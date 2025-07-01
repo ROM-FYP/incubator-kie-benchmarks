@@ -17,48 +17,33 @@
  * under the License. 
  */
 
-package org.drools.benchmarks.dmn.runtime;
+package org.drools.benchmarks.dmn.efesto.runtime;
 
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.Scanner;
-
-import org.drools.benchmarks.common.AbstractBenchmark;
 import org.drools.benchmarks.common.DMNProvider;
 import org.drools.benchmarks.common.ProviderException;
 import org.drools.benchmarks.common.providers.dmn.DecisionTablesDMNProvider;
-import org.drools.benchmarks.dmn.util.DMNUtil;
-import org.kie.api.KieServices;
-import org.kie.api.io.Resource;
-import org.kie.api.io.ResourceType;
-import org.kie.dmn.api.core.DMNContext;
-import org.kie.dmn.api.core.DMNModel;
-import org.kie.dmn.api.core.DMNResult;
-import org.kie.dmn.api.core.DMNRuntime;
+import org.drools.benchmarks.dmn.efesto.DMNEfestoAbstractBenchmark;
+import org.kie.efesto.runtimemanager.api.model.EfestoOutput;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.Warmup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Scanner;
 
 @Warmup(iterations = 200)
 @Measurement(iterations = 50)
-public class DMNEvaluateDecisionTablesSparseBenchmark extends AbstractBenchmark {
-
-    private static final Logger LOG = LoggerFactory.getLogger(DMNEvaluateDecisionTablesSparseBenchmark.class);
+@SuppressWarnings({"unchecked", "rawtypes"})
+public class DMNEvaluateDecisionTablesSparseBenchmark extends DMNEfestoAbstractBenchmark {
 
     @Param({"500"})
     private int numberOfElements;
     @Param({"1", "2", "50"})
     private int sparseness;
-
-    private Resource dmnResource;
-    private DMNRuntime dmnRuntime;
-    private DMNModel dmnModel;
-    private DMNContext dmnContext;
+    
 
     public static void main(String[] args) throws Exception {
         try (Scanner scanner = new Scanner(System.in)) {
@@ -76,35 +61,30 @@ public class DMNEvaluateDecisionTablesSparseBenchmark extends AbstractBenchmark 
     }
 
     @Setup
-    public void setupResource() throws IOException {
+    public void setupResource() {
         final DMNProvider dmnProvider = new DecisionTablesDMNProvider();
-        String dmnContent = dmnProvider.getDMN(numberOfElements);
-        LOG.debug("{}", dmnContent);
-        dmnResource = KieServices.get().getResources()
-                .newReaderResource(new StringReader(dmnContent))
-                .setResourceType(ResourceType.DMN)
-                .setSourcePath("dmnFile.dmn");
-        dmnRuntime = DMNUtil.getDMNRuntimeWithResources(false, dmnResource);
-        dmnModel = dmnRuntime.getModel("https://github.com/kiegroup/kie-dmn", dmnProvider.getModelName());
+        String dmn = dmnProvider.getDMN(numberOfElements);
+        String modelName = dmnProvider.getModelName();
+        generatedResources = compileModel(dmn, modelName);
+        modelLocalUriId = getModelLocalUriId(generatedResources);
     }
 
     @Setup(Level.Iteration)
     @Override
     public void setup() throws ProviderException {
-        dmnContext = dmnRuntime.newContext();
+        inputData = getInputData();
         for (int i = 0; i < numberOfElements; i++) {
             if (i % sparseness == 0) {
-                dmnContext.set("leftInput_" + i, "a");
-                dmnContext.set("rightInput_" + i, "x");
+                inputData.put("leftInput_" + i, "a");
+                inputData.put("rightInput_" + i, "x");
             }
         }
+        runtimeContext = getRuntimeContext(generatedResources, modelLocalUriId);
     }
 
     @Benchmark
-    public DMNResult evaluateDecision() {
-        DMNResult evaluateAll = dmnRuntime.evaluateAll(dmnModel, dmnContext);
-        LOG.debug("{}", evaluateAll);
-        return evaluateAll;
+    public Collection<EfestoOutput> evaluateDecision() {
+        return evaluate(runtimeContext, modelLocalUriId, inputData);
     }
 }
 
