@@ -47,7 +47,7 @@ public class FEELEqExecutorBenchmark {
     @Setup
     public void setup() {
         executor = EqExecutor.instance();
-        ctx = new EvaluationContextImpl(ClassLoaderUtil.findDefaultClassLoader(), null, null);
+        ctx = new EvaluationContextImpl(ClassLoaderUtil.findDefaultClassLoader(), null, null,null);
         values = getBooleanArray(args);
     }
 

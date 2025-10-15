@@ -29,8 +29,8 @@ import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Warmup;
 
-@Warmup(iterations = 30000)
-@Measurement(iterations = 5000)
+@Warmup(iterations = 300)
+@Measurement(iterations = 50)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public abstract class AbstractCEPBenchmark extends AbstractBenchmark {
 

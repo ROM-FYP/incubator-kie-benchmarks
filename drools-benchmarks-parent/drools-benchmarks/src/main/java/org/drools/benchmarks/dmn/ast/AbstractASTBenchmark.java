@@ -66,7 +66,7 @@ public abstract class AbstractASTBenchmark {
 
     private static EvaluationContext newEmptyEvaluationContext() {
         // Defaulting FEELDialect to FEEL
-        return new EvaluationContextImpl(ClassLoaderUtil.findDefaultClassLoader(), null, FEELDialect.FEEL);
+        return new EvaluationContextImpl(ClassLoaderUtil.findDefaultClassLoader(), null, FEELDialect.FEEL,null);
     }
 
     private static BaseNode getBaseNode(String baseNodeExpression) {

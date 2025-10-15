@@ -47,7 +47,7 @@ public class FEELAndExecutorBenchmark {
     @Setup
     public void setup() {
         executor = AndExecutor.instance();
-        ctx = new EvaluationContextImpl(ClassLoaderUtil.findDefaultClassLoader(), null, null);
+        ctx = new EvaluationContextImpl(ClassLoaderUtil.findDefaultClassLoader(), null, null,null);
         values = getBooleanArray(args);
     }
 
