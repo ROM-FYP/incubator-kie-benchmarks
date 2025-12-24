@@ -1,0 +1,162 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License. 
+ */
+
+package org.kie.benchmark.cep.wikimedia.rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.EditClassification;
+import org.kie.benchmark.cep.wikimedia.model.UserDiversity;
+import org.kie.benchmark.cep.wikimedia.model.EditVelocity;
+import org.kie.benchmark.cep.wikimedia.model.ViralTopicAlert;
+
+// Event declaration for WikiEvent
+declare WikiEvent
+    @role(event)
+    @timestamp(timestamp)
+    @expires(5m)
+end
+
+// ========================================
+// STAGE 1: Edit Classification Rules
+// ========================================
+
+rule "Classify Substantial Edit"
+when
+    $e: WikiEvent(sizeDelta > 500, !bot)
+then
+    insertLogical(new EditClassification($e.getTitle(), "substantial", 5));
+end
+
+rule "Classify Major Edit"
+when
+    $e: WikiEvent(sizeDelta > 100, sizeDelta <= 500, !bot)
+then
+    insertLogical(new EditClassification($e.getTitle(), "major", 3));
+end
+
+rule "Classify Minor Edit"
+when
+    $e: WikiEvent(sizeDelta > 0, sizeDelta <= 100, !bot)
+then
+    insertLogical(new EditClassification($e.getTitle(), "minor", 1));
+end
+
+rule "Classify Deletion"
+when
+    $e: WikiEvent(sizeDelta < -200, !bot)
+then
+    insertLogical(new EditClassification($e.getTitle(), "deletion", 2));
+end
+
+// ========================================
+// STAGE 2: User Diversity Detection
+// ========================================
+
+rule "Detect User Diversity"
+when
+    $page: String()
+    $users: java.util.Set(size >= 3) from accumulate(
+        WikiEvent(title == $page, $u: user, !bot) over window:time(2m),
+        collectSet($u)
+    )
+then
+    insertLogical(new UserDiversity($page, $users.size()));
+end
+
+// ========================================
+// STAGE 3: Edit Velocity Detection
+// ========================================
+
+rule "Detect High Edit Velocity"
+when
+    $page: String()
+    $count: Number(intValue >= 5) from accumulate(
+        WikiEvent(title == $page, !bot) over window:time(1m),
+        count()
+    )
+then
+    insertLogical(new EditVelocity($page, $count.doubleValue()));
+end
+
+// ========================================
+// STAGE 4: Viral Topic Detection (Final)
+// ========================================
+
+rule "Detect Viral Topic - High Activity"
+salience 10
+when
+    $velocity: EditVelocity($page: pageTitle, rate >= 5)
+    $diversity: UserDiversity(pageTitle == $page, editors >= 3)
+    $weightSum: Number(doubleValue >= 10) from accumulate(
+        EditClassification(pageTitle == $page, $w: weight),
+        sum($w)
+    )
+then
+    double score = ($velocity.getRate() * 2) + 
+                   ($diversity.getEditors() * 3) + 
+                   ($weightSum.doubleValue() * 0.5);
+    insertLogical(new ViralTopicAlert($page, "HIGH_ACTIVITY", score));
+end
+
+rule "Detect Viral Topic - Controversy"
+salience 10
+when
+    $page: String()
+    Number(intValue >= 3) from accumulate(
+        EditClassification(pageTitle == $page, type == "deletion"),
+        count()
+    )
+    $diversity: UserDiversity(pageTitle == $page, editors >= 4)
+    Number(intValue >= 8) from accumulate(
+        WikiEvent(title == $page, !bot) over window:time(3m),
+        count()
+    )
+then
+    double score = ($diversity.getEditors() * 4) + 50;
+    insertLogical(new ViralTopicAlert($page, "CONTROVERSY", score));
+end
+
+rule "Detect Viral Topic - Rapid Growth"
+salience 10
+when
+    $page: String()
+    $recentCount: Number(intValue >= 7) from accumulate(
+        WikiEvent(title == $page, !bot) over window:time(1m),
+        count()
+    )
+    Number(intValue >= 2) from accumulate(
+        EditClassification(pageTitle == $page, type == "substantial"),
+        count()
+    )
+then
+    double score = $recentCount.doubleValue() * 5;
+    insertLogical(new ViralTopicAlert($page, "RAPID_GROWTH", score));
+end
+
+// ========================================
+// STAGE 5: Alert Logging (for monitoring)
+// ========================================
+
+rule "Log Viral Alert"
+when
+    $alert: ViralTopicAlert()
+then
+    // This rule intentionally left for firing count tracking
+    // Actual logging happens in the benchmark runner
+end
