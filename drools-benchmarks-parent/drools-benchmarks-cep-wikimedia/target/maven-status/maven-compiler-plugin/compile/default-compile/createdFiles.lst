@@ -1,8 +1,8 @@
 org/kie/benchmark/cep/wikimedia/model/EditVelocity.class
 org/kie/benchmark/cep/wikimedia/model/WikiEvent.class
 org/kie/benchmark/cep/wikimedia/model/EditClassification.class
-org/kie/benchmark/cep/wikimedia/model/UserDiversity.class
 org/kie/benchmark/cep/wikimedia/CepSessionFactory.class
+org/kie/benchmark/cep/wikimedia/model/UserDiversity.class
 org/kie/benchmark/cep/wikimedia/model/ViralTopicAlert.class
 org/kie/benchmark/cep/wikimedia/WikimediaCepBenchmark$RuleFiringListener.class
 org/kie/benchmark/cep/wikimedia/WikimediaCepBenchmark.class
