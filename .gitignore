@@ -26,3 +26,6 @@ hs_err_pid*
 
 # directory for Jenkinsfiles
 !.ci
+
+# Backup files
+*.bak

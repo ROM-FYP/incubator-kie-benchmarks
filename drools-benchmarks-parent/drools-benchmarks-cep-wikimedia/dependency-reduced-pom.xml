@@ -23,7 +23,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark</mainClass>
+              <mainClass>org.kie.benchmark.cep.reproducible.wikimedia.ReproducibleWikimediaRunner</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -44,7 +44,7 @@
               <finalName>drools-benchmarks-cep-wikimedia</finalName>
               <transformers>
                 <transformer>
-                  <mainClass>org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark</mainClass>
+                  <mainClass>org.kie.benchmark.cep.reproducible.wikimedia.ReproducibleWikimediaRunner</mainClass>
                 </transformer>
                 <transformer />
               </transformers>

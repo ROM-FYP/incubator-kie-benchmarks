@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -40,6 +40,7 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
+      <version>2.20.1</version>
     </dependency>
 
     <!-- Logging -->
@@ -65,7 +66,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark</mainClass>
+              <mainClass>org.kie.benchmark.cep.reproducible.wikimedia.ReproducibleWikimediaRunner</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -91,7 +92,7 @@
               <finalName>drools-benchmarks-cep-wikimedia</finalName>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark</mainClass>
+                  <mainClass>org.kie.benchmark.cep.reproducible.wikimedia.ReproducibleWikimediaRunner</mainClass>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
@@ -112,3 +113,4 @@
     </plugins>
   </build>
 </project>
+

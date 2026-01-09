@@ -1,0 +1,1412 @@
+package org.drools.benchmark.wiki;
+
+import java.util.Set;
+import org.kie.benchmark.cep.reproducible.wikimedia.model.*;
+
+
+
+
+rule "L1_Semantic_fix"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("fix"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "fix",
+        10
+    ));
+end
+
+rule "L1_Semantic_bug"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("bug"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "bug",
+        10
+    ));
+end
+
+rule "L1_Semantic_security"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("security"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "security",
+        10
+    ));
+end
+
+rule "L1_Semantic_update"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("update"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "update",
+        10
+    ));
+end
+
+rule "L1_Semantic_breaking"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("breaking"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "breaking",
+        10
+    ));
+end
+
+rule "L1_Semantic_leak"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("leak"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "leak",
+        10
+    ));
+end
+
+rule "L1_Semantic_war"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("war"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "war",
+        10
+    ));
+end
+
+rule "L1_Semantic_crisis"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("crisis"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "crisis",
+        10
+    ));
+end
+
+rule "L1_Semantic_release"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("release"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "release",
+        10
+    ));
+end
+
+rule "L1_Semantic_attack"
+when
+    $e : WikiEvent(
+        bot == false,
+        comment.toLowerCase().contains("attack"),
+        sizeDelta > 50
+    )
+then
+    insertLogical(new EditClassification(
+        $e.getTitle(),
+        "attack",
+        10
+    ));
+end
+
+rule "L2_PageEditor"
+when
+    WikiEvent( $p : title, $u : user )
+then
+    insertLogical(new PageEditor($p, $u));
+end
+
+rule "L2_User_Diversity_Insert"
+when
+    $pe : PageEditor( $p : pageTitle )
+    not UserDiversity( pageTitle == $p )
+    $users : Set() from accumulate(
+        PageEditor( pageTitle == $p, $u : user ),
+        collectSet($u)
+    )
+then
+    insert(new UserDiversity($p, $users.size()));
+end
+
+rule "L2_User_Diversity_Update"
+when
+    $ud : UserDiversity( $p : pageTitle )
+    $users : Set() from accumulate(
+        PageEditor( pageTitle == $p, $u : user ),
+        collectSet($u)
+    )
+then
+    modify($ud) { setEditors($users.size()) };
+end
+
+rule "L3_Edit_Velocity_Insert"
+when
+    $e : WikiEvent( $p : title )
+    not EditVelocity( pageTitle == $p )
+    $count : Number() from accumulate(
+        WikiEvent( title == $p ) over window:time(30s),
+        count(1)
+    )
+then
+    insert(new EditVelocity($p, $count.doubleValue() / 30.0));
+end
+
+rule "L3_Edit_Velocity_Update"
+when
+    $e  : WikiEvent( $p : title )
+    $ev : EditVelocity( pageTitle == $p )
+    $count : Number() from accumulate(
+        WikiEvent( title == $p ) over window:time(30s),
+        count(1)
+    )
+then
+    modify($ev) { setRate($count.doubleValue() / 60.0) };
+end
+
+rule "L4_Viral_Score_0"
+when
+    $c : EditClassification( type == "fix", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "fix",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_1"
+when
+    $c : EditClassification( type == "bug", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "bug",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_2"
+when
+    $c : EditClassification( type == "security", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "security",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_3"
+when
+    $c : EditClassification( type == "update", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "update",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_4"
+when
+    $c : EditClassification( type == "breaking", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "breaking",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_5"
+when
+    $c : EditClassification( type == "leak", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "leak",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_6"
+when
+    $c : EditClassification( type == "war", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "war",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_7"
+when
+    $c : EditClassification( type == "crisis", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "crisis",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_8"
+when
+    $c : EditClassification( type == "release", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "release",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_9"
+when
+    $c : EditClassification( type == "attack", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "attack",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_10"
+when
+    $c : EditClassification( type == "fix", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "fix",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_11"
+when
+    $c : EditClassification( type == "bug", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "bug",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_12"
+when
+    $c : EditClassification( type == "security", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "security",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_13"
+when
+    $c : EditClassification( type == "update", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "update",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_14"
+when
+    $c : EditClassification( type == "breaking", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "breaking",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_15"
+when
+    $c : EditClassification( type == "leak", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "leak",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_16"
+when
+    $c : EditClassification( type == "war", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "war",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_17"
+when
+    $c : EditClassification( type == "crisis", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "crisis",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_18"
+when
+    $c : EditClassification( type == "release", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "release",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_19"
+when
+    $c : EditClassification( type == "attack", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "attack",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_20"
+when
+    $c : EditClassification( type == "fix", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "fix",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_21"
+when
+    $c : EditClassification( type == "bug", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "bug",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_22"
+when
+    $c : EditClassification( type == "security", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "security",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_23"
+when
+    $c : EditClassification( type == "update", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "update",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_24"
+when
+    $c : EditClassification( type == "breaking", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "breaking",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_25"
+when
+    $c : EditClassification( type == "leak", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "leak",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_26"
+when
+    $c : EditClassification( type == "war", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "war",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_27"
+when
+    $c : EditClassification( type == "crisis", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "crisis",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_28"
+when
+    $c : EditClassification( type == "release", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "release",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_29"
+when
+    $c : EditClassification( type == "attack", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "attack",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_30"
+when
+    $c : EditClassification( type == "fix", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "fix",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_31"
+when
+    $c : EditClassification( type == "bug", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "bug",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_32"
+when
+    $c : EditClassification( type == "security", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "security",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_33"
+when
+    $c : EditClassification( type == "update", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "update",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_34"
+when
+    $c : EditClassification( type == "breaking", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "breaking",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_35"
+when
+    $c : EditClassification( type == "leak", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "leak",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_36"
+when
+    $c : EditClassification( type == "war", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "war",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_37"
+when
+    $c : EditClassification( type == "crisis", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "crisis",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_38"
+when
+    $c : EditClassification( type == "release", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "release",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_39"
+when
+    $c : EditClassification( type == "attack", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "attack",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_40"
+when
+    $c : EditClassification( type == "fix", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "fix",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_41"
+when
+    $c : EditClassification( type == "bug", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "bug",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_42"
+when
+    $c : EditClassification( type == "security", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "security",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_43"
+when
+    $c : EditClassification( type == "update", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "update",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_44"
+when
+    $c : EditClassification( type == "breaking", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "breaking",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_45"
+when
+    $c : EditClassification( type == "leak", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "leak",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_46"
+when
+    $c : EditClassification( type == "war", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "war",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_47"
+when
+    $c : EditClassification( type == "crisis", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "crisis",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_48"
+when
+    $c : EditClassification( type == "release", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "release",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_49"
+when
+    $c : EditClassification( type == "attack", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "attack",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_50"
+when
+    $c : EditClassification( type == "fix", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "fix",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_51"
+when
+    $c : EditClassification( type == "bug", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "bug",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_52"
+when
+    $c : EditClassification( type == "security", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "security",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_53"
+when
+    $c : EditClassification( type == "update", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "update",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_54"
+when
+    $c : EditClassification( type == "breaking", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "breaking",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_55"
+when
+    $c : EditClassification( type == "leak", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "leak",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_56"
+when
+    $c : EditClassification( type == "war", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "war",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_57"
+when
+    $c : EditClassification( type == "crisis", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "crisis",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_58"
+when
+    $c : EditClassification( type == "release", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "release",
+            score
+        ));
+    }
+end
+
+rule "L4_Viral_Score_59"
+when
+    $c : EditClassification( type == "attack", $p : pageTitle )
+    $u : UserDiversity( pageTitle == $p, editors >= 4 )
+    $v : EditVelocity( pageTitle == $p, rate > 0.2 )
+then
+    double score =
+        ($c.getWeight() * 2) +
+        ($u.getEditors() * 5) +
+        ($v.getRate() * 20);
+
+    if (score >= 60) {
+        insertLogical(new ViralTopicAlert(
+            $p,
+            "attack",
+            score
+        ));
+    }
+end
+
