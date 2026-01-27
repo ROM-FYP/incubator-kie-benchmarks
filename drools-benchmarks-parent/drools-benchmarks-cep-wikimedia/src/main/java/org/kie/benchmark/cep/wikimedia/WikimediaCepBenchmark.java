@@ -53,6 +53,8 @@ public class WikimediaCepBenchmark {
 
     private volatile boolean running = false;
 
+    private MiningTraceLogger traceLogger;
+
     public WikimediaCepBenchmark(CepBenchmarkConfig config) {
         this.config = config;
         this.sessionFactory = new CepSessionFactory(config.getRulesPath());
@@ -74,6 +76,11 @@ public class WikimediaCepBenchmark {
         // Initialize Drools session
         kieSession = sessionFactory.createSession();
         kieSession.addEventListener(new RuleFiringListener());
+
+        // Initialize Mining Trace Logger
+        traceLogger = new MiningTraceLogger("mining_trace.csv");
+        traceLogger.startNewTransaction();
+        kieSession.addEventListener(traceLogger);
 
         // Start background rule firing thread
         Thread firingThread = new Thread(this::fireRulesContinuously, "rule-firing");
@@ -104,7 +111,8 @@ public class WikimediaCepBenchmark {
     }
 
     private void handleEvent(WikiEvent event) {
-        if (!running) return;
+        if (!running)
+            return;
 
         try {
             kieSession.insert(event);
@@ -167,8 +175,7 @@ public class WikimediaCepBenchmark {
 
     private long countViralAlerts() {
         Collection<FactHandle> handles = kieSession.getFactHandles(
-                obj -> obj instanceof ViralTopicAlert
-        );
+                obj -> obj instanceof ViralTopicAlert);
         return handles.size();
     }
 
@@ -182,6 +189,10 @@ public class WikimediaCepBenchmark {
 
         if (kieSession != null) {
             kieSession.dispose();
+        }
+
+        if (traceLogger != null) {
+            traceLogger.close();
         }
     }
 
@@ -207,10 +218,9 @@ public class WikimediaCepBenchmark {
             long duration = Long.parseLong(args[0]);
             config = new CepBenchmarkConfig(
                     duration,
-                    "rules/advanced_viral_rules.drl",
+                    "rules/graph_partitioning_benchmark.drl",
                     "https://stream.wikimedia.org/v2/stream/recentchange",
-                    true
-            );
+                    true);
         } else {
             config = CepBenchmarkConfig.getDefault();
         }

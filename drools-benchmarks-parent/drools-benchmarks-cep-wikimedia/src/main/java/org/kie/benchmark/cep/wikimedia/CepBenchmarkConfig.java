@@ -37,11 +37,10 @@ public class CepBenchmarkConfig {
 
     public static CepBenchmarkConfig getDefault() {
         return new CepBenchmarkConfig(
-                5, // 5 minutes default
-                "rules/advanced_viral_rules.drl",
+                1, // 5 minutes default
+                "rules/graph_partitioning_benchmark.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
-                true
-        );
+                true);
     }
 
     public long getDurationMinutes() {
