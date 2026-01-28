@@ -1,0 +1,413 @@
+package org.drools.benchmark.wiki;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+
+// ============================================================================
+// WIKIMEDIA CONTENT MODERATION RULESET
+// ============================================================================
+// 
+// Purpose: Real-time analysis of Wikipedia edit events for content moderation,
+// quality assurance, and community health monitoring.
+//
+// Five processing pipelines (clusters):
+//   1. VANDALISM - Detect and flag potential vandalism (large deletions)
+//   2. BOT_MONITOR - Track and analyze automated bot activity
+//   3. CONTENT_GROWTH - Monitor significant content additions
+//   4. MINOR_EDITS - Track minor corrections and formatting changes
+//   5. DISCUSSION - Analyze talk page activity and community engagement
+//
+// Each pipeline has 6 stages for thorough processing and balanced clustering.
+// ============================================================================
+
+declare WikiEvent @role(event) @expires(60s) end
+
+// ============================================================================
+// VANDALISM DETECTION PIPELINE - Large deletions (sizeDelta < -100)
+// ============================================================================
+// Potential vandalism: removing substantial content without explanation
+
+declare VandalismCandidate @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    deletionSize : int; 
+end
+declare VandalismAnalysis @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    riskScore : int; 
+end
+declare VandalismVerified @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    severity : String; 
+end
+declare VandalismFlagged @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+end
+declare VandalismLogged @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Vandalism_Detect" salience 500
+when
+    $e : WikiEvent( sizeDelta < -100, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Identify potential vandalism based on large content deletion
+    insert(new VandalismCandidate($t, $u, Math.abs($size)));
+end
+
+rule "Vandalism_Analyze" salience 495
+when
+    $v : VandalismCandidate( $t : title, $u : user, $size : deletionSize )
+then
+    // Stage 2: Calculate risk score based on deletion magnitude
+    int risk = $size > 500 ? 90 : ($size > 200 ? 60 : 30);
+    insert(new VandalismAnalysis($t, $u, risk));
+    retract($v);
+end
+
+rule "Vandalism_Verify" salience 490
+when
+    $v : VandalismAnalysis( $t : title, $u : user, $risk : riskScore )
+then
+    // Stage 3: Classify severity level
+    String severity = $risk > 70 ? "HIGH" : ($risk > 40 ? "MEDIUM" : "LOW");
+    insert(new VandalismVerified($t, $u, severity));
+    retract($v);
+end
+
+rule "Vandalism_Flag" salience 485
+when
+    $v : VandalismVerified( severity == "HIGH", $t : title, $u : user )
+then
+    // Stage 4: Flag high-severity cases for moderator review
+    insert(new VandalismFlagged($t, $u));
+    retract($v);
+end
+
+rule "Vandalism_Log" salience 480
+when
+    $v : VandalismFlagged( $t : title )
+then
+    // Stage 5: Record flagged vandalism for audit trail
+    insert(new VandalismLogged($t));
+    retract($v);
+end
+
+rule "Vandalism_Complete" salience 475
+when
+    $v : VandalismLogged()
+then
+    // Stage 6: Cleanup - end of vandalism pipeline
+    retract($v);
+end
+
+// ============================================================================
+// BOT ACTIVITY MONITORING PIPELINE - Automated edits (bot == true)
+// ============================================================================
+// Track bot behavior for rate limiting and anomaly detection
+
+declare BotActivity @role(event) @expires(5s) 
+    user : String; 
+    action : String; 
+end
+declare BotProfile @role(event) @expires(5s) 
+    user : String; 
+    category : String; 
+end
+declare BotHealthCheck @role(event) @expires(5s) 
+    user : String; 
+    status : String; 
+end
+declare BotMetrics @role(event) @expires(5s) 
+    user : String; 
+end
+declare BotReported @role(event) @expires(5s) 
+    user : String; 
+end
+
+rule "Bot_Detect" salience 400
+when
+    $e : WikiEvent( bot == true, $u : user, $t : title )
+then
+    // Stage 1: Identify bot-originated edit
+    insert(new BotActivity($u, "edit"));
+end
+
+rule "Bot_Categorize" salience 395
+when
+    $b : BotActivity( $u : user )
+then
+    // Stage 2: Categorize bot type based on naming conventions
+    String category = $u.contains("Bot") ? "REGISTERED" : "UNVERIFIED";
+    insert(new BotProfile($u, category));
+    retract($b);
+end
+
+rule "Bot_HealthCheck" salience 390
+when
+    $b : BotProfile( $u : user, $cat : category )
+then
+    // Stage 3: Check if bot is operating within expected parameters
+    String status = $cat.equals("REGISTERED") ? "HEALTHY" : "REVIEW_NEEDED";
+    insert(new BotHealthCheck($u, status));
+    retract($b);
+end
+
+rule "Bot_Metrics" salience 385
+when
+    $b : BotHealthCheck( $u : user )
+then
+    // Stage 4: Update bot activity metrics
+    insert(new BotMetrics($u));
+    retract($b);
+end
+
+rule "Bot_Report" salience 380
+when
+    $b : BotMetrics( $u : user )
+then
+    // Stage 5: Generate activity report
+    insert(new BotReported($u));
+    retract($b);
+end
+
+rule "Bot_Complete" salience 375
+when
+    $b : BotReported()
+then
+    // Stage 6: Cleanup - end of bot monitoring pipeline
+    retract($b);
+end
+
+// ============================================================================
+// CONTENT GROWTH PIPELINE - Large additions (sizeDelta > 200, not bot)
+// ============================================================================
+// Monitor significant content contributions for quality review
+
+declare ContentAddition @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    addedBytes : int; 
+end
+declare ContentReview @role(event) @expires(5s) 
+    title : String; 
+    qualityTier : String; 
+end
+declare ContentApproved @role(event) @expires(5s) 
+    title : String; 
+end
+declare ContentIndexed @role(event) @expires(5s) 
+    title : String; 
+end
+declare ContentCached @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Content_Detect" salience 300
+when
+    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Identify significant content addition
+    insert(new ContentAddition($t, $u, $size));
+end
+
+rule "Content_Review" salience 295
+when
+    $c : ContentAddition( $t : title, $size : addedBytes )
+then
+    // Stage 2: Assign quality tier based on contribution size
+    String tier = $size > 1000 ? "MAJOR" : ($size > 500 ? "SUBSTANTIAL" : "NOTABLE");
+    insert(new ContentReview($t, tier));
+    retract($c);
+end
+
+rule "Content_Approve" salience 290
+when
+    $c : ContentReview( $t : title )
+then
+    // Stage 3: Auto-approve for indexing (non-bot, significant content)
+    insert(new ContentApproved($t));
+    retract($c);
+end
+
+rule "Content_Index" salience 285
+when
+    $c : ContentApproved( $t : title )
+then
+    // Stage 4: Mark for search index update
+    insert(new ContentIndexed($t));
+    retract($c);
+end
+
+rule "Content_Cache" salience 280
+when
+    $c : ContentIndexed( $t : title )
+then
+    // Stage 5: Invalidate cache for fresh content delivery
+    insert(new ContentCached($t));
+    retract($c);
+end
+
+rule "Content_Complete" salience 275
+when
+    $c : ContentCached()
+then
+    // Stage 6: Cleanup - end of content growth pipeline
+    retract($c);
+end
+
+// ============================================================================
+// MINOR EDITS PIPELINE - Small changes (-50 <= sizeDelta <= 50, not bot)
+// ============================================================================
+// Track minor corrections, typo fixes, and formatting improvements
+
+declare MinorEdit @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    changeSize : int; 
+end
+declare MinorClassified @role(event) @expires(5s) 
+    title : String; 
+    editType : String; 
+end
+declare MinorValidated @role(event) @expires(5s) 
+    title : String; 
+end
+declare MinorAccepted @role(event) @expires(5s) 
+    title : String; 
+end
+declare MinorTracked @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Minor_Detect" salience 200
+when
+    $e : WikiEvent( sizeDelta >= -50, sizeDelta <= 50, bot == false, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Identify minor edit activity
+    insert(new MinorEdit($t, $u, $size));
+end
+
+rule "Minor_Classify" salience 195
+when
+    $m : MinorEdit( $t : title, $size : changeSize )
+then
+    // Stage 2: Classify edit type (correction, formatting, or link update)
+    String editType = $size == 0 ? "FORMATTING" : ($size > 0 ? "ADDITION" : "CORRECTION");
+    insert(new MinorClassified($t, editType));
+    retract($m);
+end
+
+rule "Minor_Validate" salience 190
+when
+    $m : MinorClassified( $t : title )
+then
+    // Stage 3: Quick validation (minor edits assumed good faith)
+    insert(new MinorValidated($t));
+    retract($m);
+end
+
+rule "Minor_Accept" salience 185
+when
+    $m : MinorValidated( $t : title )
+then
+    // Stage 4: Accept edit into article history
+    insert(new MinorAccepted($t));
+    retract($m);
+end
+
+rule "Minor_Track" salience 180
+when
+    $m : MinorAccepted( $t : title )
+then
+    // Stage 5: Update editor contribution stats
+    insert(new MinorTracked($t));
+    retract($m);
+end
+
+rule "Minor_Complete" salience 175
+when
+    $m : MinorTracked()
+then
+    // Stage 6: Cleanup - end of minor edits pipeline
+    retract($m);
+end
+
+// ============================================================================
+// DISCUSSION PIPELINE - Talk page activity (title matches "Talk:.*")
+// ============================================================================
+// Monitor community discussions for engagement and conflict resolution
+
+declare DiscussionPost @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+end
+declare DiscussionAnalyzed @role(event) @expires(5s) 
+    title : String; 
+    topic : String; 
+end
+declare DiscussionSentiment @role(event) @expires(5s) 
+    title : String; 
+    mood : String; 
+end
+declare DiscussionRouted @role(event) @expires(5s) 
+    title : String; 
+end
+declare DiscussionNotified @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Discussion_Detect" salience 100
+when
+    $e : WikiEvent( title matches "Talk:.*", $t : title, $u : user )
+then
+    // Stage 1: Identify talk page activity
+    insert(new DiscussionPost($t, $u));
+end
+
+rule "Discussion_Analyze" salience 95
+when
+    $d : DiscussionPost( $t : title )
+then
+    // Stage 2: Extract discussion topic from title
+    String topic = $t.replace("Talk:", "");
+    insert(new DiscussionAnalyzed($t, topic));
+    retract($d);
+end
+
+rule "Discussion_Sentiment" salience 90
+when
+    $d : DiscussionAnalyzed( $t : title )
+then
+    // Stage 3: Assign neutral sentiment (placeholder for NLP analysis)
+    insert(new DiscussionSentiment($t, "NEUTRAL"));
+    retract($d);
+end
+
+rule "Discussion_Route" salience 85
+when
+    $d : DiscussionSentiment( $t : title )
+then
+    // Stage 4: Route to appropriate moderation queue
+    insert(new DiscussionRouted($t));
+    retract($d);
+end
+
+rule "Discussion_Notify" salience 80
+when
+    $d : DiscussionRouted( $t : title )
+then
+    // Stage 5: Notify article watchers of discussion activity
+    insert(new DiscussionNotified($t));
+    retract($d);
+end
+
+rule "Discussion_Complete" salience 75
+when
+    $d : DiscussionNotified()
+then
+    // Stage 6: Cleanup - end of discussion pipeline
+    retract($d);
+end
