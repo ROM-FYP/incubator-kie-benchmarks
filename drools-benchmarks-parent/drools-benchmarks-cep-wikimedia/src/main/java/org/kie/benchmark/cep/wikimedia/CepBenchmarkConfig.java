@@ -44,7 +44,7 @@ public class CepBenchmarkConfig {
     public static CepBenchmarkConfig getDefault() {
         return new CepBenchmarkConfig(
                 1, // 5 minutes default
-                "rules/wikimedia_content_moderation.drl",
+                "rules/wikimedia_content_moderation_join_heavy.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
                 true,
                 false);

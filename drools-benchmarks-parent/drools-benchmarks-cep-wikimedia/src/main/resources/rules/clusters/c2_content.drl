@@ -1,79 +1,128 @@
-package rules.c2;
+package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 
 // ============================================================================
-// CONTENT GROWTH PIPELINE - Large additions (sizeDelta > 200, not bot)
+// CONTENT GROWTH PIPELINE
 // ============================================================================
 
 declare ContentAddition @role(event) @expires(5s) 
     title : String; 
     user : String; 
-    addedBytes : int; 
+    addedBytes : int;
+    timestamp : long;
 end
+
 declare ContentReview @role(event) @expires(5s) 
     title : String; 
-    qualityTier : String; 
+    qualityTier : String;
+    contributorRating : String;
 end
+
 declare ContentApproved @role(event) @expires(5s) 
-    title : String; 
+    title : String;
+    qualityBoost : int;
 end
+
 declare ContentIndexed @role(event) @expires(5s) 
-    title : String; 
+    title : String;
 end
+
 declare ContentCached @role(event) @expires(5s) 
-    title : String; 
+    title : String;
 end
 
 rule "Content_Detect" salience 300
 when
-    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta )
+    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
 then
-    // Stage 1: Identify significant content addition
-    insert(new ContentAddition($t, $u, $size));
+    insert(new ContentAddition($t, $u, $size, $ts));
 end
 
-rule "Content_Review" salience 295
+// Initialize UserActivity for joins if missing
+rule "Content_InitializeUserActivity" salience 305
 when
-    $c : ContentAddition( $t : title, $size : addedBytes )
+    $c : ContentAddition( $u : user )
+    not UserActivity( user == $u )
 then
-    // Stage 2: Assign quality tier based on contribution size
-    String tier = $size > 1000 ? "MAJOR" : ($size > 500 ? "SUBSTANTIAL" : "NOTABLE");
-    insert(new ContentReview($t, tier));
+    insert(new UserActivity($u, 0, "INITIALIZING"));
+end
+
+rule "Content_Review_Major_Experienced" salience 299
+when
+    $c : ContentAddition( addedBytes > 1000, $u : user, $t : title )
+    $ua : UserActivity( user == $u, editCount > 20 )
+then
+    insert(new ContentReview($t, "MAJOR", "EXPERIENCED"));
     retract($c);
 end
 
-rule "Content_Approve" salience 290
+rule "Content_Review_Major_New" salience 298
+when
+    $c : ContentAddition( addedBytes > 1000, $u : user, $t : title )
+    not UserActivity( user == $u, editCount > 20 )
+then
+    insert(new ContentReview($t, "MAJOR", "NEW"));
+    retract($c);
+end
+
+rule "Content_Review_Standard" salience 297
+when
+    $c : ContentAddition( addedBytes <= 1000, $t : title )
+then
+    insert(new ContentReview($t, "STANDARD", "REGULAR"));
+    retract($c);
+end
+
+rule "Content_Approve_Major" salience 289
+when
+    $c : ContentReview( qualityTier == "MAJOR", $t : title )
+    $aq : ArticleQuality( title == $t, $q : qualityScore )
+then
+    insert(new ContentApproved($t, 20));
+    retract($c);
+    modify($aq) { setQualityScore(Math.min(100, $q + 20)) };
+end
+
+rule "Content_Approve_NewArticle" salience 288
 when
     $c : ContentReview( $t : title )
+    not ArticleQuality( title == $t )
 then
-    // Stage 3: Auto-approve for indexing (non-bot, significant content)
-    insert(new ContentApproved($t));
+    insert(new ContentApproved($t, 10));
     retract($c);
+    insert(new ArticleQuality($t, 60, 1));
 end
 
-rule "Content_Index" salience 285
+rule "Content_Approve_Standard" salience 287
+when
+    $c : ContentReview( qualityTier != "MAJOR", $t : title )
+    $aq : ArticleQuality( title == $t, $q : qualityScore )
+then
+    insert(new ContentApproved($t, 5));
+    retract($c);
+    modify($aq) { setQualityScore(Math.min(100, $q + 5)) };
+end
+
+rule "Content_Index" salience 279
 when
     $c : ContentApproved( $t : title )
 then
-    // Stage 4: Mark for search index update
     insert(new ContentIndexed($t));
     retract($c);
 end
 
-rule "Content_Cache" salience 280
+rule "Content_Cache" salience 278
 when
     $c : ContentIndexed( $t : title )
 then
-    // Stage 5: Invalidate cache for fresh content delivery
     insert(new ContentCached($t));
     retract($c);
 end
 
-rule "Content_Complete" salience 275
+rule "Content_Complete" salience 277
 when
     $c : ContentCached()
 then
-    // Stage 6: Cleanup - end of content growth pipeline
     retract($c);
 end

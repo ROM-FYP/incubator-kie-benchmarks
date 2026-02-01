@@ -64,7 +64,7 @@ public class ContentModerationRunner {
         
         CepBenchmarkConfig config = new CepBenchmarkConfig(
                 duration,
-                "rules/wikimedia_content_moderation.drl",
+                "rules/wikimedia_content_moderation_join_heavy.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
                 true,
                 partitioned);
@@ -79,7 +79,7 @@ public class ContentModerationRunner {
         System.out.println("Starting Recording for " + duration + " minutes to " + outputFile);
         CepBenchmarkConfig config = new CepBenchmarkConfig(
                 duration,
-                "rules/wikimedia_content_moderation.drl",
+                "rules/wikimedia_content_moderation_join_heavy.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
                 true,
                 false); // Partitioning doesn't matter for recording
@@ -92,7 +92,7 @@ public class ContentModerationRunner {
         System.out.println("Starting Replay from " + inputFile + " (Partitioned=" + partitioned + ")");
         CepBenchmarkConfig config = new CepBenchmarkConfig(
                 0, // Duration determined by file
-                "rules/wikimedia_content_moderation.drl",
+                "rules/wikimedia_content_moderation_join_heavy.drl",
                 null, // No stream URL needed
                 true,
                 partitioned);

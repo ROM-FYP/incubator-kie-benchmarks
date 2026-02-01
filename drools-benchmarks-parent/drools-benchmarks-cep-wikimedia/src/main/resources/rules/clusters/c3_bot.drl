@@ -1,80 +1,134 @@
-package rules.c3;
+package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 
 // ============================================================================
-// BOT ACTIVITY MONITORING PIPELINE - Automated edits (bot == true)
+// BOT ACTIVITY MONITORING PIPELINE
 // ============================================================================
 
 declare BotActivity @role(event) @expires(5s) 
     user : String; 
-    action : String; 
+    action : String;
+    timestamp : long;
 end
+
 declare BotProfile @role(event) @expires(5s) 
     user : String; 
-    category : String; 
+    category : String;
+    activityRate : int;
 end
+
 declare BotHealthCheck @role(event) @expires(5s) 
     user : String; 
-    status : String; 
+    status : String;
+    anomalyDetected : boolean;
 end
+
 declare BotMetrics @role(event) @expires(5s) 
-    user : String; 
+    user : String;
 end
+
 declare BotReported @role(event) @expires(5s) 
-    user : String; 
+    user : String;
 end
 
 rule "Bot_Detect" salience 400
 when
-    $e : WikiEvent( bot == true, $u : user, $t : title )
+    $e : WikiEvent( bot == true, $u : user, $ts : timestamp )
 then
-    // Stage 1: Identify bot-originated edit
-    insert(new BotActivity($u, "edit"));
+    insert(new BotActivity($u, "edit", $ts));
 end
 
-rule "Bot_Categorize" salience 395
+// Initialize UserActivity for joins if missing
+rule "Bot_InitializeUserActivity" salience 405
 when
     $b : BotActivity( $u : user )
+    not UserActivity( user == $u )
 then
-    // Stage 2: Categorize bot type based on naming conventions
-    String category = $u.contains("Bot") ? "REGISTERED" : "UNVERIFIED";
-    insert(new BotProfile($u, category));
-    retract($b);
+    insert(new UserActivity($u, 0, "INITIALIZING"));
 end
 
-rule "Bot_HealthCheck" salience 390
+rule "Bot_Categorize_Registered" salience 399
 when
-    $b : BotProfile( $u : user, $cat : category )
+    $b : BotActivity( $u : user, user contains "Bot", $ts : timestamp )
+    $count : Number( intValue > 0 ) from accumulate(
+        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
+        count($ba)
+    )
 then
-    // Stage 3: Check if bot is operating within expected parameters
-    String status = $cat.equals("REGISTERED") ? "HEALTHY" : "REVIEW_NEEDED";
-    insert(new BotHealthCheck($u, status));
+    insert(new BotProfile($u, "REGISTERED", $count.intValue()));
     retract($b);
 end
 
-rule "Bot_Metrics" salience 385
+rule "Bot_Categorize_Unverified" salience 398
+when
+    $b : BotActivity( $u : user, user not contains "Bot", $ts : timestamp )
+    $count : Number( intValue > 0 ) from accumulate(
+        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
+        count($ba)
+    )
+then
+    insert(new BotProfile($u, "UNVERIFIED", $count.intValue()));
+    retract($b);
+end
+
+rule "Bot_HealthCheck_Registered_RateLimitExceeded" salience 397
+when
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5 )
+    $ua : UserActivity( user == $u, $editCount : editCount )
+then
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
+    retract($b);
+    modify($ua) { setEditCount($editCount + 1) };
+end
+
+rule "Bot_HealthCheck_Registered_Healthy" salience 396
+when
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5 )
+    $ua : UserActivity( user == $u, $editCount : editCount )
+then
+    insert(new BotHealthCheck($u, "HEALTHY", false));
+    retract($b);
+    modify($ua) { setEditCount($editCount + 1) };
+end
+
+rule "Bot_HealthCheck_Unverified_NewBot" salience 395
+when
+    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2 )
+    $ua : UserActivity( user == $u, editCount < 10 )
+then
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
+    retract($b);
+end
+
+rule "Bot_HealthCheck_Unverified_Review" salience 394
+when
+    $b : BotProfile( $u : user, category == "UNVERIFIED" )
+    not BotHealthCheck( user == $u )
+then
+    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false));
+    retract($b);
+end
+
+rule "Bot_Metrics" salience 392
 when
     $b : BotHealthCheck( $u : user )
 then
-    // Stage 4: Update bot activity metrics
     insert(new BotMetrics($u));
     retract($b);
 end
 
-rule "Bot_Report" salience 380
+rule "Bot_Report" salience 391
 when
     $b : BotMetrics( $u : user )
 then
-    // Stage 5: Generate activity report
     insert(new BotReported($u));
     retract($b);
 end
 
-rule "Bot_Complete" salience 375
+rule "Bot_Complete" salience 390
 when
     $b : BotReported()
 then
-    // Stage 6: Cleanup - end of bot monitoring pipeline
     retract($b);
 end
