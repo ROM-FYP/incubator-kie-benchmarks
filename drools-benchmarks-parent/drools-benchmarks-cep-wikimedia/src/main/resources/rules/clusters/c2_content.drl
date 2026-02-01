@@ -1,0 +1,79 @@
+package rules.c2;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+
+// ============================================================================
+// CONTENT GROWTH PIPELINE - Large additions (sizeDelta > 200, not bot)
+// ============================================================================
+
+declare ContentAddition @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    addedBytes : int; 
+end
+declare ContentReview @role(event) @expires(5s) 
+    title : String; 
+    qualityTier : String; 
+end
+declare ContentApproved @role(event) @expires(5s) 
+    title : String; 
+end
+declare ContentIndexed @role(event) @expires(5s) 
+    title : String; 
+end
+declare ContentCached @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Content_Detect" salience 300
+when
+    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Identify significant content addition
+    insert(new ContentAddition($t, $u, $size));
+end
+
+rule "Content_Review" salience 295
+when
+    $c : ContentAddition( $t : title, $size : addedBytes )
+then
+    // Stage 2: Assign quality tier based on contribution size
+    String tier = $size > 1000 ? "MAJOR" : ($size > 500 ? "SUBSTANTIAL" : "NOTABLE");
+    insert(new ContentReview($t, tier));
+    retract($c);
+end
+
+rule "Content_Approve" salience 290
+when
+    $c : ContentReview( $t : title )
+then
+    // Stage 3: Auto-approve for indexing (non-bot, significant content)
+    insert(new ContentApproved($t));
+    retract($c);
+end
+
+rule "Content_Index" salience 285
+when
+    $c : ContentApproved( $t : title )
+then
+    // Stage 4: Mark for search index update
+    insert(new ContentIndexed($t));
+    retract($c);
+end
+
+rule "Content_Cache" salience 280
+when
+    $c : ContentIndexed( $t : title )
+then
+    // Stage 5: Invalidate cache for fresh content delivery
+    insert(new ContentCached($t));
+    retract($c);
+end
+
+rule "Content_Complete" salience 275
+when
+    $c : ContentCached()
+then
+    // Stage 6: Cleanup - end of content growth pipeline
+    retract($c);
+end

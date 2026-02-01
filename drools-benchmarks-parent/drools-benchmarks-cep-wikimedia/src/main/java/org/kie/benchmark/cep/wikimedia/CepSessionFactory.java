@@ -84,6 +84,17 @@ public class CepSessionFactory {
      * Create a new stateful KieSession.
      */
     public KieSession createSession() {
-        return kieBase.newKieSession();
+        return createSession(false);
+    }
+    
+    public KieSession createSession(boolean pseudoClock) {
+        KieServices kieServices = KieServices.Factory.get();
+        org.kie.api.runtime.KieSessionConfiguration sessionConfig = kieServices.newKieSessionConfiguration();
+        
+        if (pseudoClock) {
+            sessionConfig.setOption(org.kie.api.runtime.conf.ClockTypeOption.get("pseudo"));
+        }
+        
+        return kieBase.newKieSession(sessionConfig, null);
     }
 }

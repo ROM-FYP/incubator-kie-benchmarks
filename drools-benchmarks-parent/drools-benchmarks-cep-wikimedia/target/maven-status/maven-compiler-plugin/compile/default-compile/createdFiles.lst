@@ -1,11 +1,14 @@
+org\kie\benchmark\cep\wikimedia\CepPartitionedSessionFactory.class
 org\kie\benchmark\cep\wikimedia\MiningTraceLogger.class
 org\kie\benchmark\cep\wikimedia\model\VerifiedEdit.class
 org\kie\benchmark\cep\wikimedia\model\UserDiversity.class
 org\kie\benchmark\cep\wikimedia\model\ViralTopicAlert.class
+org\kie\benchmark\cep\wikimedia\EventRecorder.class
 org\kie\benchmark\cep\wikimedia\WikimediaEventSource.class
 org\kie\benchmark\cep\wikimedia\BalancedBenchmarkRunner.class
 org\kie\benchmark\cep\wikimedia\model\EditVelocity.class
 org\kie\benchmark\cep\wikimedia\model\UserContext.class
+org\kie\benchmark\cep\wikimedia\ClusterId.class
 org\kie\benchmark\cep\wikimedia\model\WikiEvent.class
 org\kie\benchmark\cep\wikimedia\model\BotAction.class
 org\kie\benchmark\cep\wikimedia\model\CryptoScamAlert.class
@@ -13,6 +16,8 @@ org\kie\benchmark\cep\wikimedia\WikimediaCepBenchmark$RuleFiringListener.class
 org\kie\benchmark\cep\wikimedia\model\BotVelocity.class
 org\kie\benchmark\cep\wikimedia\WikimediaCepBenchmark.class
 org\kie\benchmark\cep\wikimedia\model\EditClassification.class
+org\kie\benchmark\cep\wikimedia\EventReplayer.class
+org\kie\benchmark\cep\wikimedia\EventRouter.class
 org\kie\benchmark\cep\wikimedia\CepSessionFactory.class
 org\kie\benchmark\cep\wikimedia\model\ContentAnalysis.class
 org\kie\benchmark\cep\wikimedia\model\Alert.class

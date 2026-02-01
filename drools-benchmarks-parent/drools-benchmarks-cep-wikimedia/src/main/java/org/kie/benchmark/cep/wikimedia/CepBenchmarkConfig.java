@@ -27,20 +27,27 @@ public class CepBenchmarkConfig {
     private final String rulesPath;
     private final String wikimediaUrl;
     private final boolean verbose;
+    private final boolean partitioned;
 
     public CepBenchmarkConfig(long durationMinutes, String rulesPath, String wikimediaUrl, boolean verbose) {
+        this(durationMinutes, rulesPath, wikimediaUrl, verbose, false);
+    }
+
+    public CepBenchmarkConfig(long durationMinutes, String rulesPath, String wikimediaUrl, boolean verbose, boolean partitioned) {
         this.durationMinutes = durationMinutes;
         this.rulesPath = rulesPath;
         this.wikimediaUrl = wikimediaUrl;
         this.verbose = verbose;
+        this.partitioned = partitioned;
     }
 
     public static CepBenchmarkConfig getDefault() {
         return new CepBenchmarkConfig(
                 1, // 5 minutes default
-                "rules/graph_partitioning_benchmark.drl",
+                "rules/wikimedia_content_moderation.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
-                true);
+                true,
+                false);
     }
 
     public long getDurationMinutes() {
@@ -57,5 +64,9 @@ public class CepBenchmarkConfig {
 
     public boolean isVerbose() {
         return verbose;
+    }
+
+    public boolean isPartitioned() {
+        return partitioned;
     }
 }

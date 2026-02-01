@@ -85,6 +85,8 @@ Runs the CEP benchmark using the `wikimedia_content_moderation.drl` ruleset with
 cd drools-benchmarks-cep-wikimedia
 mvn compile -DskipTests
 java -cp "target/classes;target/dependency/*" org.kie.benchmark.cep.wikimedia.ContentModerationRunner [durationMinutes]
+#alternatively
+java -cp target/drools-benchmarks-cep-wikimedia.jar org.kie.benchmark.cep.wikimedia.ContentModerationRunnerarent\drools-benchmarks-cep-wikimedia>
 ```
 
 ### Parameters

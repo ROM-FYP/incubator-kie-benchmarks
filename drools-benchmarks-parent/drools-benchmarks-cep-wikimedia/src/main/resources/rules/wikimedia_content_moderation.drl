@@ -1,4 +1,4 @@
-package org.drools.benchmark.wiki;
+package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 

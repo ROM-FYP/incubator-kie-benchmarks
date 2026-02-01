@@ -1,0 +1,5 @@
+package rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+
+declare WikiEvent @role(event) @expires(60s) end

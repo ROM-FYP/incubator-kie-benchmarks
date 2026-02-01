@@ -1,0 +1,79 @@
+package rules.c1;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+
+// ============================================================================
+// MINOR EDITS PIPELINE - Small changes (-50 <= sizeDelta <= 50, not bot)
+// ============================================================================
+
+declare MinorEdit @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    changeSize : int; 
+end
+declare MinorClassified @role(event) @expires(5s) 
+    title : String; 
+    editType : String; 
+end
+declare MinorValidated @role(event) @expires(5s) 
+    title : String; 
+end
+declare MinorAccepted @role(event) @expires(5s) 
+    title : String; 
+end
+declare MinorTracked @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Minor_Detect" salience 200
+when
+    $e : WikiEvent( sizeDelta >= -50, sizeDelta <= 50, bot == false, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Identify minor edit activity
+    insert(new MinorEdit($t, $u, $size));
+end
+
+rule "Minor_Classify" salience 195
+when
+    $m : MinorEdit( $t : title, $size : changeSize )
+then
+    // Stage 2: Classify edit type (correction, formatting, or link update)
+    String editType = $size == 0 ? "FORMATTING" : ($size > 0 ? "ADDITION" : "CORRECTION");
+    insert(new MinorClassified($t, editType));
+    retract($m);
+end
+
+rule "Minor_Validate" salience 190
+when
+    $m : MinorClassified( $t : title )
+then
+    // Stage 3: Quick validation (minor edits assumed good faith)
+    insert(new MinorValidated($t));
+    retract($m);
+end
+
+rule "Minor_Accept" salience 185
+when
+    $m : MinorValidated( $t : title )
+then
+    // Stage 4: Accept edit into article history
+    insert(new MinorAccepted($t));
+    retract($m);
+end
+
+rule "Minor_Track" salience 180
+when
+    $m : MinorAccepted( $t : title )
+then
+    // Stage 5: Update editor contribution stats
+    insert(new MinorTracked($t));
+    retract($m);
+end
+
+rule "Minor_Complete" salience 175
+when
+    $m : MinorTracked()
+then
+    // Stage 6: Cleanup - end of minor edits pipeline
+    retract($m);
+end

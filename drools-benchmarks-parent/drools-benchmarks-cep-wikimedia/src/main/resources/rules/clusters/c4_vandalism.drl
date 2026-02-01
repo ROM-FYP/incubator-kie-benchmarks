@@ -1,0 +1,84 @@
+package rules.c4;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+
+// ============================================================================
+// VANDALISM DETECTION PIPELINE - Large deletions (sizeDelta < -100)
+// ============================================================================
+
+declare VandalismCandidate @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    deletionSize : int; 
+end
+declare VandalismAnalysis @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    riskScore : int; 
+end
+declare VandalismVerified @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+    severity : String; 
+end
+declare VandalismFlagged @role(event) @expires(5s) 
+    title : String; 
+    user : String; 
+end
+declare VandalismLogged @role(event) @expires(5s) 
+    title : String; 
+end
+
+rule "Vandalism_Detect" salience 500
+when
+    $e : WikiEvent( sizeDelta < -100, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Identify potential vandalism based on large content deletion
+    insert(new VandalismCandidate($t, $u, Math.abs($size)));
+end
+
+rule "Vandalism_Analyze" salience 495
+when
+    $v : VandalismCandidate( $t : title, $u : user, $size : deletionSize )
+then
+    // Stage 2: Calculate risk score based on deletion magnitude
+    int risk = $size > 500 ? 90 : ($size > 200 ? 60 : 30);
+    insert(new VandalismAnalysis($t, $u, risk));
+    retract($v);
+end
+
+rule "Vandalism_Verify" salience 490
+when
+    $v : VandalismAnalysis( $t : title, $u : user, $risk : riskScore )
+then
+    // Stage 3: Classify severity level
+    String severity = $risk > 70 ? "HIGH" : ($risk > 40 ? "MEDIUM" : "LOW");
+    insert(new VandalismVerified($t, $u, severity));
+    retract($v);
+end
+
+rule "Vandalism_Flag" salience 485
+when
+    $v : VandalismVerified( severity == "HIGH", $t : title, $u : user )
+then
+    // Stage 4: Flag high-severity cases for moderator review
+    insert(new VandalismFlagged($t, $u));
+    retract($v);
+end
+
+rule "Vandalism_Log" salience 480
+when
+    $v : VandalismFlagged( $t : title )
+then
+    // Stage 5: Record flagged vandalism for audit trail
+    insert(new VandalismLogged($t));
+    retract($v);
+end
+
+rule "Vandalism_Complete" salience 475
+when
+    $v : VandalismLogged()
+then
+    // Stage 6: Cleanup - end of vandalism pipeline
+    retract($v);
+end
