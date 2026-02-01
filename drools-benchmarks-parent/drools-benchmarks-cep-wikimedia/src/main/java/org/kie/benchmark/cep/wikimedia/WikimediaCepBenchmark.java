@@ -334,7 +334,7 @@ public class WikimediaCepBenchmark {
     private void reportFinalStats(double durationSeconds) {
         long totalEvents = eventsIngested.get();
         long totalRulesFired = rulesFired.get();
-        long totalAlerts = countViralAlerts();
+        long totalAlerts = alertsGenerated.get(); // Use the counter
 
         double eventsPerSecond = durationSeconds > 0 ? totalEvents / durationSeconds : 0;
         double rulesPerSecond = durationSeconds > 0 ? totalRulesFired / durationSeconds : 0;
@@ -352,44 +352,12 @@ public class WikimediaCepBenchmark {
     }
 
     private long countViralAlerts() {
-        // Note: ViralTopicAlert is NOT in the partitioned DRLs yet?
-        // Wait, ViralTopicAlert is from the original benchmarking codebase, 
-        // effectively mostly used in `VandalismLogged`, `BotReported` etc which act as "Alerts" 
-        // in our DRLs.
-        // The original `wikimedia_content_moderation.drl` did NOT have ViralTopicAlert rules.
-        // It had VandalismLogged, BotReported, ContentCached, MinorTracked, DiscussionNotified.
-        // The `countViralAlerts` method in existing code looked for `ViralTopicAlert`, 
-        // but `ViralTopicAlert.java` exists in the model but WAS NOT USED in `wikimedia_content_moderation.drl`.
-        // The original code might have been copy-pasted from another benchmark that used `ViralTopicAlert`.
-        // I will adapt this to count the "Terminal Facts" of our pipelines over all sessions.
-        
-        long total = 0;
-        if (config.isPartitioned()) {
-             for (KieSession session : partitionedSessions.values()) {
-                 total += countTerminalFacts(session);
-             }
-        } else {
-             total = countTerminalFacts(kieSession);
-        }
-        return total;
+        // Obsolete, but kept for internal logic check if needed
+        return alertsGenerated.get();
     }
     
     private long countTerminalFacts(KieSession session) {
-        if (session == null) return 0;
-        
-        long count = 0;
-        // Count all terminal types
-        count += session.getFactHandles(o -> o.getClass().getSimpleName().equals("VandalismLogged")).size();
-        count += session.getFactHandles(o -> o.getClass().getSimpleName().equals("BotReported")).size();
-        count += session.getFactHandles(o -> o.getClass().getSimpleName().equals("ContentCached")).size();
-        count += session.getFactHandles(o -> o.getClass().getSimpleName().equals("MinorTracked")).size();
-        // DiscussionNotified is in fallback/missed for now if not routed, so won't appear in partitions
-        count += session.getFactHandles(o -> o.getClass().getSimpleName().equals("DiscussionNotified")).size(); 
-        
-        // Also check for ViralTopicAlert just in case
-        count += session.getFactHandles(o -> o instanceof ViralTopicAlert).size();
-        
-        return count;
+        return 0; // Not used anymore
     }
 
     private void shutdown() {
@@ -416,20 +384,29 @@ public class WikimediaCepBenchmark {
     }
 
     /**
-     * Listener to track rule firings.
+     * Listener to track rule firings and count alerts.
      */
     private class RuleFiringListener extends DefaultAgendaEventListener {
         @Override
         public void afterMatchFired(AfterMatchFiredEvent event) {
+            String ruleName = event.getMatch().getRule().getName();
+            
+            // Increment alerts for terminal rules
+            if (ruleName.endsWith("_Log") || ruleName.endsWith("_Report") || 
+                ruleName.endsWith("_Track") || ruleName.endsWith("_Cache") ||
+                ruleName.endsWith("_Notify")) {
+                alertsGenerated.incrementAndGet();
+            }
+
             if (config.isVerbose()) {
-                String ruleName = event.getMatch().getRule().getName();
                 // Simple debug filter
-                if (ruleName.contains("Detect") || ruleName.contains("Complete")) {
+                if (ruleName.contains("Detect") || ruleName.contains("Complete") || ruleName.contains("Log") || ruleName.contains("Report")) {
                     logger.debug("Rule fired: {}", ruleName);
                 }
             }
         }
     }
+
 
     public static void main(String[] args) {
         // Kept for compatibility but Main is in ContentModerationRunner
