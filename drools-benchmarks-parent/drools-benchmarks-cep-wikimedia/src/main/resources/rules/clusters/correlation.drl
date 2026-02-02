@@ -3,29 +3,36 @@ package rules;
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
-// Metadata handled by Java annotations in DrlFacts
-declare WikiEvent @role(event) @expires(60s) end
+// ============================================================================
+// CORRELATION SESSION RULES - SHARED STATE & CROSS-PIPELINE LOGIC
+// ============================================================================
 
-// VANDALISM PIPELINE
+// --- SHARED STATE INITIALIZATION ---
 
-// Stage 1: Detect
-rule "Vandalism_Detect" salience 500
+rule "InitializeUserActivity" salience 1000
 when
-    $e : WikiEvent( sizeDelta < -100, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
-then
-    insert(new VandalismCandidate($t, $u, Math.abs($size), $ts));
-end
-
-// Initialize UserActivity for joins if missing
-rule "Vandalism_InitializeUserActivity" salience 505
-when
-    $v : VandalismCandidate( $u : user )
+    ( VandalismCandidate( $u : user ) or
+      ContentAddition( $u : user ) or
+      MinorEdit( $u : user ) or
+      BotProfile( $u : user ) )
     not UserActivity( user == $u )
 then
     insert(new UserActivity($u, 0, "INITIALIZING"));
 end
 
-// Stage 2: Analyze + Update Activity
+rule "InitializeArticleQuality" salience 999
+when
+    ( VandalismAnalysis( $t : title ) or
+      ContentAddition( $t : title ) or
+      MinorEdit( $t : title ) )
+    not ArticleQuality( title == $t )
+then
+    insert(new ArticleQuality($t, 50, 0));
+end
+
+// --- VANDALISM PIPELINE CORRELATIONS ---
+
+// Stage 2: Analyze (Uses UserActivity)
 rule "Vandalism_Analyze_MassiveDeletion_NewUser" salience 499
 when
     $v : VandalismCandidate( $t : title, $u : user, deletionSize > 500 )
@@ -116,8 +123,7 @@ then
     modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
 end
 
-
-// Stage 3 variants (Verify)
+// Stage 3: Verify (Uses ArticleQuality)
 rule "Vandalism_Verify_HighRisk_HighQualityArticle" salience 490
 when
     $v : VandalismAnalysis( $t : title, $u : user, riskScore > 70 )
@@ -170,8 +176,8 @@ end
 rule "Vandalism_Verify_MediumRisk_OtherArticles" salience 485
 when
     $v : VandalismAnalysis( $t : title, $u : user, riskScore > 40, riskScore <= 70 )
-    $aq : ArticleQuality( title == $t, qualityScore <= 80, $quality : qualityScore ) or
-    not ArticleQuality( title == $t )
+    ($aq : ArticleQuality( title == $t, qualityScore <= 80, $quality : qualityScore ) or
+     not ArticleQuality( title == $t ))
 then
     insert(new VandalismVerified($t, $u, "MEDIUM", "STANDARD_ARTICLE"));
     retract($v);
@@ -185,7 +191,7 @@ then
     retract($v);
 end
 
-// Stage 4 variants (Flag)
+// Stage 4: Flag (Uses EditPattern)
 rule "Vandalism_Flag_HighSeverity_HighValue_RepeatOffender" salience 483
 when
     $v : VandalismVerified( severity == "HIGH", articleImpact == "HIGH_VALUE_ARTICLE", $t : title, $u : user )
@@ -206,40 +212,6 @@ then
     insert(new EditPattern($u, $t, "DESTRUCTIVE"));
 end
 
-rule "Vandalism_Flag_HighSeverity_Standard_RepeatOffender" salience 481
-when
-    $v : VandalismVerified( severity == "HIGH", articleImpact == "STANDARD_ARTICLE", $t : title, $u : user )
-    $ep : EditPattern( user == $u, pattern == "DESTRUCTIVE" )
-then
-    insert(new VandalismFlagged($t, $u, 80));
-    retract($v);
-end
-
-rule "Vandalism_Flag_HighSeverity_Standard_FirstTime" salience 480
-when
-    $v : VandalismVerified( severity == "HIGH", articleImpact == "STANDARD_ARTICLE", $t : title, $u : user )
-    not EditPattern( user == $u )
-then
-    insert(new VandalismFlagged($t, $u, 60));
-    retract($v);
-    insert(new EditPattern($u, $t, "DESTRUCTIVE"));
-end
-
-rule "Vandalism_Flag_MediumSeverity_HighValue" salience 479
-when
-    $v : VandalismVerified( severity == "MEDIUM", articleImpact == "HIGH_VALUE_ARTICLE", $t : title, $u : user )
-then
-    insert(new VandalismFlagged($t, $u, 70));
-    retract($v);
-end
-
-rule "Vandalism_NoFlag_LowSeverity" salience 478
-when
-    $v : VandalismVerified( severity == "LOW" )
-then
-    retract($v);
-end
-
 rule "Vandalism_Log" salience 477
 when
     $v : VandalismFlagged( $t : title )
@@ -248,45 +220,14 @@ then
     retract($v);
 end
 
-rule "Vandalism_Complete" salience 476
+rule "Vandalism_Complete" salience 470
 when
     $v : VandalismLogged()
 then
     retract($v);
 end
 
-// BOT PIPELINE
-
-rule "Bot_Detect" salience 400
-when
-    $e : WikiEvent( bot == true, $u : user, $ts : timestamp )
-then
-    insert(new BotActivity($u, "edit", $ts));
-end
-
-rule "Bot_Categorize_Registered" salience 399
-when
-    $b : BotActivity( $u : user, user contains "Bot", $ts : timestamp )
-    $count : Number( intValue > 0 ) from accumulate(
-        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
-        count($ba)
-    )
-then
-    insert(new BotProfile($u, "REGISTERED", $count.intValue()));
-    retract($b);
-end
-
-rule "Bot_Categorize_Unverified" salience 398
-when
-    $b : BotActivity( $u : user, user not contains "Bot", $ts : timestamp )
-    $count : Number( intValue > 0 ) from accumulate(
-        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
-        count($ba)
-    )
-then
-    insert(new BotProfile($u, "UNVERIFIED", $count.intValue()));
-    retract($b);
-end
+// --- BOT PIPELINE CORRELATIONS ---
 
 rule "Bot_HealthCheck_Registered_RateLimitExceeded" salience 397
 when
@@ -326,37 +267,25 @@ then
     retract($b);
 end
 
-rule "Bot_Metrics" salience 392
+rule "Bot_Report_Notify" salience 392
 when
     $b : BotHealthCheck( $u : user )
 then
     insert(new BotMetrics($u));
-    retract($b);
-end
-
-rule "Bot_Report" salience 391
-when
-    $b : BotMetrics( $u : user )
-then
     insert(new BotReported($u));
     retract($b);
 end
 
-rule "Bot_Complete" salience 390
+rule "Bot_Complete" salience 380
 when
-    $b : BotReported()
+    $br : BotReported()
+    $bm : BotMetrics()
 then
-    retract($b);
+    retract($br);
+    retract($bm);
 end
 
-// CONTENT PIPELINE
-
-rule "Content_Detect" salience 300
-when
-    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
-then
-    insert(new ContentAddition($t, $u, $size, $ts));
-end
+// --- CONTENT PIPELINE CORRELATIONS ---
 
 rule "Content_Review_Major_Experienced" salience 299
 when
@@ -376,14 +305,6 @@ then
     retract($c);
 end
 
-rule "Content_Review_Standard" salience 297
-when
-    $c : ContentAddition( addedBytes <= 1000, $t : title )
-then
-    insert(new ContentReview($t, "UNKNOWN", "STANDARD", "REGULAR"));
-    retract($c);
-end
-
 rule "Content_Approve_Major" salience 289
 when
     $c : ContentReview( qualityTier == "MAJOR", $t : title, $u : user )
@@ -394,74 +315,35 @@ then
     modify($aq) { setQualityScore(Math.min(100, $q + 20)) };
 end
 
-rule "Content_Approve_NewArticle" salience 288
+rule "Content_Index_Track" salience 281
 when
-    $c : ContentReview( $t : title, $u : user )
-    not ArticleQuality( title == $t )
-then
-    insert(new ContentApproved($t, $u, 10));
-    retract($c);
-    insert(new ArticleQuality($t, 60, 1));
-end
-
-rule "Content_Approve_Standard" salience 287
-when
-    $c : ContentReview( qualityTier != "MAJOR", $t : title, $u : user )
-    $aq : ArticleQuality( title == $t, $q : qualityScore )
-then
-    insert(new ContentApproved($t, $u, 5));
-    retract($c);
-    modify($aq) { setQualityScore(Math.min(100, $q + 5)) };
-end
-
-rule "Content_Index" salience 279
-when
-    $c : ContentApproved( $t : title )
+    $a : ContentApproved( $t : title )
 then
     insert(new ContentIndexed($t));
-    retract($c);
+    retract($a);
 end
 
-rule "Content_Cache" salience 278
+rule "Content_Cache_Cache" salience 280
 when
-    $c : ContentIndexed( $t : title )
+    $i : ContentIndexed( $t : title )
 then
     insert(new ContentCached($t));
-    retract($c);
+    retract($i);
 end
 
-rule "Content_Complete" salience 277
+rule "Content_Log" salience 279
 when
     $c : ContentCached()
 then
     retract($c);
 end
 
-// MINOR EDITS PIPELINE
-
-rule "Minor_Detect" salience 200
-when
-    $e : WikiEvent( sizeDelta >= -50, sizeDelta <= 50, bot == false, $t : title, $u : user, $ts : timestamp )
-then
-    insert(new MinorEdit($t, $u, 0, $ts));
-end
-
-rule "Minor_Classify" salience 199
-when
-    $m : MinorEdit( $t : title, $u : user, $ts : timestamp )
-    $freq : Number() from accumulate(
-        $me : MinorEdit( title == $t, user == $u, timestamp > ($ts - 60000) ),
-        count($me)
-    )
-then
-    insert(new MinorClassified($t, $u, "CORRECTION", $freq.intValue()));
-    retract($m);
-end
+// --- MINOR PIPELINE CORRELATIONS ---
 
 rule "Minor_Validate_Trusted" salience 196
 when
     $m : MinorClassified( frequency < 3, $t : title, $u : user )
-    $ua : UserActivity( editCount > 50 )
+    $ua : UserActivity( user == $u, editCount > 50 )
 then
     insert(new MinorValidated($t, $u, "HIGH"));
     retract($m);
@@ -470,9 +352,9 @@ end
 rule "Minor_Validate_Standard" salience 195
 when
     $m : MinorClassified( $t : title, $u : user )
-    not MinorValidated( title == $t )
+    not MinorValidated( title == $t, user == $u )
 then
-    insert(new MinorValidated($t, "UNKNOWN", "STANDARD"));
+    insert(new MinorValidated($t, $u, "STANDARD"));
     retract($m);
 end
 
@@ -484,7 +366,7 @@ then
     retract($m);
 end
 
-rule "Minor_Track" salience 190
+rule "Minor_Track_Track" salience 190
 when
     $m : MinorAccepted( $t : title )
 then
@@ -499,80 +381,7 @@ then
     retract($m);
 end
 
-// DISCUSSION PIPELINE
-declare DiscussionPost @role(event) @expires(5s) 
-    title : String; 
-    user : String;
-    timestamp : long;
-end
-
-declare DiscussionAnalyzed @role(event) @expires(5s) 
-    title : String; 
-    topic : String;
-    relatedArticleQuality : int;
-end
-
-declare DiscussionSentiment @role(event) @expires(5s) 
-    title : String; 
-    mood : String;
-    userEngagement : String;
-end
-
-declare DiscussionRouted @role(event) @expires(5s) 
-    title : String;
-end
-
-declare DiscussionNotified @role(event) @expires(5s) 
-    title : String;
-end
-
-rule "Discussion_Detect" salience 100
-when
-    $e : WikiEvent( title matches "Talk:.*", $t : title, $u : user, $ts : timestamp )
-then
-    insert(new DiscussionPost($t, $u, $ts));
-end
-
-rule "Discussion_Analyze" salience 99
-when
-    $d : DiscussionPost( $t : title )
-then
-    insert(new DiscussionAnalyzed($t, "TOPIC", 50));
-    retract($d);
-end
-
-rule "Discussion_Sentiment" salience 97
-when
-    $d : DiscussionAnalyzed( $t : title )
-then
-    insert(new DiscussionSentiment($t, "NEUTRAL", "REGULAR"));
-    retract($d);
-end
-
-rule "Discussion_Route" salience 91
-when
-    $d : DiscussionSentiment( $t : title )
-then
-    insert(new DiscussionRouted($t));
-    retract($d);
-end
-
-rule "Discussion_Notify" salience 90
-when
-    $d : DiscussionRouted( $t : title )
-then
-    insert(new DiscussionNotified($t));
-    retract($d);
-end
-
-rule "Discussion_Complete" salience 89
-when
-    $d : DiscussionNotified()
-then
-    retract($d);
-end
-
-// CORRELATIONS
+// --- CROSS-PIPELINE CORRELATIONS ---
 
 rule "CorrelateHighRiskUser" salience 50
 when

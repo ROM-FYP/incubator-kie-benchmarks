@@ -1,36 +1,13 @@
 package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
 // ============================================================================
 // BOT ACTIVITY MONITORING PIPELINE
 // ============================================================================
 
-declare BotActivity @role(event) @expires(5s) 
-    user : String; 
-    action : String;
-    timestamp : long;
-end
-
-declare BotProfile @role(event) @expires(5s) 
-    user : String; 
-    category : String;
-    activityRate : int;
-end
-
-declare BotHealthCheck @role(event) @expires(5s) 
-    user : String; 
-    status : String;
-    anomalyDetected : boolean;
-end
-
-declare BotMetrics @role(event) @expires(5s) 
-    user : String;
-end
-
-declare BotReported @role(event) @expires(5s) 
-    user : String;
-end
+// Bot activity signals stay here for local categorization.
 
 rule "Bot_Detect" salience 400
 when
@@ -39,96 +16,14 @@ then
     insert(new BotActivity($u, "edit", $ts));
 end
 
-// Initialize UserActivity for joins if missing
-rule "Bot_InitializeUserActivity" salience 405
+rule "Bot_Categorize" salience 398
 when
-    $b : BotActivity( $u : user )
-    not UserActivity( user == $u )
-then
-    insert(new UserActivity($u, 0, "INITIALIZING"));
-end
-
-rule "Bot_Categorize_Registered" salience 399
-when
-    $b : BotActivity( $u : user, user contains "Bot", $ts : timestamp )
-    $count : Number( intValue > 0 ) from accumulate(
-        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
+    $a : BotActivity( $u : user, $ts : timestamp )
+    $rate : Number() from accumulate(
+        $ba : BotActivity( user == $u, action == "edit", timestamp > ($ts - 60000) ),
         count($ba)
     )
 then
-    insert(new BotProfile($u, "REGISTERED", $count.intValue()));
-    retract($b);
-end
-
-rule "Bot_Categorize_Unverified" salience 398
-when
-    $b : BotActivity( $u : user, user not contains "Bot", $ts : timestamp )
-    $count : Number( intValue > 0 ) from accumulate(
-        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
-        count($ba)
-    )
-then
-    insert(new BotProfile($u, "UNVERIFIED", $count.intValue()));
-    retract($b);
-end
-
-rule "Bot_HealthCheck_Registered_RateLimitExceeded" salience 397
-when
-    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5 )
-    $ua : UserActivity( user == $u, $editCount : editCount )
-then
-    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
-    retract($b);
-    modify($ua) { setEditCount($editCount + 1) };
-end
-
-rule "Bot_HealthCheck_Registered_Healthy" salience 396
-when
-    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5 )
-    $ua : UserActivity( user == $u, $editCount : editCount )
-then
-    insert(new BotHealthCheck($u, "HEALTHY", false));
-    retract($b);
-    modify($ua) { setEditCount($editCount + 1) };
-end
-
-rule "Bot_HealthCheck_Unverified_NewBot" salience 395
-when
-    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2 )
-    $ua : UserActivity( user == $u, editCount < 10 )
-then
-    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
-    retract($b);
-end
-
-rule "Bot_HealthCheck_Unverified_Review" salience 394
-when
-    $b : BotProfile( $u : user, category == "UNVERIFIED" )
-    not BotHealthCheck( user == $u )
-then
-    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false));
-    retract($b);
-end
-
-rule "Bot_Metrics" salience 392
-when
-    $b : BotHealthCheck( $u : user )
-then
-    insert(new BotMetrics($u));
-    retract($b);
-end
-
-rule "Bot_Report" salience 391
-when
-    $b : BotMetrics( $u : user )
-then
-    insert(new BotReported($u));
-    retract($b);
-end
-
-rule "Bot_Complete" salience 390
-when
-    $b : BotReported()
-then
-    retract($b);
+    insert(new BotProfile($u, "UNVERIFIED", $rate.intValue()));
+    retract($a);
 end

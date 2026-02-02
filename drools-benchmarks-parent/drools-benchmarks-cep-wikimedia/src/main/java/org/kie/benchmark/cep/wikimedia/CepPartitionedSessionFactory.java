@@ -41,6 +41,9 @@ public class CepPartitionedSessionFactory {
         
         // C4: Vandalism
         clusterKieBases.put(ClusterId.C4_VANDALISM, createKieBase("rules/clusters/c4_vandalism.drl"));
+        
+        // S_CORRELATION: Shared logic and cross-pipeline joins
+        clusterKieBases.put(ClusterId.S_CORRELATION, createKieBase("rules/clusters/correlation.drl"));
     }
 
     private KieBase createKieBase(String clusterDrlPath) {

@@ -1,23 +1,7 @@
 package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
+// Metadata handled by Java annotations in DrlFacts
 declare WikiEvent @role(event) @expires(60s) end
-
-declare UserActivity @role(event) @expires(30s)
-    user : String;
-    editCount : int;
-    lastEditType : String;
-end
-
-declare ArticleQuality @role(event) @expires(30s)
-    title : String;
-    qualityScore : int;
-    editCount : int;
-end
-
-declare EditPattern @role(event) @expires(20s)
-    user : String;
-    title : String;
-    pattern : String; // "CONSTRUCTIVE", "DESTRUCTIVE", "MIXED"
-end

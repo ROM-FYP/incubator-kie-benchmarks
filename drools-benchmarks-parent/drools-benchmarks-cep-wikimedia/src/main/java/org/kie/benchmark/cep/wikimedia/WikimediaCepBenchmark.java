@@ -56,6 +56,8 @@ public class WikimediaCepBenchmark {
     
     // Partitioned Sessions
     private Map<ClusterId, KieSession> partitionedSessions;
+    private FactForwardingListener forwardingListener;
+    private EnumSet<ClusterId> activeClusters = EnumSet.noneOf(ClusterId.class);
 
     private WikimediaEventSource eventSource;
 
@@ -83,12 +85,7 @@ public class WikimediaCepBenchmark {
     /**
      * Run the benchmark for the configured duration.
      */
-
-    /**
-     * Run the benchmark for the configured duration.
-     */
     public void run() {
-        // ... (existing logging)
         logger.info("========================================");
         logger.info("Wikimedia CEP Benchmark");
         logger.info("Duration: {} minutes", config.getDurationMinutes());
@@ -176,10 +173,9 @@ public class WikimediaCepBenchmark {
         LongConsumer timeAdvancer;
         if (config.isPartitioned()) {
             timeAdvancer = (time) -> {
-                for (KieSession session : partitionedSessions.values()) {
-                    SessionPseudoClock clock = session.getSessionClock();
-                    clock.advanceTime(time, TimeUnit.MILLISECONDS);
-                }
+                // Lazy advancement: We don't advance all sessions here.
+                // Advancement for pipeline sessions happens in eventProcessor.
+                // Advancement for Correlation happens in FactForwardingListener.
             };
         } else {
             timeAdvancer = (time) -> {
@@ -192,12 +188,23 @@ public class WikimediaCepBenchmark {
         java.util.function.BiConsumer<WikiEvent, Long> eventProcessor;
         if (config.isPartitioned()) {
              eventProcessor = (event, time) -> {
-                 EnumSet<ClusterId> clusters = eventRouter.route(event);
-                 for (ClusterId id : clusters) {
-                     KieSession session = partitionedSessions.get(id);
-                     if (session != null) session.insert(event);
-                 }
-                 eventsIngested.incrementAndGet();
+                  activeClusters.clear();
+                  forwardingListener.reset();
+                  EnumSet<ClusterId> clusters = eventRouter.route(event);
+                  for (ClusterId id : clusters) {
+                      KieSession session = partitionedSessions.get(id);
+                      if (session != null) {
+                          // Lazy clock advancement for active pipeline session
+                          SessionPseudoClock clock = session.getSessionClock();
+                          long clockTime = clock.getCurrentTime();
+                          if (time > clockTime) {
+                              clock.advanceTime(time - clockTime, TimeUnit.MILLISECONDS);
+                          }
+                          session.insert(event);
+                          activeClusters.add(id);
+                      }
+                  }
+                  eventsIngested.incrementAndGet();
              };
         } else {
             eventProcessor = (event, time) -> {
@@ -211,9 +218,16 @@ public class WikimediaCepBenchmark {
         if (config.isPartitioned()) {
             ruleFirer = () -> {
                 int fired = 0;
-                for (KieSession session : partitionedSessions.values()) {
-                    fired += session.fireAllRules();
+                // 1. Fire active pipeline sessions
+                for (ClusterId id : activeClusters) {
+                    fired += partitionedSessions.get(id).fireAllRules();
                 }
+                
+                // 2. Fire Correlation if facts were forwarded
+                if (forwardingListener.hasForwarded()) {
+                    fired += partitionedSessions.get(ClusterId.S_CORRELATION).fireAllRules();
+                }
+                
                 rulesFired.addAndGet(fired);
             };
         } else {
@@ -247,15 +261,31 @@ public class WikimediaCepBenchmark {
     private void initializePartitionedSessions(boolean pseudoClock) {
         partitionedSessions = partitionedSessionFactory.createSessions(pseudoClock);
         
+        KieSession correlationSession = partitionedSessions.get(ClusterId.S_CORRELATION);
+        if (correlationSession == null) {
+            throw new RuntimeException("S_CORRELATION session missing from partitioned sessions map");
+        }
+
+        // Initialize Fact Forwarding Listener
+        this.forwardingListener = new FactForwardingListener(correlationSession);
+
         // Initialize Mining Trace Logger (Single shared instance for all partitions)
         traceLogger = new MiningTraceLogger("mining_trace.csv");
         traceLogger.startNewTransaction(); // Start global transaction for this run
         
         // Add listener to all sessions
-        RuleFiringListener listener = new RuleFiringListener();
-        for (KieSession session : partitionedSessions.values()) {
-            session.addEventListener(listener);
+        RuleFiringListener firingListener = new RuleFiringListener();
+        for (Map.Entry<ClusterId, KieSession> entry : partitionedSessions.entrySet()) {
+            ClusterId id = entry.getKey();
+            KieSession session = entry.getValue();
+            
+            session.addEventListener(firingListener);
             session.addEventListener(traceLogger); // Shared trace logger
+            
+            // Attached forwarding listener ONLY to pipeline sessions
+            if (id != ClusterId.S_CORRELATION) {
+                session.addEventListener(forwardingListener);
+            }
         }
     }
 
@@ -268,14 +298,7 @@ public class WikimediaCepBenchmark {
                 // Route event
                 EnumSet<ClusterId> clusters = eventRouter.route(event);
                 
-                if (clusters.isEmpty()) {
-                    // Fallback: Currently dropping as per plan OR could route to a fallback session
-                    // Instructions say: "safest is route to baseline session OR multicast to all"
-                    // But we don't have baseline session open in partitioned mode.
-                    // Let's assume for this specific benchmark we only care about routed events, 
-                    // or we could assume a "Common" session. 
-                    // Given existing plan didn't specify instantiation of fallback session, we skip.
-                } else {
+                if (!clusters.isEmpty()) {
                     for (ClusterId id : clusters) {
                         KieSession session = partitionedSessions.get(id);
                         if (session != null) {
@@ -323,10 +346,7 @@ public class WikimediaCepBenchmark {
     }
 
     private void reportStats() {
-        // Count viral alerts in working memory
-        long alerts = countViralAlerts();
-        alertsGenerated.set(alerts);
-
+        // Stats represent a snapshot
         logger.info("Stats - Events: {}, Rules Fired: {}, Viral Alerts: {}",
                 eventsIngested.get(), rulesFired.get(), alertsGenerated.get());
     }
@@ -334,7 +354,7 @@ public class WikimediaCepBenchmark {
     private void reportFinalStats(double durationSeconds) {
         long totalEvents = eventsIngested.get();
         long totalRulesFired = rulesFired.get();
-        long totalAlerts = alertsGenerated.get(); // Use the counter
+        long totalAlerts = alertsGenerated.get();
 
         double eventsPerSecond = durationSeconds > 0 ? totalEvents / durationSeconds : 0;
         double rulesPerSecond = durationSeconds > 0 ? totalRulesFired / durationSeconds : 0;
@@ -349,15 +369,6 @@ public class WikimediaCepBenchmark {
         logger.info("Events/sec: {}", String.format("%.2f", eventsPerSecond));
         logger.info("Rules/sec: {}", String.format("%.2f", rulesPerSecond));
         logger.info("========================================");
-    }
-
-    private long countViralAlerts() {
-        // Obsolete, but kept for internal logic check if needed
-        return alertsGenerated.get();
-    }
-    
-    private long countTerminalFacts(KieSession session) {
-        return 0; // Not used anymore
     }
 
     private void shutdown() {
@@ -399,7 +410,6 @@ public class WikimediaCepBenchmark {
             }
 
             if (config.isVerbose()) {
-                // Simple debug filter
                 if (ruleName.contains("Detect") || ruleName.contains("Complete") || ruleName.contains("Log") || ruleName.contains("Report")) {
                     logger.debug("Rule fired: {}", ruleName);
                 }
@@ -407,9 +417,7 @@ public class WikimediaCepBenchmark {
         }
     }
 
-
     public static void main(String[] args) {
-        // Kept for compatibility but Main is in ContentModerationRunner
         ContentModerationRunner.main(args);
     }
 }

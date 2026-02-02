@@ -1,128 +1,17 @@
 package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
 // ============================================================================
 // CONTENT GROWTH PIPELINE
 // ============================================================================
 
-declare ContentAddition @role(event) @expires(5s) 
-    title : String; 
-    user : String; 
-    addedBytes : int;
-    timestamp : long;
-end
-
-declare ContentReview @role(event) @expires(5s) 
-    title : String; 
-    qualityTier : String;
-    contributorRating : String;
-end
-
-declare ContentApproved @role(event) @expires(5s) 
-    title : String;
-    qualityBoost : int;
-end
-
-declare ContentIndexed @role(event) @expires(5s) 
-    title : String;
-end
-
-declare ContentCached @role(event) @expires(5s) 
-    title : String;
-end
+// Content addition signals stay here for local processing.
 
 rule "Content_Detect" salience 300
 when
     $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
 then
     insert(new ContentAddition($t, $u, $size, $ts));
-end
-
-// Initialize UserActivity for joins if missing
-rule "Content_InitializeUserActivity" salience 305
-when
-    $c : ContentAddition( $u : user )
-    not UserActivity( user == $u )
-then
-    insert(new UserActivity($u, 0, "INITIALIZING"));
-end
-
-rule "Content_Review_Major_Experienced" salience 299
-when
-    $c : ContentAddition( addedBytes > 1000, $u : user, $t : title )
-    $ua : UserActivity( user == $u, editCount > 20 )
-then
-    insert(new ContentReview($t, "MAJOR", "EXPERIENCED"));
-    retract($c);
-end
-
-rule "Content_Review_Major_New" salience 298
-when
-    $c : ContentAddition( addedBytes > 1000, $u : user, $t : title )
-    not UserActivity( user == $u, editCount > 20 )
-then
-    insert(new ContentReview($t, "MAJOR", "NEW"));
-    retract($c);
-end
-
-rule "Content_Review_Standard" salience 297
-when
-    $c : ContentAddition( addedBytes <= 1000, $t : title )
-then
-    insert(new ContentReview($t, "STANDARD", "REGULAR"));
-    retract($c);
-end
-
-rule "Content_Approve_Major" salience 289
-when
-    $c : ContentReview( qualityTier == "MAJOR", $t : title )
-    $aq : ArticleQuality( title == $t, $q : qualityScore )
-then
-    insert(new ContentApproved($t, 20));
-    retract($c);
-    modify($aq) { setQualityScore(Math.min(100, $q + 20)) };
-end
-
-rule "Content_Approve_NewArticle" salience 288
-when
-    $c : ContentReview( $t : title )
-    not ArticleQuality( title == $t )
-then
-    insert(new ContentApproved($t, 10));
-    retract($c);
-    insert(new ArticleQuality($t, 60, 1));
-end
-
-rule "Content_Approve_Standard" salience 287
-when
-    $c : ContentReview( qualityTier != "MAJOR", $t : title )
-    $aq : ArticleQuality( title == $t, $q : qualityScore )
-then
-    insert(new ContentApproved($t, 5));
-    retract($c);
-    modify($aq) { setQualityScore(Math.min(100, $q + 5)) };
-end
-
-rule "Content_Index" salience 279
-when
-    $c : ContentApproved( $t : title )
-then
-    insert(new ContentIndexed($t));
-    retract($c);
-end
-
-rule "Content_Cache" salience 278
-when
-    $c : ContentIndexed( $t : title )
-then
-    insert(new ContentCached($t));
-    retract($c);
-end
-
-rule "Content_Complete" salience 277
-when
-    $c : ContentCached()
-then
-    retract($c);
 end

@@ -1,51 +1,19 @@
 package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
 // ============================================================================
 // MINOR EDITS PIPELINE
 // ============================================================================
 
-declare MinorEdit @role(event) @expires(5s) 
-    title : String; 
-    user : String; 
-    changeSize : int;
-    timestamp : long;
-end
-
-declare MinorClassified @role(event) @expires(5s) 
-    title : String; 
-    editType : String;
-    frequency : int;
-end
-
-declare MinorValidated @role(event) @expires(5s) 
-    title : String;
-    trustLevel : String;
-end
-
-declare MinorAccepted @role(event) @expires(5s) 
-    title : String;
-end
-
-declare MinorTracked @role(event) @expires(5s) 
-    title : String;
-end
+// Minor edit signals stay here for local frequency analysis.
 
 rule "Minor_Detect" salience 200
 when
     $e : WikiEvent( sizeDelta >= -50, sizeDelta <= 50, bot == false, $t : title, $u : user, $ts : timestamp )
 then
     insert(new MinorEdit($t, $u, 0, $ts));
-end
-
-// Initialize UserActivity for joins if missing
-rule "Minor_InitializeUserActivity" salience 205
-when
-    $m : MinorEdit( $u : user )
-    not UserActivity( user == $u )
-then
-    insert(new UserActivity($u, 0, "INITIALIZING"));
 end
 
 rule "Minor_Classify" salience 199
@@ -56,47 +24,6 @@ when
         count($me)
     )
 then
-    insert(new MinorClassified($t, "CORRECTION", $freq.intValue()));
-    retract($m);
-end
-
-rule "Minor_Validate_Trusted" salience 196
-when
-    $m : MinorClassified( frequency < 3, $t : title )
-    $ua : UserActivity( editCount > 50 )
-then
-    insert(new MinorValidated($t, "HIGH"));
-    retract($m);
-end
-
-rule "Minor_Validate_Standard" salience 195
-when
-    $m : MinorClassified( $t : title )
-    not MinorValidated( title == $t )
-then
-    insert(new MinorValidated($t, "STANDARD"));
-    retract($m);
-end
-
-rule "Minor_Accept" salience 191
-when
-    $m : MinorValidated( $t : title )
-then
-    insert(new MinorAccepted($t));
-    retract($m);
-end
-
-rule "Minor_Track" salience 190
-when
-    $m : MinorAccepted( $t : title )
-then
-    insert(new MinorTracked($t));
-    retract($m);
-end
-
-rule "Minor_Complete" salience 189
-when
-    $m : MinorTracked()
-then
+    insert(new MinorClassified($t, $u, "CORRECTION", $freq.intValue()));
     retract($m);
 end

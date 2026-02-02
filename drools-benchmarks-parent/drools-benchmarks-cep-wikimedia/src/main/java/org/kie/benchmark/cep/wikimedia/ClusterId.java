@@ -7,5 +7,6 @@ public enum ClusterId {
     C1_MINOR,
     C2_CONTENT,
     C3_BOT,
-    C4_VANDALISM
+    C4_VANDALISM,
+    S_CORRELATION
 }
