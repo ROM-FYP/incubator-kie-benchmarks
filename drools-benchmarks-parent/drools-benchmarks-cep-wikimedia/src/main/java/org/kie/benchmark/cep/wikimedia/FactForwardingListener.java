@@ -37,6 +37,9 @@ public class FactForwardingListener extends DefaultRuleRuntimeEventListener {
         forwardedTypes.add("MinorEdit");
         forwardedTypes.add("MinorClassified");
         forwardedTypes.add("MinorValidated");
+        
+        // Memoization support: forward ClusterOutput to correlation
+        forwardedTypes.add("ClusterOutput");
     }
 
     @Override

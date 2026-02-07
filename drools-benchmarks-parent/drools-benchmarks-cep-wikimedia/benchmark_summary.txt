@@ -1,0 +1,38 @@
+
+============================================
+   MULTI-ITERATION BENCHMARK SUMMARY
+============================================
+Iterations: 5
+
+--------------------------------------------
+BASELINE MODE (No Partitioning, No Memo)
+--------------------------------------------
+Duration (ms):    Mean=3362.00  Min=2580.00  Max=3960.00  StdDev=445.98
+Alerts Generated: Mean=1019.0  Min=1019  Max=1019
+Rules Fired:      Mean=29791  Min=29791  Max=29791
+Throughput:       Mean=0.00 events/sec
+
+--------------------------------------------
+MEMOIZATION MODE (Partitioned + Cache)
+--------------------------------------------
+Duration (ms):    Mean=4320.00  Min=3620.00  Max=4800.00  StdDev=424.64
+Alerts Generated: Mean=999.0  Min=999  Max=999
+Rules Fired:      Mean=31457  Min=31457  Max=31457
+Throughput:       Mean=1454.01 events/sec
+
+Cache Performance:
+  Hits:           Mean=473.0  Min=473  Max=473
+  Misses:         Mean=5742.0  Min=5742  Max=5742
+  Hit Rate:       Mean=0.00%  Min=0.00%  Max=0.00%
+  Evals Skipped:  Mean=0.0  Min=0  Max=0
+
+--------------------------------------------
+PERFORMANCE COMPARISON
+--------------------------------------------
+Memoization is 1.28x SLOWER than baseline
+Performance overhead: 28.49% increase in duration
+
+Duration delta:   958.00 ms (-28.49%)
+Rules reduction:  -1666 fewer rules (-5.59%)
+
+============================================

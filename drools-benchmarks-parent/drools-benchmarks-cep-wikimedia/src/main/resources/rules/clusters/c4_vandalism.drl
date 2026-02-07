@@ -2,6 +2,9 @@ package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+import org.kie.benchmark.cep.wikimedia.memoization.ClusterOutput;
+
+import java.util.HashMap;
 
 // ============================================================================
 // VANDALISM DETECTION PIPELINE - Enhanced with joins
@@ -13,4 +16,18 @@ when
     $e : WikiEvent( (sizeDelta < -100), bot == false, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
 then
     insert(new VandalismCandidate($t, $u, - $size, $ts));
+end
+
+// ============================================================================
+// OUTPUT EMITTERS FOR MEMOIZATION
+// ============================================================================
+
+rule "Emit_ClusterOutput_VandalismCandidate" no-loop
+when
+    $v : VandalismCandidate( $t : title, $u : user, $delSize : deletionSize, $ts : timestamp )
+then
+    HashMap<String, Object> attrs = new HashMap<>();
+    attrs.put("deletionSize", $delSize);
+    ClusterOutput output = new ClusterOutput(3, "VANDALISM_DETECTED", $u, $ts, attrs);
+    insert(output);
 end

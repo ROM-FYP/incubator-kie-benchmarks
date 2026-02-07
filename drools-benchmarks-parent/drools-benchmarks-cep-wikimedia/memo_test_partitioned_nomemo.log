@@ -1,0 +1,133 @@
+Starting Replay from test_events_merged.json (Partitioned=true, Memo=false)
+17:31:39.239 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:39.242 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:39.273 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:39.274 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:39.274 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:39.313 [main] DEBUG org.drools.drl.parser.DrlParser -- parse : ANTLR4_PARSER_ENABLED = false, languageLevel = DRL6
+17:31:41.185 [main] DEBUG org.drools.compiler.kie.builder.impl.KieRepositoryImpl -- KieModule was added: MemoryKieModule[releaseId=org.default:artifact:1.0.0]
+17:31:41.204 [main] DEBUG org.drools.compiler.kie.builder.impl.KieRepositoryImpl -- Cannot load a KieRepositoryScanner, using the DummyKieScanner
+17:31:41.403 [main] INFO org.drools.compiler.kie.builder.impl.KieContainerImpl -- Start creation of KieBase: defaultKieBase
+17:31:41.670 [main] INFO org.drools.compiler.kie.builder.impl.KieContainerImpl -- End creation of KieBase: defaultKieBase
+17:31:41.678 [main] WARN org.drools.compiler.kie.builder.impl.KieBuilderImpl -- File 'rules/clusters/c1_minor.drl' is in folder 'rules/clusters' but declares package 'rules'. It is advised to have a correspondance between package and folder names.
+17:31:41.678 [main] WARN org.drools.compiler.kie.builder.impl.KieBuilderImpl -- File 'rules/clusters/common.drl' is in folder 'rules/clusters' but declares package 'rules'. It is advised to have a correspondance between package and folder names.
+17:31:41.680 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:41.680 [main] DEBUG org.drools.compiler.compiler.JavaDialectConfiguration -- Selected compiler ECLIPSE [drools.dialect.java.compiler:null, hasEclipseCompiler:true]
+17:31:41.682 [main] DEBUG org.drools.drl.parser.DrlParser -- parse : ANTLR4_PARSER_ENABLED = false, languageLevel = DRL6
+17:31:41.689 [main] DEBUG org.drools.drl.parser.DrlParser -- parse : ANTLR4_PARSER_ENABLED = false, languageLevel = DRL6
+17:31:41.892 [main] ERROR org.drools.compiler.kie.builder.impl.KieProject -- Unable to build KieBaseModel:defaultKieBase
+Field Reader does not exist for declaration '$tier' in '$tier : tier' in the rule 'Emit_ClusterOutput_MinorClassified' : [Rule name='Emit_ClusterOutput_MinorClassified']
+
+Field Reader does not exist for declaration '$type' in '$type : analysisType' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed' : [Rule name='Emit_ClusterOutput_DiscussionAnalyzed']
+
+Field Reader does not exist for declaration '$score' in '$score : score' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed' : [Rule name='Emit_ClusterOutput_DiscussionAnalyzed']
+
+Rule Compilation error : [Rule name='Emit_ClusterOutput_DiscussionAnalyzed']
+	$type cannot be resolved to a variable
+	$score cannot be resolved to a variable
+
+Rule Compilation error : [Rule name='Emit_ClusterOutput_MinorClassified']
+	The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified
+	$tier cannot be resolved to a variable
+	The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified
+
+
+17:31:41.907 [main] INFO org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory -- Builder results for rules/clusters/c1_minor.drl: 
+Error Messages:
+Message [id=1, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=56, column=0
+   text=Field Reader does not exist for declaration '$tier' in '$tier : tier' in the rule 'Emit_ClusterOutput_MinorClassified']
+Message [id=2, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$type' in '$type : analysisType' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=3, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$score' in '$score : score' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=4, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=65, column=0
+   text=Rule Compilation error $type cannot be resolved to a variable
+$score cannot be resolved to a variable]
+Message [id=5, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=54, column=0
+   text=Rule Compilation error The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified
+$tier cannot be resolved to a variable
+The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified]
+---
+Warning Messages:
+---
+Info Messages:
+
+17:31:41.909 [main] ERROR org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory -- Failed to create KieBase for rules/clusters/c1_minor.drl
+java.lang.RuntimeException: Build errors for rules/clusters/c1_minor.drl: Error Messages:
+Message [id=1, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=56, column=0
+   text=Field Reader does not exist for declaration '$tier' in '$tier : tier' in the rule 'Emit_ClusterOutput_MinorClassified']
+Message [id=2, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$type' in '$type : analysisType' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=3, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$score' in '$score : score' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=4, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=65, column=0
+   text=Rule Compilation error $type cannot be resolved to a variable
+$score cannot be resolved to a variable]
+Message [id=5, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=54, column=0
+   text=Rule Compilation error The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified
+$tier cannot be resolved to a variable
+The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified]
+---
+Warning Messages:
+---
+Info Messages:
+
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.createKieBase(CepPartitionedSessionFactory.java:69)
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.initializeClusterBases(CepPartitionedSessionFactory.java:35)
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.<init>(CepPartitionedSessionFactory.java:30)
+	at org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark.<init>(WikimediaCepBenchmark.java:58)
+	at org.kie.benchmark.cep.wikimedia.ContentModerationRunner.runReplay(ContentModerationRunner.java:117)
+	at org.kie.benchmark.cep.wikimedia.ContentModerationRunner.main(ContentModerationRunner.java:46)
+java.lang.RuntimeException: Build errors for rules/clusters/c1_minor.drl: Error Messages:
+Message [id=1, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=56, column=0
+   text=Field Reader does not exist for declaration '$tier' in '$tier : tier' in the rule 'Emit_ClusterOutput_MinorClassified']
+Message [id=2, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$type' in '$type : analysisType' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=3, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$score' in '$score : score' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=4, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=65, column=0
+   text=Rule Compilation error $type cannot be resolved to a variable
+$score cannot be resolved to a variable]
+Message [id=5, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=54, column=0
+   text=Rule Compilation error The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified
+$tier cannot be resolved to a variable
+The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified]
+---
+Warning Messages:
+---
+Info Messages:
+
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.createKieBase(CepPartitionedSessionFactory.java:69)
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.initializeClusterBases(CepPartitionedSessionFactory.java:35)
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.<init>(CepPartitionedSessionFactory.java:30)
+	at org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark.<init>(WikimediaCepBenchmark.java:58)
+	at org.kie.benchmark.cep.wikimedia.ContentModerationRunner.runReplay(ContentModerationRunner.java:117)
+	at org.kie.benchmark.cep.wikimedia.ContentModerationRunner.main(ContentModerationRunner.java:46)
+Exception in thread "main" java.lang.RuntimeException: Failed to create KieBase
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.createKieBase(CepPartitionedSessionFactory.java:82)
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.initializeClusterBases(CepPartitionedSessionFactory.java:35)
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.<init>(CepPartitionedSessionFactory.java:30)
+	at org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark.<init>(WikimediaCepBenchmark.java:58)
+	at org.kie.benchmark.cep.wikimedia.ContentModerationRunner.runReplay(ContentModerationRunner.java:117)
+	at org.kie.benchmark.cep.wikimedia.ContentModerationRunner.main(ContentModerationRunner.java:46)
+Caused by: java.lang.RuntimeException: Build errors for rules/clusters/c1_minor.drl: Error Messages:
+Message [id=1, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=56, column=0
+   text=Field Reader does not exist for declaration '$tier' in '$tier : tier' in the rule 'Emit_ClusterOutput_MinorClassified']
+Message [id=2, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$type' in '$type : analysisType' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=3, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=67, column=0
+   text=Field Reader does not exist for declaration '$score' in '$score : score' in the rule 'Emit_ClusterOutput_DiscussionAnalyzed']
+Message [id=4, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=65, column=0
+   text=Rule Compilation error $type cannot be resolved to a variable
+$score cannot be resolved to a variable]
+Message [id=5, kieBase=defaultKieBase, level=ERROR, path=rules/clusters/c1_minor.drl, line=54, column=0
+   text=Rule Compilation error The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified
+$tier cannot be resolved to a variable
+The method getFrequencyCount() is undefined for the type DrlFacts.MinorClassified]
+---
+Warning Messages:
+---
+Info Messages:
+
+	at org.kie.benchmark.cep.wikimedia.CepPartitionedSessionFactory.createKieBase(CepPartitionedSessionFactory.java:69)
+	... 5 more

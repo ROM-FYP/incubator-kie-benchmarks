@@ -6,6 +6,7 @@ import org.kie.api.event.rule.DefaultAgendaEventListener;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.rule.FactHandle;
 import org.kie.api.time.SessionPseudoClock;
+import org.kie.benchmark.cep.wikimedia.memoization.*;
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,14 @@ public class WikimediaCepBenchmark {
     private final AtomicLong eventsIngested = new AtomicLong(0);
     private final AtomicLong rulesFired = new AtomicLong(0);
     private final AtomicLong alertsGenerated = new AtomicLong(0);
+    private final AtomicLong memoHits = new AtomicLong(0);
+    private final AtomicLong memoMisses = new AtomicLong(0);
+    private final AtomicLong clusterEvaluationsSkipped = new AtomicLong(0);
+
+    // --- Memoization Infrastructure ---
+    private ClusterMemoizationCache memoCache;
+    private SharedStateVersionTracker stateTracker;
+    private Map<Integer, ClusterOutputCaptureListener> captureListeners;
 
     // --- Execution Control ---
     private volatile boolean running = false;
@@ -80,13 +89,35 @@ public class WikimediaCepBenchmark {
         KieSession correlationSession = partitionedSessions.get(ClusterId.S_CORRELATION);
         forwardingListener = new FactForwardingListener(correlationSession);
         
+        // Initialize memoization if enabled
+        if (config.isMemoizationEnabled()) {
+            logger.info("Memoization ENABLED - Max Entries: {}, TTL: {}ms", 
+                       config.getCacheMaxEntries(), config.getCacheTTLms());
+            memoCache = new ClusterMemoizationCache(config.getCacheMaxEntries(), config.getCacheTTLms());
+            stateTracker = new SharedStateVersionTracker();
+            captureListeners = new HashMap<>();
+            
+            // Attach state tracker to correlation session
+            correlationSession.addEventListener(stateTracker);
+        }
+        
         for (Map.Entry<ClusterId, KieSession> entry : partitionedSessions.entrySet()) {
             KieSession session = entry.getValue();
             session.addEventListener(new RuleFiringListener());
             setupTraceLogger(session);
             
             if (entry.getKey() != ClusterId.S_CORRELATION) {
-                session.addEventListener(forwardingListener);
+                // When memoization is enabled: use ClusterOutput capture + explicit forwarding
+                // When memoization is disabled: use standard FactForwardingListener
+                if (config.isMemoizationEnabled()) {
+                    ClusterOutputCaptureListener captureListener = 
+                        new ClusterOutputCaptureListener(entry.getKey().ordinal());
+                    session.addEventListener(captureListener);
+                    captureListeners.put(entry.getKey().ordinal(), captureListener);
+                    logger.info("Attached ClusterOutputCaptureListener to {}", entry.getKey());
+                } else {
+                    session.addEventListener(forwardingListener);
+                }
             }
         }
 
@@ -209,12 +240,34 @@ public class WikimediaCepBenchmark {
         KieSession correlationSession = partitionedSessions.get(ClusterId.S_CORRELATION);
         forwardingListener = new FactForwardingListener(correlationSession);
         
+        // Initialize memoization if enabled
+        if (config.isMemoizationEnabled()) {
+            logger.info("Memoization ENABLED for Replay - Max Entries: {}, TTL: {}ms", 
+                       config.getCacheMaxEntries(), config.getCacheTTLms());
+            memoCache = new ClusterMemoizationCache(config.getCacheMaxEntries(), config.getCacheTTLms());
+            stateTracker = new SharedStateVersionTracker();
+            captureListeners = new HashMap<>();
+            
+            // Attach state tracker to correlation session
+            correlationSession.addEventListener(stateTracker);
+        }
+        
         for (Map.Entry<ClusterId, KieSession> entry : partitionedSessions.entrySet()) {
             KieSession session = entry.getValue();
             session.addEventListener(new RuleFiringListener());
             setupTraceLogger(session);
             if (entry.getKey() != ClusterId.S_CORRELATION) {
-                session.addEventListener(forwardingListener);
+                // When memoization is enabled: use ClusterOutput capture + explicit forwarding
+                // When memoization is disabled: use standard FactForwardingListener
+                if (config.isMemoizationEnabled()) {
+                    ClusterOutputCaptureListener captureListener = 
+                        new ClusterOutputCaptureListener(entry.getKey().ordinal());
+                    session.addEventListener(captureListener);
+                    captureListeners.put(entry.getKey().ordinal(), captureListener);
+                    logger.info("Attached ClusterOutputCaptureListener to {} for replay", entry.getKey());
+                } else {
+                    session.addEventListener(forwardingListener);
+                }
             }
         }
     }
@@ -223,15 +276,65 @@ public class WikimediaCepBenchmark {
         if (config.isPartitioned()) {
             ClusterId cluster = EventRouter.route(event);
             KieSession session = partitionedSessions.get(cluster);
-            advanceClock(session, event.getTimestamp());
-            session.insert(event);
+            KieSession correlationSession = partitionedSessions.get(ClusterId.S_CORRELATION);
             
-            forwardingListener.reset();
-            rulesFired.addAndGet(session.fireAllRules());
+            boolean hasOutputs = false;
             
-            if (forwardingListener.hasForwarded()) {
-                advanceClock(partitionedSessions.get(ClusterId.S_CORRELATION), event.getTimestamp());
-                rulesFired.addAndGet(partitionedSessions.get(ClusterId.S_CORRELATION).fireAllRules());
+            if (config.isMemoizationEnabled() && cluster != ClusterId.S_CORRELATION) {
+                // Build cache key with current shared state version
+                CacheKey key = CacheKey.from(cluster.ordinal(), event, stateTracker.getCurrentVersion());
+                Optional<List<ClusterOutput>> cached = memoCache.get(key);
+                
+                if (cached.isPresent()) {
+                    // CACHE HIT - reuse cached outputs
+                    List<ClusterOutput> outputs = cached.get();
+                    for (ClusterOutput output : outputs) {
+                        correlationSession.insert(output);
+                    }
+                    memoHits.incrementAndGet();
+                    clusterEvaluationsSkipped.incrementAndGet();
+                    hasOutputs = !outputs.isEmpty();
+                    
+                    logger.debug("Cache HIT for {} - {} outputs", cluster, outputs.size());
+                } else {
+                    // CACHE MISS - execute cluster and capture outputs
+                    advanceClock(session, event.getTimestamp());
+                    session.insert(event);
+                    
+                    // Clear previous outputs and fire with bounded limit
+                    captureListeners.get(cluster.ordinal()).clear();
+                    forwardingListener.reset();
+                    rulesFired.addAndGet(session.fireAllRules(1000)); // bounded firing
+                    
+                    // Collect captured ClusterOutputs
+                    List<ClusterOutput> outputs = captureListeners.get(cluster.ordinal()).getAndClearOutputs();
+                    
+                    // Store in cache
+                    memoCache.put(key, outputs);
+                    memoMisses.incrementAndGet();
+                    
+                    // Insert outputs into correlation session
+                    for (ClusterOutput output : outputs) {
+                        correlationSession.insert(output);
+                    }
+                    hasOutputs = !outputs.isEmpty() || forwardingListener.hasForwarded();
+                    
+                    logger.debug("Cache MISS for {} - {} outputs captured", cluster, outputs.size());
+                }
+            } else {
+                // Standard execution (no memoization or correlation cluster)
+                advanceClock(session, event.getTimestamp());
+                session.insert(event);
+                
+                forwardingListener.reset();
+                rulesFired.addAndGet(session.fireAllRules());
+                hasOutputs = forwardingListener.hasForwarded();
+            }
+            
+            // Fire correlation session if any outputs were added
+            if (hasOutputs || forwardingListener.hasForwarded()) {
+                advanceClock(correlationSession, event.getTimestamp());
+                rulesFired.addAndGet(correlationSession.fireAllRules());
             }
         } else {
             advanceClock(kieSession, event.getTimestamp());
@@ -267,6 +370,18 @@ public class WikimediaCepBenchmark {
         logger.info("Total Terminal Alerts: {}", alertsGenerated.get());
         logger.info("Duration: {} seconds", String.format("%.2f", durationSeconds));
         logger.info("Events/sec: {}", String.format("%.2f", eventsIngested.get() / (durationSeconds > 0 ? durationSeconds : 1)));
+        
+        // Memoization metrics
+        if (config.isMemoizationEnabled() && memoCache != null) {
+            logger.info("--- Memoization Metrics ---");
+            logger.info("Cache Hits: {}", memoHits.get());
+            logger.info("Cache Misses: {}", memoMisses.get());
+            logger.info("Hit Rate: {:.2f}%", memoCache.getHitRate() * 100);
+            logger.info("Cluster Evaluations Skipped: {}", clusterEvaluationsSkipped.get());
+            logger.info("Cache Size: {}/{}", memoCache.getSize(), config.getCacheMaxEntries());
+            memoCache.printMetrics();
+        }
+        
         logger.info("========================================");
     }
 

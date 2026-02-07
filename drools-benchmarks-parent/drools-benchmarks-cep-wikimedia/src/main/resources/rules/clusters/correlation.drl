@@ -2,6 +2,9 @@ package rules;
 
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+import org.kie.benchmark.cep.wikimedia.memoization.ClusterOutput;
+
+import java.util.Map;
 
 // ============================================================================
 // CORRELATION SESSION RULES - SHARED STATE & CROSS-PIPELINE LOGIC
@@ -439,4 +442,69 @@ when
     ArticleUnderAttack( title == $t )
 then
     modify($vf) { setPriority($priority + 50) };
+end
+
+// ============================================================================
+// CLUSTEROUTPUT-BASED CORRELATION RULES (DUAL-FEED PATH)
+// ============================================================================
+
+// --- VANDALISM CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Vandalism_ToCandidate" salience 600
+when
+    $co : ClusterOutput( clusterId == 3, kind == "VANDALISM_DETECTED", $entityId : entityId, $ts : logicalTimestamp, $attrs : attributes )
+    not VandalismCandidate( user == $entityId, timestamp == $ts )
+then
+    int delSize = (Integer) $attrs.get("deletionSize");
+    insert(new VandalismCandidate("unknown", $entityId, delSize, $ts));
+    retract($co);
+end
+
+// --- BOT CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Bot_ToProfile" salience 590
+when
+    $co : ClusterOutput( clusterId == 2, kind == "BOT_DETECTED", $entityId : entityId, $ts : logicalTimestamp, $attrs : attributes )
+    not BotProfile( user == $entityId, timestamp == $ts )
+then
+    int activityRate = (Integer) $attrs.get("activityRate");
+    String category = (String) $attrs.get("category");
+    insert(new BotProfile($entityId, category, activityRate, $ts));
+    retract($co);
+end
+
+// --- CONTENT CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Content_ToAddition" salience 580
+when
+    $co : ClusterOutput( clusterId == 1, kind == "CONTENT_GROWTH_NOTED", $entityId : entityId, $ts : logicalTimestamp, $attrs : attributes )
+    not ContentAddition( title == $entityId, timestamp == $ts )
+then
+    int addedBytes = (Integer) $attrs.get("addedBytes");
+    insert(new ContentAddition($entityId, "unknown", addedBytes, $ts));
+    retract($co);
+end
+
+// --- MINOR CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Minor_ToClassified" salience 570
+when
+    $co : ClusterOutput( clusterId == 0, kind == "MINOR_TRACKED", $entityId : entityId, $attrs : attributes )
+    not MinorClassified( user == $entityId )
+then
+    int frequency = (Integer) $attrs.get("frequency");
+    String editType = (String) $attrs.get("editType");
+    insert(new MinorClassified("unknown", $entityId, editType, frequency));
+    retract($co);
+end
+
+rule "ClusterOutput_Discussion_ToAnalyzed" salience 560
+when
+    $co : ClusterOutput( clusterId == 0, kind == "DISCUSSION_FLAGGED", $entityId : entityId, $attrs : attributes )
+    not DiscussionAnalyzed( title == $entityId )
+then
+    String topic = (String) $attrs.get("topic");
+    int quality = (Integer) $attrs.get("relatedArticleQuality");
+    insert(new DiscussionAnalyzed($entityId, topic, quality));
+    retract($co);
 end

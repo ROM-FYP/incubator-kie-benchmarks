@@ -28,17 +28,23 @@ public class CepBenchmarkConfig {
     private final String wikimediaUrl;
     private final boolean verbose;
     private final boolean partitioned;
+    private final boolean memoizationEnabled;
+    private final int cacheMaxEntries;
+    private final long cacheTTLms;
 
     public CepBenchmarkConfig(long durationMinutes, String rulesPath, String wikimediaUrl, boolean verbose) {
-        this(durationMinutes, rulesPath, wikimediaUrl, verbose, false);
+        this(durationMinutes, rulesPath, wikimediaUrl, verbose, false, false, 2000, -1);
     }
 
-    public CepBenchmarkConfig(long durationMinutes, String rulesPath, String wikimediaUrl, boolean verbose, boolean partitioned) {
+    public CepBenchmarkConfig(long durationMinutes, String rulesPath, String wikimediaUrl, boolean verbose, boolean partitioned, boolean memoizationEnabled, int cacheMaxEntries, long cacheTTLms) {
         this.durationMinutes = durationMinutes;
         this.rulesPath = rulesPath;
         this.wikimediaUrl = wikimediaUrl;
         this.verbose = verbose;
         this.partitioned = partitioned;
+        this.memoizationEnabled = memoizationEnabled;
+        this.cacheMaxEntries = cacheMaxEntries;
+        this.cacheTTLms = cacheTTLms;
     }
 
     public static CepBenchmarkConfig getDefault() {
@@ -47,7 +53,10 @@ public class CepBenchmarkConfig {
                 "rules/wikimedia_content_moderation_join_heavy.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
                 true,
-                false);
+                false,
+                false,
+                2000,
+                -1);
     }
 
     public long getDurationMinutes() {
@@ -68,5 +77,17 @@ public class CepBenchmarkConfig {
 
     public boolean isPartitioned() {
         return partitioned;
+    }
+
+    public boolean isMemoizationEnabled() {
+        return memoizationEnabled;
+    }
+
+    public int getCacheMaxEntries() {
+        return cacheMaxEntries;
+    }
+
+    public long getCacheTTLms() {
+        return cacheTTLms;
     }
 }

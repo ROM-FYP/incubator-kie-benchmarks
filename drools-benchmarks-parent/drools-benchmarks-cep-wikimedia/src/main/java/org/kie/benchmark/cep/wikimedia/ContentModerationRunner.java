@@ -42,7 +42,8 @@ public class ContentModerationRunner {
             } else if ("replay".equalsIgnoreCase(mode)) {
                 String inputFile = args.length > 1 ? args[1] : "events.json";
                 boolean partitioned = args.length > 2 && Boolean.parseBoolean(args[2]);
-                runReplay(inputFile, partitioned);
+                boolean memoization = args.length > 3 && Boolean.parseBoolean(args[3]);
+                runReplay(inputFile, partitioned, memoization);
                 return;
             }
         }
@@ -67,7 +68,10 @@ public class ContentModerationRunner {
                 "rules/wikimedia_content_moderation_join_heavy.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
                 true,
-                partitioned);
+                partitioned,
+                false,  // memoization off by default
+                2000,
+                -1);
         
         printHeader();
         
@@ -82,20 +86,33 @@ public class ContentModerationRunner {
                 "rules/wikimedia_content_moderation_join_heavy.drl",
                 "https://stream.wikimedia.org/v2/stream/recentchange",
                 true,
-                false); // Partitioning doesn't matter for recording
+                false,  // Partitioning doesn't matter for recording
+                false,  // No memoization for recording
+                2000,
+                -1);
         
         WikimediaCepBenchmark benchmark = new WikimediaCepBenchmark(config);
         benchmark.record(outputFile);
     }
     
     private static void runReplay(String inputFile, boolean partitioned) {
-        System.out.println("Starting Replay from " + inputFile + " (Partitioned=" + partitioned + ")");
+        // Check for optional memoization flag (third arg)
+        runReplay(inputFile, partitioned, false);
+    }
+    
+    private static void runReplay(String inputFile, boolean partitioned, boolean memoization) {
+        System.out.println("Starting Replay from " + inputFile + 
+                          " (Partitioned=" + partitioned + 
+                          ", Memo=" + memoization + ")");
         CepBenchmarkConfig config = new CepBenchmarkConfig(
                 0, // Duration determined by file
                 "rules/wikimedia_content_moderation_join_heavy.drl",
                 null, // No stream URL needed
                 true,
-                partitioned);
+                partitioned,
+                memoization,
+                2000,  // Default cache size
+                -1);   // No TTL
         
         WikimediaCepBenchmark benchmark = new WikimediaCepBenchmark(config);
         benchmark.replay(inputFile);
