@@ -21,13 +21,13 @@ From: 'an unknown organization'
   - MXParser (http://x-stream.github.io/mxparser) io.github.x-stream:mxparser:jar:1.2.2
     License: Indiana University Extreme! Lab Software License  (https://raw.githubusercontent.com/x-stream/mxparser/master/LICENSE.txt)
 
-  - Byte Buddy (without dependencies) (https://bytebuddy.net/byte-buddy) net.bytebuddy:byte-buddy:jar:1.15.11
+  - Byte Buddy (without dependencies) (https://bytebuddy.net/byte-buddy) net.bytebuddy:byte-buddy:jar:1.18.3
     License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
   - JOpt Simple (http://jopt-simple.github.io/jopt-simple) net.sf.jopt-simple:jopt-simple:jar:5.0.4
     License: The MIT License  (http://www.opensource.org/licenses/mit-license.php)
 
-  - AssertJ Core (https://assertj.github.io/doc/#assertj-core) org.assertj:assertj-core:jar:3.27.3
+  - AssertJ Core (https://assertj.github.io/doc/#assertj-core) org.assertj:assertj-core:jar:3.27.7
     License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
   - JPMML model (http://www.jpmml.org/pmml-model) org.jpmml:pmml-model:jar:1.6.4

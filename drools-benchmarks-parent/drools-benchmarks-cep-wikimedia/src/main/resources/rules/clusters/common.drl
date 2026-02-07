@@ -4,4 +4,4 @@ import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
 // Metadata handled by Java annotations in DrlFacts
-declare WikiEvent @role(event) @expires(60s) end
+// Metadata handled by Java annotations in WikiEvent class

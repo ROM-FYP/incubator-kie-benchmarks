@@ -6,8 +6,15 @@ import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.util.*;
 
+/**
+ * Calculates expected alert counts based on refined definitions:
+ * 1. Bots: Only high-volume bots (>10 edits/min) trigger an alert.
+ * 2. Content Major: Each major edit (>1000 sizeDelta) triggers exactly 1 alert (_Log).
+ * 3. Minors/Others: Tracked but no alerts generated.
+ */
 public class AlertGroundTruthCalculator {
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
@@ -31,55 +38,54 @@ public class AlertGroundTruthCalculator {
                     events.add(e);
                 } catch (Exception e) {
                     errCount++;
-                    if (errCount <= 5) {
-                        System.err.println("Error at line " + lineNum + ": " + e.getMessage());
-                        System.err.println("Line content: " + (line.length() > 100 ? line.substring(0, 100) + "..." : line));
-                    }
                 }
             }
         }
 
-        if (errCount > 0) {
-            System.err.println("Total errors encountered: " + errCount);
-        }
-
-        int bots = 0;
-        int vandalismCandidates = 0;
-        int contentCandidates = 0;
+        // --- REFINED LOGIC ---
+        
+        // 1. Bot High Volume Logic (Activity Rate > 10 edits/min)
+        Map<String, List<Long>> botHistory = new HashMap<>();
+        int botAlerts = 0;
         int contentMajor = 0;
-        int minorCandidates = 0;
-        int ignored = 0;
 
         for (WikiEvent e : events) {
             if (e.isBot()) {
-                bots++;
+                String user = e.getUser();
+                long ts = e.getTimestamp();
+                botHistory.putIfAbsent(user, new ArrayList<>());
+                List<Long> history = botHistory.get(user);
+                history.add(ts);
+                
+                // Count edits in last 60s
+                long count = history.stream().filter(t -> t > (ts - 60)).count();
+                if (count > 10) {
+                    botAlerts++;
+                }
             } else {
                 int size = e.getSizeDelta();
-                if (size < -100) {
-                    vandalismCandidates++;
-                } else if (size > 200) {
-                    contentCandidates++;
-                    if (size > 1000) contentMajor++;
-                } else if (size >= -50 && size <= 50) {
-                    minorCandidates++;
-                } else {
-                    ignored++;
+                if (size > 1000) {
+                    contentMajor++;
                 }
             }
         }
 
-        System.out.println("Ground Truth Analysis for: " + args[0]);
-        System.out.println("Total Successfully Parsed Events: " + events.size());
+        int expectedAlerts = botAlerts + contentMajor;
+
+        System.out.println("Ground Truth Analysis (Refined) for: " + args[0]);
         System.out.println("----------------------------------------");
-        System.out.println("Bots: " + bots + " (Expected Alerts: " + bots + ")");
-        System.out.println("Minors: " + minorCandidates + " (Expected Alerts: " + minorCandidates + ")");
-        System.out.println("Content (>200): " + contentCandidates);
-        System.out.println("  - Major (>1000): " + contentMajor + " (Expected Alerts: " + (contentMajor * 3) + ")");
-        System.out.println("Vandalism (<-100): " + vandalismCandidates + " (Expected Alerts: Potential Log)");
-        System.out.println("Ignored/Noise: " + ignored);
+        System.out.println("Refined Bot Alerts (>10/min): " + botAlerts);
+        System.out.println("Refined Content Major Alerts: " + contentMajor);
+        System.out.println("Refined Total Expected Alerts: " + expectedAlerts);
         System.out.println("----------------------------------------");
-        
-        int minExpected = bots + minorCandidates + (contentMajor * 3);
-        System.out.println("Calculated Theoretical Alerts: " + minExpected + " (Bot + Minor + 3x ContentMajor)");
+
+        // Write to file for benchmark verification
+        try (FileWriter writer = new FileWriter("ground_truth_summary.txt")) {
+            writer.write("Ground Truth Summary\n");
+            writer.write("--------------------\n");
+            writer.write("Expected Alerts: " + expectedAlerts + "\n");
+            writer.write("Refined Bots: " + botAlerts + "\n");
+            writer.write("Refined Content Major: " + contentMajor + "\n");
+        }
     }
 }

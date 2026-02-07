@@ -23,6 +23,7 @@ D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\ContentModerationRunner.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\MiningTraceLogger.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\EditVelocity.java
+D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\EventMerger.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\WikiEvent.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\CepBenchmarkConfig.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\DrlFacts.java

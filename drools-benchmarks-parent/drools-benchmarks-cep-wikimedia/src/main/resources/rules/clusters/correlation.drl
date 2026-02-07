@@ -212,7 +212,7 @@ then
     insert(new EditPattern($u, $t, "DESTRUCTIVE"));
 end
 
-rule "Vandalism_Log" salience 477
+rule "Vandalism_Complete" salience 477
 when
     $v : VandalismFlagged( $t : title )
 then
@@ -220,7 +220,7 @@ then
     retract($v);
 end
 
-rule "Vandalism_Complete" salience 470
+rule "Vandalism_Logged_Complete" salience 470
 when
     $v : VandalismLogged()
 then
@@ -231,58 +231,57 @@ end
 
 rule "Bot_HealthCheck_Registered_RateLimitExceeded" salience 397
 when
-    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5 )
-    $ua : UserActivity( user == $u, $editCount : editCount )
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
-    retract($b);
-    modify($ua) { setEditCount($editCount + 1) };
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true, $rate, $ts));
 end
 
 rule "Bot_HealthCheck_Registered_Healthy" salience 396
 when
-    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5 )
-    $ua : UserActivity( user == $u, $editCount : editCount )
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "HEALTHY", false));
-    retract($b);
-    modify($ua) { setEditCount($editCount + 1) };
+    insert(new BotHealthCheck($u, "HEALTHY", false, $rate, $ts));
 end
 
 rule "Bot_HealthCheck_Unverified_NewBot" salience 395
 when
-    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2 )
-    $ua : UserActivity( user == $u, editCount < 10 )
+    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
-    retract($b);
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true, $rate, $ts));
 end
 
 rule "Bot_HealthCheck_Unverified_Review" salience 394
 when
-    $b : BotProfile( $u : user, category == "UNVERIFIED" )
-    not BotHealthCheck( user == $u )
+    $b : BotProfile( $u : user, category == "UNVERIFIED", $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false));
-    retract($b);
+    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false, $rate, $ts));
 end
 
-rule "Bot_Report_Notify" salience 392
+rule "Bot_Metrics" salience 392
 when
-    $b : BotHealthCheck( $u : user )
+    $b : BotHealthCheck( $u : user, $rate : activityRate, $ts : timestamp )
+    not BotMetrics( user == $u, timestamp == $ts )
 then
-    insert(new BotMetrics($u));
-    insert(new BotReported($u));
-    retract($b);
+    insert(new BotMetrics($u, $rate, $ts));
 end
 
-rule "Bot_Complete" salience 380
+rule "Bot_Report" salience 391
 when
-    $br : BotReported()
-    $bm : BotMetrics()
+    $b : BotMetrics( $u : user, activityRate > 10, $ts : timestamp )
+    not BotReported( user == $u, timestamp == $ts )
 then
-    retract($br);
-    retract($bm);
+    insert(new BotReported($u, $ts));
+end
+
+rule "Bot_Complete" salience 390
+when
+    $b : BotReported( $u : user, $ts : timestamp )
+then
+    // Lifecycle handled by expiration
 end
 
 // --- CONTENT PIPELINE CORRELATIONS ---
@@ -310,24 +309,24 @@ when
     $c : ContentReview( qualityTier == "MAJOR", $t : title, $u : user )
     $aq : ArticleQuality( title == $t, $q : qualityScore )
 then
-    insert(new ContentApproved($t, $u, 20));
+    insert(new ContentApproved($t, $u, 20, "MAJOR"));
     retract($c);
     modify($aq) { setQualityScore(Math.min(100, $q + 20)) };
 end
 
 rule "Content_Index_Track" salience 281
 when
-    $a : ContentApproved( $t : title )
+    $a : ContentApproved( $t : title, $tier : tier )
 then
-    insert(new ContentIndexed($t));
+    insert(new ContentIndexed($t, $tier));
     retract($a);
 end
 
 rule "Content_Cache_Cache" salience 280
 when
-    $i : ContentIndexed( $t : title )
+    $i : ContentIndexed( $t : title, $tier : tier )
 then
-    insert(new ContentCached($t));
+    insert(new ContentCached($t, $tier));
     retract($i);
 end
 
@@ -379,6 +378,39 @@ when
     $m : MinorTracked()
 then
     retract($m);
+end
+
+// --- DISCUSSION PIPELINE CORRELATIONS ---
+
+rule "Discussion_Sentiment" salience 97
+when
+    $d : DiscussionAnalyzed( $t : title )
+then
+    insert(new DiscussionSentiment($t, "NEUTRAL", "REGULAR"));
+    retract($d);
+end
+
+rule "Discussion_Route" salience 91
+when
+    $d : DiscussionSentiment( $t : title )
+then
+    insert(new DiscussionRouted($t));
+    retract($d);
+end
+
+rule "Discussion_Notify" salience 90
+when
+    $d : DiscussionRouted( $t : title )
+then
+    insert(new DiscussionNotified($t));
+    retract($d);
+end
+
+rule "Discussion_Complete" salience 89
+when
+    $d : DiscussionNotified()
+then
+    retract($d);
 end
 
 // --- CROSS-PIPELINE CORRELATIONS ---

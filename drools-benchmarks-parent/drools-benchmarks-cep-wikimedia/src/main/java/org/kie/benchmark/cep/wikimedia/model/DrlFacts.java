@@ -12,7 +12,7 @@ import java.io.Serializable;
 public class DrlFacts {
 
     @Role(Role.Type.EVENT)
-    @Expires("30s")
+    @Expires("90s")
     public static class UserActivity implements Serializable {
         public String user;
         public int editCount;
@@ -30,7 +30,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("30s")
+    @Expires("90s")
     public static class ArticleQuality implements Serializable {
         public String title;
         public int qualityScore;
@@ -48,7 +48,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("20s")
+    @Expires("90s")
     public static class EditPattern implements Serializable {
         public String user;
         public String title;
@@ -66,7 +66,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     @Timestamp("timestamp")
     public static class VandalismCandidate implements Serializable {
         public String title;
@@ -88,7 +88,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class VandalismAnalysis implements Serializable {
         public String title;
         public String user;
@@ -109,7 +109,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class VandalismVerified implements Serializable {
         public String title;
         public String user;
@@ -133,7 +133,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class VandalismFlagged implements Serializable {
         public String title;
         public String user;
@@ -151,7 +151,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class VandalismLogged implements Serializable {
         public String title;
         public VandalismLogged() {}
@@ -161,14 +161,23 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class BotHealthCheck implements Serializable {
         public String user;
         public String status;
         public boolean anomalyDetected;
+        public int activityRate;
+        public long timestamp;
         public BotHealthCheck() {}
         public BotHealthCheck(String user, String status, boolean anomalyDetected) {
+            this(user, status, anomalyDetected, 0, 0L);
+        }
+        public BotHealthCheck(String user, String status, boolean anomalyDetected, int activityRate) {
+            this(user, status, anomalyDetected, activityRate, 0L);
+        }
+        public BotHealthCheck(String user, String status, boolean anomalyDetected, int activityRate, long timestamp) {
             this.user = user; this.status = status; this.anomalyDetected = anomalyDetected;
+            this.activityRate = activityRate; this.timestamp = timestamp;
         }
         public String getUser() { return user; }
         public void setUser(String user) { this.user = user; }
@@ -176,10 +185,14 @@ public class DrlFacts {
         public void setStatus(String status) { this.status = status; }
         public boolean isAnomalyDetected() { return anomalyDetected; }
         public void setAnomalyDetected(boolean anomalyDetected) { this.anomalyDetected = anomalyDetected; }
+        public int getActivityRate() { return activityRate; }
+        public void setActivityRate(int activityRate) { this.activityRate = activityRate; }
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     @Timestamp("timestamp")
     public static class BotActivity implements Serializable {
         public String user;
@@ -198,14 +211,18 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class BotProfile implements Serializable {
         public String user;
         public String category;
         public int activityRate;
+        public long timestamp;
         public BotProfile() {}
         public BotProfile(String user, String category, int activityRate) {
-            this.user = user; this.category = category; this.activityRate = activityRate;
+            this(user, category, activityRate, 0L);
+        }
+        public BotProfile(String user, String category, int activityRate, long timestamp) {
+            this.user = user; this.category = category; this.activityRate = activityRate; this.timestamp = timestamp;
         }
         public String getUser() { return user; }
         public void setUser(String user) { this.user = user; }
@@ -213,30 +230,48 @@ public class DrlFacts {
         public void setCategory(String category) { this.category = category; }
         public int getActivityRate() { return activityRate; }
         public void setActivityRate(int activityRate) { this.activityRate = activityRate; }
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class BotMetrics implements Serializable {
         public String user;
+        public int activityRate;
+        public long timestamp;
         public BotMetrics() {}
-        public BotMetrics(String user) { this.user = user; }
+        public BotMetrics(String user) { this(user, 0, 0L); }
+        public BotMetrics(String user, int activityRate) { this(user, activityRate, 0L); }
+        public BotMetrics(String user, int activityRate, long timestamp) {
+            this.user = user; this.activityRate = activityRate; this.timestamp = timestamp;
+        }
         public String getUser() { return user; }
         public void setUser(String user) { this.user = user; }
+        public int getActivityRate() { return activityRate; }
+        public void setActivityRate(int activityRate) { this.activityRate = activityRate; }
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class BotReported implements Serializable {
         public String user;
+        public long timestamp;
         public BotReported() {}
-        public BotReported(String user) { this.user = user; }
+        public BotReported(String user) { this(user, 0L); }
+        public BotReported(String user, long timestamp) {
+            this.user = user; this.timestamp = timestamp;
+        }
         public String getUser() { return user; }
         public void setUser(String user) { this.user = user; }
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     @Timestamp("timestamp")
     public static class ContentAddition implements Serializable {
         public String title;
@@ -258,7 +293,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class ContentReview implements Serializable {
         public String title;
         public String user;
@@ -282,17 +317,18 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class ContentApproved implements Serializable {
         public String title;
         public String user;
         public int qualityBoost;
+        public String tier;
         public ContentApproved() {}
         public ContentApproved(String title, String user, int qualityBoost) {
-            this.title = title; this.user = user; this.qualityBoost = qualityBoost;
+            this(title, user, qualityBoost, "STANDARD");
         }
-        public ContentApproved(String title, int qualityBoost) {
-            this(title, "UNKNOWN", qualityBoost);
+        public ContentApproved(String title, String user, int qualityBoost, String tier) {
+            this.title = title; this.user = user; this.qualityBoost = qualityBoost; this.tier = tier;
         }
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
@@ -300,30 +336,40 @@ public class DrlFacts {
         public void setUser(String user) { this.user = user; }
         public int getQualityBoost() { return qualityBoost; }
         public void setQualityBoost(int qualityBoost) { this.qualityBoost = qualityBoost; }
+        public String getTier() { return tier; }
+        public void setTier(String tier) { this.tier = tier; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class ContentIndexed implements Serializable {
         public String title;
+        public String tier;
         public ContentIndexed() {}
-        public ContentIndexed(String title) { this.title = title; }
+        public ContentIndexed(String title) { this(title, "STANDARD"); }
+        public ContentIndexed(String title, String tier) { this.title = title; this.tier = tier; }
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
+        public String getTier() { return tier; }
+        public void setTier(String tier) { this.tier = tier; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class ContentCached implements Serializable {
         public String title;
+        public String tier;
         public ContentCached() {}
-        public ContentCached(String title) { this.title = title; }
+        public ContentCached(String title) { this(title, "STANDARD"); }
+        public ContentCached(String title, String tier) { this.title = title; this.tier = tier; }
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
+        public String getTier() { return tier; }
+        public void setTier(String tier) { this.tier = tier; }
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     @Timestamp("timestamp")
     public static class MinorEdit implements Serializable {
         public String title;
@@ -345,7 +391,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class MinorClassified implements Serializable {
         public String title;
         public String user;
@@ -369,7 +415,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class MinorValidated implements Serializable {
         public String title;
         public String user;
@@ -390,7 +436,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class MinorAccepted implements Serializable {
         public String title;
         public MinorAccepted() {}
@@ -400,7 +446,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class MinorTracked implements Serializable {
         public String title;
         public MinorTracked() {}
@@ -410,7 +456,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     @Timestamp("timestamp")
     public static class DiscussionPost implements Serializable {
         public String title;
@@ -429,7 +475,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class DiscussionAnalyzed implements Serializable {
         public String title;
         public String topic;
@@ -447,7 +493,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class DiscussionSentiment implements Serializable {
         public String title;
         public String mood;
@@ -465,7 +511,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class DiscussionRouted implements Serializable {
         public String title;
         public DiscussionRouted() {}
@@ -475,7 +521,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("5s")
+    @Expires("90s")
     public static class DiscussionNotified implements Serializable {
         public String title;
         public DiscussionNotified() {}
@@ -485,7 +531,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("30s")
+    @Expires("90s")
     public static class HighRiskUser implements Serializable {
         public String user;
         public String riskFactors;
@@ -500,7 +546,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("30s")
+    @Expires("90s")
     public static class ArticleUnderAttack implements Serializable {
         public String title;
         public int attackSeverity;

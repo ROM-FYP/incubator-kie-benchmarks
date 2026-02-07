@@ -19,10 +19,17 @@
 
 package org.kie.benchmark.cep.wikimedia.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+import org.kie.api.definition.type.Timestamp;
+
 /**
  * Represents a Wikipedia edit event from the Wikimedia stream.
  * This is the primary event type fed into the Drools CEP engine.
  */
+@Role(Role.Type.EVENT)
+@Expires("90s")
+@Timestamp("timestamp")
 public class WikiEvent {
     private String title;
     private String user;

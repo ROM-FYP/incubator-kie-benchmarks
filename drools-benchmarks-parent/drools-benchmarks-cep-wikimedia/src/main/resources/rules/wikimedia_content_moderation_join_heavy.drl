@@ -4,7 +4,7 @@ import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
 
 // Metadata handled by Java annotations in DrlFacts
-declare WikiEvent @role(event) @expires(60s) end
+// Metadata handled by Java annotations in WikiEvent class
 
 // VANDALISM PIPELINE
 
@@ -17,9 +17,9 @@ then
 end
 
 // Initialize UserActivity for joins if missing
-rule "Vandalism_InitializeUserActivity" salience 505
+rule "InitializeUserActivity" salience 1000
 when
-    $v : VandalismCandidate( $u : user )
+    $e : WikiEvent( $u : user )
     not UserActivity( user == $u )
 then
     insert(new UserActivity($u, 0, "INITIALIZING"));
@@ -240,7 +240,7 @@ then
     retract($v);
 end
 
-rule "Vandalism_Log" salience 477
+rule "Vandalism_Complete" salience 477
 when
     $v : VandalismFlagged( $t : title )
 then
@@ -248,7 +248,7 @@ then
     retract($v);
 end
 
-rule "Vandalism_Complete" salience 476
+rule "Vandalism_Logged_Complete" salience 476
 when
     $v : VandalismLogged()
 then
@@ -266,87 +266,81 @@ end
 
 rule "Bot_Categorize_Registered" salience 399
 when
-    $b : BotActivity( $u : user, user contains "Bot", $ts : timestamp )
+    $b : BotActivity( $u : user, user contains "Bot" || user contains "bot", $ts : timestamp )
     $count : Number( intValue > 0 ) from accumulate(
-        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
+        $ba : BotActivity( user == $u, timestamp > ($ts - 60000), timestamp <= $ts ),
         count($ba)
     )
+    not BotProfile( user == $u, timestamp == $ts )
 then
-    insert(new BotProfile($u, "REGISTERED", $count.intValue()));
-    retract($b);
+    insert(new BotProfile($u, "REGISTERED", $count.intValue(), $ts));
 end
 
 rule "Bot_Categorize_Unverified" salience 398
 when
-    $b : BotActivity( $u : user, user not contains "Bot", $ts : timestamp )
+    $b : BotActivity( $u : user, user not contains "Bot", user not contains "bot", $ts : timestamp )
     $count : Number( intValue > 0 ) from accumulate(
-        $ba : BotActivity( user == $u, timestamp > ($ts - 10000), timestamp <= $ts ),
+        $ba : BotActivity( user == $u, timestamp > ($ts - 60000), timestamp <= $ts ),
         count($ba)
     )
+    not BotProfile( user == $u, timestamp == $ts )
 then
-    insert(new BotProfile($u, "UNVERIFIED", $count.intValue()));
-    retract($b);
+    insert(new BotProfile($u, "UNVERIFIED", $count.intValue(), $ts));
 end
 
 rule "Bot_HealthCheck_Registered_RateLimitExceeded" salience 397
 when
-    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5 )
-    $ua : UserActivity( user == $u, $editCount : editCount )
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
-    retract($b);
-    modify($ua) { setEditCount($editCount + 1) };
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true, $rate, $ts));
 end
 
 rule "Bot_HealthCheck_Registered_Healthy" salience 396
 when
-    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5 )
-    $ua : UserActivity( user == $u, $editCount : editCount )
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "HEALTHY", false));
-    retract($b);
-    modify($ua) { setEditCount($editCount + 1) };
+    insert(new BotHealthCheck($u, "HEALTHY", false, $rate, $ts));
 end
 
 rule "Bot_HealthCheck_Unverified_NewBot" salience 395
 when
-    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2 )
-    $ua : UserActivity( user == $u, editCount < 10 )
+    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true));
-    retract($b);
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true, $rate, $ts));
 end
 
 rule "Bot_HealthCheck_Unverified_Review" salience 394
 when
-    $b : BotProfile( $u : user, category == "UNVERIFIED" )
-    not BotHealthCheck( user == $u )
+    $b : BotProfile( $u : user, category == "UNVERIFIED", $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
 then
-    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false));
-    retract($b);
+    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false, $rate, $ts));
 end
 
 rule "Bot_Metrics" salience 392
 when
-    $b : BotHealthCheck( $u : user )
+    $b : BotHealthCheck( $u : user, $rate : activityRate, $ts : timestamp )
+    not BotMetrics( user == $u, timestamp == $ts )
 then
-    insert(new BotMetrics($u));
-    retract($b);
+    insert(new BotMetrics($u, $rate, $ts));
 end
 
 rule "Bot_Report" salience 391
 when
-    $b : BotMetrics( $u : user )
+    $b : BotMetrics( $u : user, activityRate > 10, $ts : timestamp )
+    not BotReported( user == $u, timestamp == $ts )
 then
-    insert(new BotReported($u));
-    retract($b);
+    insert(new BotReported($u, $ts));
 end
 
 rule "Bot_Complete" salience 390
 when
-    $b : BotReported()
+    $b : BotReported( $u : user, $ts : timestamp )
 then
-    retract($b);
+    // Lifecycle handled by expiration
 end
 
 // CONTENT PIPELINE
@@ -389,17 +383,17 @@ when
     $c : ContentReview( qualityTier == "MAJOR", $t : title, $u : user )
     $aq : ArticleQuality( title == $t, $q : qualityScore )
 then
-    insert(new ContentApproved($t, $u, 20));
+    insert(new ContentApproved($t, $u, 20, "MAJOR"));
     retract($c);
     modify($aq) { setQualityScore(Math.min(100, $q + 20)) };
 end
 
 rule "Content_Approve_NewArticle" salience 288
 when
-    $c : ContentReview( $t : title, $u : user )
+    $c : ContentReview( $t : title, $u : user, $tier : qualityTier )
     not ArticleQuality( title == $t )
 then
-    insert(new ContentApproved($t, $u, 10));
+    insert(new ContentApproved($t, $u, 10, $tier));
     retract($c);
     insert(new ArticleQuality($t, 60, 1));
 end
@@ -409,30 +403,37 @@ when
     $c : ContentReview( qualityTier != "MAJOR", $t : title, $u : user )
     $aq : ArticleQuality( title == $t, $q : qualityScore )
 then
-    insert(new ContentApproved($t, $u, 5));
+    insert(new ContentApproved($t, $u, 5, "STANDARD"));
     retract($c);
     modify($aq) { setQualityScore(Math.min(100, $q + 5)) };
 end
 
 rule "Content_Index" salience 279
 when
-    $c : ContentApproved( $t : title )
+    $c : ContentApproved( $t : title, $tier : tier )
 then
-    insert(new ContentIndexed($t));
+    insert(new ContentIndexed($t, $tier));
     retract($c);
 end
 
 rule "Content_Cache" salience 278
 when
-    $c : ContentIndexed( $t : title )
+    $c : ContentIndexed( $t : title, $tier : tier )
 then
-    insert(new ContentCached($t));
+    insert(new ContentCached($t, $tier));
     retract($c);
 end
 
-rule "Content_Complete" salience 277
+rule "Content_Major_Log" salience 277
 when
-    $c : ContentCached()
+    $c : ContentCached( tier == "MAJOR" )
+then
+    retract($c);
+end
+
+rule "Content_Standard_Complete" salience 276
+when
+    $c : ContentCached( tier == "STANDARD" )
 then
     retract($c);
 end
@@ -500,31 +501,7 @@ then
 end
 
 // DISCUSSION PIPELINE
-declare DiscussionPost @role(event) @expires(5s) 
-    title : String; 
-    user : String;
-    timestamp : long;
-end
-
-declare DiscussionAnalyzed @role(event) @expires(5s) 
-    title : String; 
-    topic : String;
-    relatedArticleQuality : int;
-end
-
-declare DiscussionSentiment @role(event) @expires(5s) 
-    title : String; 
-    mood : String;
-    userEngagement : String;
-end
-
-declare DiscussionRouted @role(event) @expires(5s) 
-    title : String;
-end
-
-declare DiscussionNotified @role(event) @expires(5s) 
-    title : String;
-end
+// Metadata handled by Java annotations in DrlFacts
 
 rule "Discussion_Detect" salience 100
 when

@@ -27,3 +27,19 @@ then
     insert(new MinorClassified($t, $u, "CORRECTION", $freq.intValue()));
     retract($m);
 end
+
+// DISCUSSION PIPELINE
+rule "Discussion_Detect" salience 100
+when
+    $e : WikiEvent( title matches "Talk:.*", $t : title, $u : user, $ts : timestamp )
+then
+    insert(new DiscussionPost($t, $u, $ts));
+end
+
+rule "Discussion_Analyze" salience 99
+when
+    $d : DiscussionPost( $t : title )
+then
+    insert(new DiscussionAnalyzed($t, "TOPIC", 50));
+    retract($d);
+end

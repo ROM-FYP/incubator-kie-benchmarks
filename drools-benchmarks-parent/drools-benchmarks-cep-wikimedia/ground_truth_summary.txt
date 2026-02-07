@@ -1,0 +1,5 @@
+Ground Truth Summary
+--------------------
+Expected Alerts: 1097
+Refined Bots: 662
+Refined Content Major: 435

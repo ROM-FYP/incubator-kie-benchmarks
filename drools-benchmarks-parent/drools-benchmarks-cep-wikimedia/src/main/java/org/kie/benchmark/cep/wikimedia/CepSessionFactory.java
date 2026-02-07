@@ -24,6 +24,7 @@ import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
 import org.kie.api.builder.Message;
+import org.kie.api.runtime.KieContainer;
 import org.kie.api.conf.EventProcessingOption;
 import org.kie.api.io.ResourceType;
 import org.kie.api.runtime.KieSession;
@@ -62,6 +63,10 @@ public class CepSessionFactory {
             KieBuilder kieBuilder = kieServices.newKieBuilder(kfs);
             kieBuilder.buildAll();
 
+            if (kieBuilder.getResults().hasMessages(Message.Level.ERROR, Message.Level.WARNING)) {
+                logger.info("Builder results: \n{}", kieBuilder.getResults().toString());
+            }
+
             if (kieBuilder.getResults().hasMessages(Message.Level.ERROR)) {
                 throw new RuntimeException("Build errors: " + kieBuilder.getResults().toString());
             }
@@ -70,12 +75,12 @@ public class CepSessionFactory {
             org.kie.api.KieBaseConfiguration kieBaseConfig = kieServices.newKieBaseConfiguration();
             kieBaseConfig.setOption(EventProcessingOption.STREAM);
             
-            return kieServices.newKieContainer(kieServices.getRepository().getDefaultReleaseId())
-                    .newKieBase(kieBaseConfig);
-
+            KieContainer kieContainer = kieServices.newKieContainer(kieServices.getRepository().getDefaultReleaseId());
+            return kieContainer.newKieBase(kieBaseConfig);
 
         } catch (Exception e) {
             logger.error("Failed to create KieBase", e);
+            e.printStackTrace(); // Direct to console for benchmark capture
             throw new RuntimeException("Failed to create KieBase", e);
         }
     }
