@@ -84,6 +84,9 @@ From: 'Eclipse Foundation' (https://www.eclipse.org)
   - Angus Activation Registries (https://github.com/eclipse-ee4j/angus-activation/angus-activation) org.eclipse.angus:angus-activation:jar:2.0.3
     License: EDL 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
 
+  - Eclipse Compiler for Java(TM) (https://github.com/eclipse-jdt/eclipse.jdt.core/) org.eclipse.jdt:ecj:jar:3.44.0
+    License: EPL-2.0  (https://www.eclipse.org/legal/epl-2.0/)
+
   - JAXB Core (https://eclipse-ee4j.github.io/jaxb-ri/) org.glassfish.jaxb:jaxb-core:jar:4.0.6
     License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
 
@@ -92,12 +95,6 @@ From: 'Eclipse Foundation' (https://www.eclipse.org)
 
   - TXW2 Runtime (https://eclipse-ee4j.github.io/jaxb-ri/) org.glassfish.jaxb:txw2:jar:4.0.6
     License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
-
-
-From: 'Eclipse Foundation' (https://www.eclipse.org/)
-
-  - Eclipse Compiler for Java(TM) (https://projects.eclipse.org/projects/eclipse.jdt) org.eclipse.jdt:ecj:jar:3.33.0
-    License: Eclipse Public License - v 2.0  (https://www.eclipse.org/legal/epl-2.0/)
 
 
 From: 'FasterXML' (http://fasterxml.com/)

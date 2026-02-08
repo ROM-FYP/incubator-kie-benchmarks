@@ -1,0 +1,1030 @@
+/*
+ * WIKIMEDIA DEEP SEMANTIC CLUSTERING - v7
+ * =====================================================================
+ * 100 rules across 5 clusters (20 each)
+ * Dense beta joins on every rule (2+ facts matched)
+ * Cluster-specific prefixes to prevent cross-matching
+ * =====================================================================
+ */
+
+package org.kie.benchmark.cep.wikimedia.rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.UserContext;
+import org.kie.benchmark.cep.wikimedia.model.EditClassification;
+import org.kie.benchmark.cep.wikimedia.model.BotAction;
+import org.kie.benchmark.cep.wikimedia.model.Alert;
+import org.kie.benchmark.cep.wikimedia.model.QualityGrade;
+import org.kie.benchmark.cep.wikimedia.model.SuspiciousActivity;
+
+declare WikiEvent @role(event) @expires(120s) end
+declare BotAction @role(event) @expires(90s) end
+declare EditClassification @role(event) @expires(90s) end
+declare UserContext @role(event) @expires(90s) end
+declare QualityGrade @role(event) @expires(90s) end
+declare SuspiciousActivity @role(event) @expires(90s) end
+declare Alert @role(event) @expires(120s) end
+
+
+// ============================================================================
+// CLUSTER A: BOT MONITORING (20 rules, salience 1000-980)
+// Entry: bot == true
+// All facts use title="BOT_A" and reason="BOT" to prevent cross-cluster matching
+// ============================================================================
+
+rule "A01_BotEntry" salience 1000
+when
+    $e : WikiEvent( bot == true, $u : user, $size : sizeDelta )
+then
+    insert(new BotAction($u, "A_step1", Math.abs($size)));
+    insert(new SuspiciousActivity($u, "BOT_A", "BOT", "A_step1", 1));
+end
+
+rule "A02_BotStep2" salience 999
+when
+    $ba : BotAction( type == "A_step1", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step1" )
+then
+    modify($ba) { setType("A_step2"); }
+    modify($sa) { setStatus("A_step2"); }
+end
+
+rule "A03_BotStep3" salience 998
+when
+    $ba : BotAction( type == "A_step2", $u : user, $vel : velocity )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step2" )
+then
+    int threat = $vel > 200 ? 3 : 1;
+    modify($ba) { setType("A_step3"); }
+    modify($sa) { setStatus("A_step3"); }
+    modify($sa) { setRiskLevel(threat); }
+end
+
+rule "A04_BotStep4" salience 997
+when
+    $ba : BotAction( type == "A_step3", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step3", $r : riskLevel )
+then
+    insert(new QualityGrade("BOT_A", $u, "A_step4", -10 * $r));
+    modify($ba) { setType("A_step4"); }
+    modify($sa) { setStatus("A_step4"); }
+end
+
+rule "A05_BotStep5" salience 996
+when
+    $ba : BotAction( type == "A_step4", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step4" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step4" )
+then
+    modify($ba) { setType("A_step5"); }
+    modify($sa) { setStatus("A_step5"); }
+    modify($qg) { setGrade("A_step5"); }
+end
+
+rule "A06_BotStep6" salience 995
+when
+    $ba : BotAction( type == "A_step5", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step5" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step5", $s : score )
+then
+    int newScore = $s - 10;
+    modify($ba) { setType("A_step6"); }
+    modify($sa) { setStatus("A_step6"); }
+    modify($qg) { setGrade("A_step6"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "A07_BotStep7" salience 994
+when
+    $ba : BotAction( type == "A_step6", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step6" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step6" )
+then
+    modify($ba) { setType("A_step7"); }
+    modify($sa) { setStatus("A_step7"); }
+    modify($qg) { setGrade("A_step7"); }
+end
+
+rule "A08_BotStep8" salience 993
+when
+    $ba : BotAction( type == "A_step7", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_step7", $r : riskLevel )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step7" )
+then
+    String action = $r >= 2 ? "A_block" : "A_allow";
+    modify($ba) { setType("A_step8"); }
+    modify($sa) { setStatus(action); }
+    modify($qg) { setGrade("A_step8"); }
+end
+
+rule "A09_BotStep9" salience 992
+when
+    $ba : BotAction( type == "A_step8", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", status == "A_block" || status == "A_allow" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step8", $s : score )
+then
+    int newScore = $s + 50;
+    modify($ba) { setType("A_step9"); }
+    modify($qg) { setGrade("A_step9"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "A10_BotStep10" salience 991
+when
+    $ba : BotAction( type == "A_step9", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step9" )
+then
+    modify($ba) { setType("A_step10"); }
+    modify($qg) { setGrade("A_step10"); }
+end
+
+rule "A11_BotStep11" salience 990
+when
+    $ba : BotAction( type == "A_step10", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step10", $s : score )
+then
+    int newScore = $s + 20;
+    modify($ba) { setType("A_step11"); }
+    modify($qg) { setGrade("A_step11"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "A12_BotStep12" salience 989
+when
+    $ba : BotAction( type == "A_step11", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step11" )
+then
+    modify($ba) { setType("A_step12"); }
+    modify($qg) { setGrade("A_step12"); }
+end
+
+rule "A13_BotStep13" salience 988
+when
+    $ba : BotAction( type == "A_step12", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step12", $s : score )
+then
+    int newScore = $s + 15;
+    modify($ba) { setType("A_step13"); }
+    modify($qg) { setGrade("A_step13"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "A14_BotStep14" salience 987
+when
+    $ba : BotAction( type == "A_step13", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step13" )
+then
+    modify($ba) { setType("A_step14"); }
+    modify($qg) { setGrade("A_step14"); }
+end
+
+rule "A15_BotStep15" salience 986
+when
+    $ba : BotAction( type == "A_step14", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step14", $s : score )
+then
+    int newScore = $s + 10;
+    modify($ba) { setType("A_step15"); }
+    modify($qg) { setGrade("A_step15"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "A16_BotStep16" salience 985
+when
+    $ba : BotAction( type == "A_step15", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step15" )
+then
+    modify($ba) { setType("A_step16"); }
+    modify($qg) { setGrade("A_step16"); }
+end
+
+rule "A17_BotStep17" salience 984
+when
+    $ba : BotAction( type == "A_step16", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step16", $s : score )
+then
+    int newScore = $s + 5;
+    modify($ba) { setType("A_step17"); }
+    modify($qg) { setGrade("A_step17"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "A18_BotStep18" salience 983
+when
+    $ba : BotAction( type == "A_step17", $u : user )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT", $st : status )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step17" )
+then
+    int sev = $st.equals("A_block") ? 3 : 1;
+    insert(new Alert("BOT_A", sev, $u, "BOT_A", $st, System.currentTimeMillis()));
+    modify($ba) { setType("A_step18"); }
+    modify($qg) { setGrade("A_step18"); }
+end
+
+rule "A19_BotStep19" salience 982
+when
+    $alert : Alert( alertType == "BOT_A", $u : user )
+    $ba : BotAction( type == "A_step18", user == $u )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_step18" )
+then
+    modify($ba) { setType("A_done"); }
+    modify($qg) { setGrade("A_done"); }
+end
+
+rule "A20_BotCleanup" salience 981
+when
+    $alert : Alert( alertType == "BOT_A", $u : user )
+    $ba : BotAction( type == "A_done", user == $u )
+    $sa : SuspiciousActivity( user == $u, reason == "BOT" )
+    $qg : QualityGrade( title == "BOT_A", user == $u, grade == "A_done" )
+then
+    retract($ba);
+    retract($sa);
+    retract($qg);
+end
+
+
+// ============================================================================
+// CLUSTER B: MAJOR CONTENT (20 rules, salience 900-880)
+// Entry: bot == false, sizeDelta > 200
+// All facts use title="MAJOR_B" to prevent cross-cluster matching
+// ============================================================================
+
+rule "B01_MajorEntry" salience 900
+when
+    $e : WikiEvent( bot == false, sizeDelta > 200, $u : user, $t : title, $size : sizeDelta )
+then
+    insert(new EditClassification($t, "B_step1", $size / 100));
+    insert(new QualityGrade("MAJOR_B", $t, "B_step1", $size / 10));
+end
+
+rule "B02_MajorStep2" salience 899
+when
+    $ec : EditClassification( type == "B_step1", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step1" )
+then
+    modify($ec) { setType("B_step2"); }
+    modify($qg) { setGrade("B_step2"); }
+end
+
+rule "B03_MajorStep3" salience 898
+when
+    $ec : EditClassification( type == "B_step2", $t : pageTitle, $w : weight )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step2" )
+then
+    String cat = $w > 5 ? "B_big" : "B_med";
+    modify($ec) { setType(cat); }
+    modify($qg) { setGrade("B_step3"); }
+end
+
+rule "B04_MajorStep4" salience 897
+when
+    $ec : EditClassification( type == "B_big" || type == "B_med", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step3", $s : score )
+then
+    int newScore = $s + 20;
+    modify($ec) { setType("B_step4"); }
+    modify($qg) { setGrade("B_step4"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "B05_MajorStep5" salience 896
+when
+    $ec : EditClassification( type == "B_step4", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step4" )
+then
+    modify($ec) { setType("B_step5"); }
+    modify($qg) { setGrade("B_step5"); }
+end
+
+rule "B06_MajorStep6" salience 895
+when
+    $ec : EditClassification( type == "B_step5", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step5", $s : score )
+then
+    int newScore = $s + 15;
+    modify($ec) { setType("B_step6"); }
+    modify($qg) { setGrade("B_step6"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "B07_MajorStep7" salience 894
+when
+    $ec : EditClassification( type == "B_step6", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step6" )
+then
+    modify($ec) { setType("B_step7"); }
+    modify($qg) { setGrade("B_step7"); }
+end
+
+rule "B08_MajorStep8" salience 893
+when
+    $ec : EditClassification( type == "B_step7", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_step7", $s : score )
+then
+    String verdict = $s > 50 ? "B_good" : "B_ok";
+    modify($ec) { setType("B_step8"); }
+    modify($qg) { setGrade(verdict); }
+end
+
+rule "B09_MajorStep9" salience 892
+when
+    $ec : EditClassification( type == "B_step8", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, grade == "B_good" || grade == "B_ok", $s : score )
+then
+    int newScore = $s + 10;
+    modify($ec) { setType("B_step9"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "B10_MajorStep10" salience 891
+when
+    $ec : EditClassification( type == "B_step9", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    modify($ec) { setType("B_step10"); }
+end
+
+rule "B11_MajorStep11" salience 890
+when
+    $ec : EditClassification( type == "B_step10", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, $s : score )
+then
+    int newScore = $s + 8;
+    modify($ec) { setType("B_step11"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "B12_MajorStep12" salience 889
+when
+    $ec : EditClassification( type == "B_step11", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    modify($ec) { setType("B_step12"); }
+end
+
+rule "B13_MajorStep13" salience 888
+when
+    $ec : EditClassification( type == "B_step12", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, $s : score )
+then
+    int newScore = $s + 6;
+    modify($ec) { setType("B_step13"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "B14_MajorStep14" salience 887
+when
+    $ec : EditClassification( type == "B_step13", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    modify($ec) { setType("B_step14"); }
+end
+
+rule "B15_MajorStep15" salience 886
+when
+    $ec : EditClassification( type == "B_step14", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, $s : score )
+then
+    int newScore = $s + 4;
+    modify($ec) { setType("B_step15"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "B16_MajorStep16" salience 885
+when
+    $ec : EditClassification( type == "B_step15", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    modify($ec) { setType("B_step16"); }
+end
+
+rule "B17_MajorStep17" salience 884
+when
+    $ec : EditClassification( type == "B_step16", $t : pageTitle )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t, $s : score, $g : grade )
+then
+    int sev = $g.equals("B_good") ? 1 : 2;
+    insert(new Alert("MAJOR_B", sev, "sys", $t, $g, System.currentTimeMillis()));
+    modify($ec) { setType("B_step17"); }
+end
+
+rule "B18_MajorStep18" salience 883
+when
+    $alert : Alert( alertType == "MAJOR_B", $t : title )
+    $ec : EditClassification( type == "B_step17", pageTitle == $t )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    modify($ec) { setType("B_step18"); }
+end
+
+rule "B19_MajorStep19" salience 882
+when
+    $alert : Alert( alertType == "MAJOR_B", $t : title )
+    $ec : EditClassification( type == "B_step18", pageTitle == $t )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    modify($ec) { setType("B_done"); }
+end
+
+rule "B20_MajorCleanup" salience 881
+when
+    $alert : Alert( alertType == "MAJOR_B", $t : title )
+    $ec : EditClassification( type == "B_done", pageTitle == $t )
+    $qg : QualityGrade( title == "MAJOR_B", user == $t )
+then
+    retract($ec);
+    retract($qg);
+end
+
+
+// ============================================================================
+// CLUSTER C: MINOR EDITS (20 rules, salience 800-780)
+// Entry: bot == false, -50 <= sizeDelta <= 50
+// All facts use title="MINOR_C" to prevent cross-cluster matching
+// ============================================================================
+
+rule "C01_MinorEntry" salience 800
+when
+    $e : WikiEvent( bot == false, sizeDelta >= -50, sizeDelta <= 50, $u : user )
+then
+    insert(new UserContext($u, 1, 1, 0, 0));
+    insert(new QualityGrade("MINOR_C", $u, "C_step1", 10));
+end
+
+rule "C02_MinorStep2" salience 799
+when
+    $uc : UserContext( editCount == 1, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_step1" )
+then
+    modify($uc) { setEditCount(2); }
+    modify($qg) { setGrade("C_step2"); }
+end
+
+rule "C03_MinorStep3" salience 798
+when
+    $uc : UserContext( editCount == 2, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_step2", $s : score )
+then
+    int newScore = $s + 5;
+    modify($uc) { setEditCount(3); }
+    modify($qg) { setGrade("C_step3"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "C04_MinorStep4" salience 797
+when
+    $uc : UserContext( editCount == 3, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_step3" )
+then
+    modify($uc) { setEditCount(4); }
+    modify($qg) { setGrade("C_step4"); }
+end
+
+rule "C05_MinorStep5" salience 796
+when
+    $uc : UserContext( editCount == 4, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_step4", $s : score )
+then
+    int newScore = $s + 5;
+    modify($uc) { setEditCount(5); }
+    modify($qg) { setGrade("C_step5"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "C06_MinorStep6" salience 795
+when
+    $uc : UserContext( editCount == 5, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_step5" )
+then
+    modify($uc) { setEditCount(6); }
+    modify($qg) { setGrade("C_step6"); }
+end
+
+rule "C07_MinorStep7" salience 794
+when
+    $uc : UserContext( editCount == 6, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_step6", $s : score )
+then
+    String verdict = $s >= 20 ? "C_good" : "C_basic";
+    modify($uc) { setEditCount(7); }
+    modify($qg) { setGrade(verdict); }
+end
+
+rule "C08_MinorStep8" salience 793
+when
+    $uc : UserContext( editCount == 7, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, grade == "C_good" || grade == "C_basic", $s : score )
+then
+    int newScore = $s + 10;
+    modify($uc) { setEditCount(8); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "C09_MinorStep9" salience 792
+when
+    $uc : UserContext( editCount == 8, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(9); }
+end
+
+rule "C10_MinorStep10" salience 791
+when
+    $uc : UserContext( editCount == 9, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, $s : score )
+then
+    int newScore = $s + 5;
+    modify($uc) { setEditCount(10); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "C11_MinorStep11" salience 790
+when
+    $uc : UserContext( editCount == 10, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(11); }
+end
+
+rule "C12_MinorStep12" salience 789
+when
+    $uc : UserContext( editCount == 11, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, $s : score )
+then
+    int newScore = $s + 5;
+    modify($uc) { setEditCount(12); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "C13_MinorStep13" salience 788
+when
+    $uc : UserContext( editCount == 12, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(13); }
+end
+
+rule "C14_MinorStep14" salience 787
+when
+    $uc : UserContext( editCount == 13, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, $s : score )
+then
+    int newScore = $s + 5;
+    modify($uc) { setEditCount(14); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "C15_MinorStep15" salience 786
+when
+    $uc : UserContext( editCount == 14, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(15); }
+end
+
+rule "C16_MinorStep16" salience 785
+when
+    $uc : UserContext( editCount == 15, $u : user )
+    $qg : QualityGrade( title == "MINOR_C", user == $u, $s : score, $g : grade )
+then
+    int sev = $g.equals("C_good") ? 1 : 2;
+    insert(new Alert("MINOR_C", sev, $u, "MINOR_C", $g, System.currentTimeMillis()));
+    modify($uc) { setEditCount(16); }
+end
+
+rule "C17_MinorStep17" salience 784
+when
+    $alert : Alert( alertType == "MINOR_C", $u : user )
+    $uc : UserContext( editCount == 16, user == $u )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(17); }
+end
+
+rule "C18_MinorStep18" salience 783
+when
+    $alert : Alert( alertType == "MINOR_C", $u : user )
+    $uc : UserContext( editCount == 17, user == $u )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(18); }
+end
+
+rule "C19_MinorStep19" salience 782
+when
+    $alert : Alert( alertType == "MINOR_C", $u : user )
+    $uc : UserContext( editCount == 18, user == $u )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    modify($uc) { setEditCount(19); }
+end
+
+rule "C20_MinorCleanup" salience 781
+when
+    $alert : Alert( alertType == "MINOR_C", $u : user )
+    $uc : UserContext( editCount == 19, user == $u )
+    $qg : QualityGrade( title == "MINOR_C", user == $u )
+then
+    retract($uc);
+    retract($qg);
+end
+
+
+// ============================================================================
+// CLUSTER D: DELETIONS (20 rules, salience 700-680)
+// Entry: bot == false, sizeDelta < -100
+// All facts use title="DEL_D" and reason="DEL" to prevent cross-cluster matching
+// ============================================================================
+
+rule "D01_DeleteEntry" salience 700
+when
+    $e : WikiEvent( bot == false, sizeDelta < -100, $u : user, $t : title, $size : sizeDelta )
+then
+    insert(new SuspiciousActivity($u, $t, "DEL", "D_step1", Math.abs($size) / 100));
+    insert(new QualityGrade("DEL_D", $t, "D_step1", -10));
+end
+
+rule "D02_DeleteStep2" salience 699
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step1", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step1" )
+then
+    modify($sa) { setStatus("D_step2"); }
+    modify($qg) { setGrade("D_step2"); }
+end
+
+rule "D03_DeleteStep3" salience 698
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step2", $t : title, $r : riskLevel )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step2" )
+then
+    String sev = $r > 3 ? "D_severe" : "D_mild";
+    modify($sa) { setStatus(sev); }
+    modify($qg) { setGrade("D_step3"); }
+end
+
+rule "D04_DeleteStep4" salience 697
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_severe" || status == "D_mild", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step3", $s : score )
+then
+    int newScore = $s - 20;
+    modify($sa) { setStatus("D_step4"); }
+    modify($qg) { setGrade("D_step4"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "D05_DeleteStep5" salience 696
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step4", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step4" )
+then
+    modify($sa) { setStatus("D_step5"); }
+    modify($qg) { setGrade("D_step5"); }
+end
+
+rule "D06_DeleteStep6" salience 695
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step5", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step5", $s : score )
+then
+    int newScore = $s - 10;
+    modify($sa) { setStatus("D_step6"); }
+    modify($qg) { setGrade("D_step6"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "D07_DeleteStep7" salience 694
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step6", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step6" )
+then
+    modify($sa) { setStatus("D_step7"); }
+    modify($qg) { setGrade("D_step7"); }
+end
+
+rule "D08_DeleteStep8" salience 693
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step7", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step7", $s : score )
+then
+    String action = $s < -30 ? "D_esc" : "D_mon";
+    modify($sa) { setStatus(action); }
+    modify($qg) { setGrade("D_step8"); }
+end
+
+rule "D09_DeleteStep9" salience 692
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_esc" || status == "D_mon", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, grade == "D_step8", $s : score )
+then
+    int newScore = $s + 50;
+    modify($sa) { setStatus("D_step9"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "D10_DeleteStep10" salience 691
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step9", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    modify($sa) { setStatus("D_step10"); }
+end
+
+rule "D11_DeleteStep11" salience 690
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step10", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, $s : score )
+then
+    int newScore = $s + 10;
+    modify($sa) { setStatus("D_step11"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "D12_DeleteStep12" salience 689
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step11", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    modify($sa) { setStatus("D_step12"); }
+end
+
+rule "D13_DeleteStep13" salience 688
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step12", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, $s : score )
+then
+    int newScore = $s + 8;
+    modify($sa) { setStatus("D_step13"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "D14_DeleteStep14" salience 687
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step13", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    modify($sa) { setStatus("D_step14"); }
+end
+
+rule "D15_DeleteStep15" salience 686
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step14", $t : title )
+    $qg : QualityGrade( title == "DEL_D", user == $t, $s : score )
+then
+    int newScore = $s + 5;
+    modify($sa) { setStatus("D_step15"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "D16_DeleteStep16" salience 685
+when
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step15", $t : title, $u : user )
+    $qg : QualityGrade( title == "DEL_D", user == $t, $g : grade )
+then
+    int sev = $g.equals("D_esc") ? 3 : 1;
+    insert(new Alert("DEL_D", sev, $u, $t, $g, System.currentTimeMillis()));
+    modify($sa) { setStatus("D_step16"); }
+end
+
+rule "D17_DeleteStep17" salience 684
+when
+    $alert : Alert( alertType == "DEL_D", $t : title )
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step16", title == $t )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    modify($sa) { setStatus("D_step17"); }
+end
+
+rule "D18_DeleteStep18" salience 683
+when
+    $alert : Alert( alertType == "DEL_D", $t : title )
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step17", title == $t )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    modify($sa) { setStatus("D_step18"); }
+end
+
+rule "D19_DeleteStep19" salience 682
+when
+    $alert : Alert( alertType == "DEL_D", $t : title )
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_step18", title == $t )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    modify($sa) { setStatus("D_done"); }
+end
+
+rule "D20_DeleteCleanup" salience 681
+when
+    $alert : Alert( alertType == "DEL_D", $t : title )
+    $sa : SuspiciousActivity( reason == "DEL", status == "D_done", title == $t )
+    $qg : QualityGrade( title == "DEL_D", user == $t )
+then
+    retract($sa);
+    retract($qg);
+end
+
+
+// ============================================================================
+// CLUSTER E: MEDIUM CHANGES (20 rules, salience 600-580)
+// Entry: bot == false, 50 < sizeDelta <= 200
+// All facts use title="MED_E" to prevent cross-cluster matching
+// ============================================================================
+
+rule "E01_MediumEntry" salience 600
+when
+    $e : WikiEvent( bot == false, sizeDelta > 50, sizeDelta <= 200, $u : user, $t : title, $size : sizeDelta )
+then
+    insert(new EditClassification($t, "E_step1", $size / 50));
+    insert(new QualityGrade("MED_E", $t, "E_step1", $size / 20));
+end
+
+rule "E02_MediumStep2" salience 599
+when
+    $ec : EditClassification( type == "E_step1", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step1" )
+then
+    modify($ec) { setType("E_step2"); }
+    modify($qg) { setGrade("E_step2"); }
+end
+
+rule "E03_MediumStep3" salience 598
+when
+    $ec : EditClassification( type == "E_step2", $t : pageTitle, $w : weight )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step2" )
+then
+    String cat = $w >= 3 ? "E_sub" : "E_lite";
+    modify($ec) { setType(cat); }
+    modify($qg) { setGrade("E_step3"); }
+end
+
+rule "E04_MediumStep4" salience 597
+when
+    $ec : EditClassification( type == "E_sub" || type == "E_lite", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step3", $s : score )
+then
+    int newScore = $s + 10;
+    modify($ec) { setType("E_step4"); }
+    modify($qg) { setGrade("E_step4"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "E05_MediumStep5" salience 596
+when
+    $ec : EditClassification( type == "E_step4", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step4" )
+then
+    modify($ec) { setType("E_step5"); }
+    modify($qg) { setGrade("E_step5"); }
+end
+
+rule "E06_MediumStep6" salience 595
+when
+    $ec : EditClassification( type == "E_step5", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step5", $s : score )
+then
+    int newScore = $s + 8;
+    modify($ec) { setType("E_step6"); }
+    modify($qg) { setGrade("E_step6"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "E07_MediumStep7" salience 594
+when
+    $ec : EditClassification( type == "E_step6", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step6" )
+then
+    modify($ec) { setType("E_step7"); }
+    modify($qg) { setGrade("E_step7"); }
+end
+
+rule "E08_MediumStep8" salience 593
+when
+    $ec : EditClassification( type == "E_step7", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_step7", $s : score )
+then
+    String verdict = $s > 15 ? "E_good" : "E_acc";
+    modify($ec) { setType("E_step8"); }
+    modify($qg) { setGrade(verdict); }
+end
+
+rule "E09_MediumStep9" salience 592
+when
+    $ec : EditClassification( type == "E_step8", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, grade == "E_good" || grade == "E_acc", $s : score )
+then
+    int newScore = $s + 5;
+    modify($ec) { setType("E_step9"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "E10_MediumStep10" salience 591
+when
+    $ec : EditClassification( type == "E_step9", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    modify($ec) { setType("E_step10"); }
+end
+
+rule "E11_MediumStep11" salience 590
+when
+    $ec : EditClassification( type == "E_step10", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, $s : score )
+then
+    int newScore = $s + 4;
+    modify($ec) { setType("E_step11"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "E12_MediumStep12" salience 589
+when
+    $ec : EditClassification( type == "E_step11", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    modify($ec) { setType("E_step12"); }
+end
+
+rule "E13_MediumStep13" salience 588
+when
+    $ec : EditClassification( type == "E_step12", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, $s : score )
+then
+    int newScore = $s + 3;
+    modify($ec) { setType("E_step13"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "E14_MediumStep14" salience 587
+when
+    $ec : EditClassification( type == "E_step13", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    modify($ec) { setType("E_step14"); }
+end
+
+rule "E15_MediumStep15" salience 586
+when
+    $ec : EditClassification( type == "E_step14", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, $s : score )
+then
+    int newScore = $s + 2;
+    modify($ec) { setType("E_step15"); }
+    modify($qg) { setScore(newScore); }
+end
+
+rule "E16_MediumStep16" salience 585
+when
+    $ec : EditClassification( type == "E_step15", $t : pageTitle )
+    $qg : QualityGrade( title == "MED_E", user == $t, $g : grade )
+then
+    int sev = $g.equals("E_good") ? 1 : 2;
+    insert(new Alert("MED_E", sev, "sys", $t, $g, System.currentTimeMillis()));
+    modify($ec) { setType("E_step16"); }
+end
+
+rule "E17_MediumStep17" salience 584
+when
+    $alert : Alert( alertType == "MED_E", $t : title )
+    $ec : EditClassification( type == "E_step16", pageTitle == $t )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    modify($ec) { setType("E_step17"); }
+end
+
+rule "E18_MediumStep18" salience 583
+when
+    $alert : Alert( alertType == "MED_E", $t : title )
+    $ec : EditClassification( type == "E_step17", pageTitle == $t )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    modify($ec) { setType("E_step18"); }
+end
+
+rule "E19_MediumStep19" salience 582
+when
+    $alert : Alert( alertType == "MED_E", $t : title )
+    $ec : EditClassification( type == "E_step18", pageTitle == $t )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    modify($ec) { setType("E_done"); }
+end
+
+rule "E20_MediumCleanup" salience 581
+when
+    $alert : Alert( alertType == "MED_E", $t : title )
+    $ec : EditClassification( type == "E_done", pageTitle == $t )
+    $qg : QualityGrade( title == "MED_E", user == $t )
+then
+    retract($ec);
+    retract($qg);
+end

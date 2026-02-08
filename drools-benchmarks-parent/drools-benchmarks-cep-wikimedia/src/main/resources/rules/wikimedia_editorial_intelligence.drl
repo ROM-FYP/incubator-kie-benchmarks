@@ -1,0 +1,327 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License. 
+ */
+
+package org.kie.benchmark.cep.wikimedia.rules;
+
+// ============================================================================
+// WIKIMEDIA EDITORIAL INTELLIGENCE RULESET - Beta Join Architecture
+// ============================================================================
+//
+// Purpose: Demonstrates rich beta joins (cross-fact pattern matching) for
+// editorial intelligence and content moderation in Wikipedia.
+//
+// Architecture: 5 distinct clusters with inter-cluster beta joins
+//   CLUSTER 1 (Salience 500-480): User Activity Tracking
+//   CLUSTER 2 (Salience 400-380): Content Analysis Pipeline
+//   CLUSTER 3 (Salience 300-280): Quality Assessment
+//   CLUSTER 4 (Salience 200-180): Suspicious Activity Detection
+//   CLUSTER 5 (Salience 100-50):  Editorial Decision (Beta Join Hub)
+//
+// Beta Join Points:
+//   - Editorial rules join UserContext + ContentAnalysis + QualityGrade
+//   - Cross-correlation rules join SuspiciousActivity + QualityGrade
+//   - Alert rules join multiple fact types on user/title keys
+// ============================================================================
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.UserContext;
+import org.kie.benchmark.cep.wikimedia.model.EditClassification;
+import org.kie.benchmark.cep.wikimedia.model.ContentAnalysis;
+import org.kie.benchmark.cep.wikimedia.model.BotAction;
+import org.kie.benchmark.cep.wikimedia.model.VerifiedEdit;
+import org.kie.benchmark.cep.wikimedia.model.Alert;
+import org.kie.benchmark.cep.wikimedia.model.QualityGrade;
+import org.kie.benchmark.cep.wikimedia.model.SuspiciousActivity;
+import org.kie.benchmark.cep.wikimedia.model.EditorialPackage;
+
+import java.util.Arrays;
+
+// CEP Event Declarations
+declare WikiEvent @role(event) @expires(60s) end
+declare UserContext @role(event) @expires(30s) end
+declare EditClassification @role(event) @expires(30s) end
+declare ContentAnalysis @role(event) @expires(30s) end
+declare BotAction @role(event) @expires(30s) end
+declare VerifiedEdit @role(event) @expires(30s) end
+declare QualityGrade @role(event) @expires(30s) end
+declare SuspiciousActivity @role(event) @expires(30s) end
+declare EditorialPackage @role(event) @expires(30s) end
+declare Alert @role(event) @expires(60s) end
+
+
+// ============================================================================
+// CLUSTER 1: USER ACTIVITY TRACKING (Salience 500-480)
+// ============================================================================
+// Entry point for non-bot human edits. Creates UserContext for downstream joins.
+
+rule "User_EditDetect" salience 500
+when
+    $e : WikiEvent( bot == false, $u : user, $t : title, $size : sizeDelta )
+then
+    // Stage 1: Detect human edit and create initial user context
+    int reputation = Math.abs($size) > 500 ? 3 : (Math.abs($size) > 100 ? 2 : 1);
+    insert(new UserContext($u, reputation, 1, 30, 0));
+end
+
+rule "User_Classify" salience 495
+when
+    $uc : UserContext( $u : user, $rep : reputation )
+then
+    // Stage 2: Create edit classification based on user reputation
+    String type = $rep >= 3 ? "trusted" : ($rep >= 2 ? "regular" : "newcomer");
+    insert(new EditClassification("user:" + $u, type, $rep));
+end
+
+rule "User_ProfileComplete" salience 490
+when
+    $uc : UserContext( $u : user )
+    $ec : EditClassification( pageTitle == "user:" + $u )
+then
+    // Stage 3: Mark user profile as ready for downstream processing
+    // This is a beta join on user identifier
+    retract($ec);
+end
+
+
+// ============================================================================
+// CLUSTER 2: CONTENT ANALYSIS PIPELINE (Salience 400-380)
+// ============================================================================
+// Analyzes content changes and creates ContentAnalysis for editorial decisions.
+
+rule "Content_Detect" salience 400
+when
+    $e : WikiEvent( sizeDelta != 0, $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Detect content change and analyze
+    double sentiment = $size > 0 ? 0.7 : 0.3;
+    int complexity = Math.min(Math.abs($size) / 100, 10);
+    insert(new ContentAnalysis($t, "", sentiment, complexity, Arrays.asList("AUTO_ANALYZED")));
+end
+
+rule "Content_Score" salience 395
+when
+    $ca : ContentAnalysis( $t : title, $sentiment : sentiment, $complexity : complexity )
+then
+    // Stage 2: Calculate content quality score
+    // Forward chain: ContentAnalysis -> EditClassification
+    int weight = (int)(($sentiment * 5) + ($complexity * 0.5));
+    String type = $sentiment > 0.5 ? "constructive" : "destructive";
+    insert(new EditClassification($t, type, weight));
+end
+
+rule "Content_Finalize" salience 390
+when
+    $ca : ContentAnalysis( $t : title )
+    $ec : EditClassification( pageTitle == $t, $type : type, $weight : weight )
+then
+    // Stage 3: Beta join - correlate content analysis with classification
+    // Updates content analysis flags based on classification
+    retract($ec);
+end
+
+
+// ============================================================================
+// CLUSTER 3: QUALITY ASSESSMENT (Salience 300-280)
+// ============================================================================
+// Creates QualityGrade facts for editorial decision joins.
+
+rule "Quality_Assess" salience 300
+when
+    $e : WikiEvent( $t : title, $u : user, $size : sizeDelta )
+then
+    // Stage 1: Initial quality assessment
+    int score = Math.abs($size) > 500 ? 90 : (Math.abs($size) > 100 ? 60 : 30);
+    String grade = score >= 80 ? "HIGH" : (score >= 50 ? "MEDIUM" : "LOW");
+    insert(new QualityGrade($t, $u, grade, score));
+end
+
+rule "Quality_Verify" salience 295
+when
+    // Only adjust grades that haven't been adjusted yet (score < 100)
+    $qg : QualityGrade( $t : title, $u : user, $grade : grade, $score : score, score < 100 )
+    $uc : UserContext( user == $u, $rep : reputation )
+then
+    // Stage 2: Beta join - adjust quality based on user reputation
+    // High-rep users get quality boost - add 100 to mark as adjusted
+    int adjustedScore = $score + ($rep * 5) + 100;
+    String newGrade = (adjustedScore - 100) >= 80 ? "HIGH" : ((adjustedScore - 100) >= 50 ? "MEDIUM" : "LOW");
+    retract($qg);
+    insert(new QualityGrade($t, $u, newGrade, adjustedScore));
+end
+
+rule "Quality_Complete" salience 290
+when
+    $qg : QualityGrade( $t : title, grade != null )
+    not QualityGrade( title == $t, this != $qg )
+then
+    // Stage 3: Final quality grade is ready for editorial decision
+    // No duplicate grades for same title
+end
+
+
+// ============================================================================
+// CLUSTER 4: SUSPICIOUS ACTIVITY DETECTION (Salience 200-180)
+// ============================================================================
+// Monitors bot activity and creates SuspiciousActivity for correlation.
+
+rule "Suspicious_BotDetect" salience 200
+when
+    $e : WikiEvent( bot == true, $u : user, $t : title, $size : sizeDelta )
+    eval( Math.abs($size) > 300 )
+then
+    // Stage 1: Flag large bot edits as suspicious
+    insert(new SuspiciousActivity($u, $t, "BOT_LARGE_EDIT", "DETECTED", 5));
+    insert(new BotAction($u, "large_edit", Math.abs($size)));
+end
+
+rule "Suspicious_Investigate" salience 195
+when
+    $sa : SuspiciousActivity( status == "DETECTED", $u : user, $t : title, $reason : reason )
+    $ba : BotAction( user == $u, $vel : velocity )
+then
+    // Stage 2: Beta join - correlate suspicious activity with bot action
+    int risk = $vel > 500 ? 8 : 5;
+    retract($sa);
+    insert(new SuspiciousActivity($u, $t, $reason, "INVESTIGATING", risk));
+    retract($ba);
+end
+
+rule "Suspicious_Resolve" salience 190
+when
+    $sa : SuspiciousActivity( status == "INVESTIGATING", $u : user, $t : title, $risk : riskLevel )
+then
+    // Stage 3: Mark investigation as resolved for alert generation
+    retract($sa);
+    insert(new SuspiciousActivity($u, $t, "REVIEWED", "RESOLVED", $risk));
+end
+
+
+// ============================================================================
+// CLUSTER 5: EDITORIAL DECISION HUB - BETA JOINS (Salience 100-50)
+// ============================================================================
+// Central hub for beta joins across all clusters.
+
+rule "Editorial_Collect" salience 100
+when
+    $uc : UserContext( $u : user, $rep : reputation )
+    $ca : ContentAnalysis( $t : title, $sentiment : sentiment )
+    $qg : QualityGrade( title == $t, user == $u, $grade : grade, $score : score )
+then
+    // BETA JOIN: UserContext + ContentAnalysis + QualityGrade on user/title
+    // Creates editorial package for final decision
+    String recommendation = $rep >= 2 && $score >= 60 ? "APPROVE" : 
+                           ($rep >= 1 && $score >= 40 ? "REVIEW" : "REJECT");
+    insert(new EditorialPackage($t, $u, $grade, $sentiment, $rep, recommendation));
+end
+
+rule "Editorial_Decide" salience 95
+when
+    $ep : EditorialPackage( $t : title, $u : user, $rec : recommendation, 
+                            $grade : qualityGrade, $score : contentScore )
+    $qg : QualityGrade( title == $t, user == $u )
+then
+    // BETA JOIN: EditorialPackage + QualityGrade
+    // Make final editorial decision
+    int severity = $rec.equals("REJECT") ? 3 : ($rec.equals("REVIEW") ? 2 : 1);
+    insert(new Alert("EDITORIAL_DECISION", severity, $u, $t, 
+                     "Decision: " + $rec + ", Grade: " + $grade, System.currentTimeMillis()));
+    retract($qg);
+end
+
+rule "Editorial_Archive" salience 90
+when
+    $ep : EditorialPackage( $t : title )
+    $alert : Alert( title == $t, alertType == "EDITORIAL_DECISION" )
+then
+    // BETA JOIN: EditorialPackage + Alert
+    // Archive completed editorial package
+    retract($ep);
+end
+
+
+// ============================================================================
+// CROSS-CLUSTER CORRELATION RULES - ADDITIONAL BETA JOINS (Salience 150-140)
+// ============================================================================
+
+rule "CrossCorrelate_SuspiciousQuality" salience 150
+when
+    $sa : SuspiciousActivity( status == "RESOLVED", $u : user, $t : title, $risk : riskLevel )
+    $qg : QualityGrade( user == $u, grade == "LOW", $score : score )
+then
+    // BETA JOIN: SuspiciousActivity + QualityGrade on user
+    // Correlate resolved suspicious activity with low quality
+    insert(new Alert("SUSPICIOUS_LOW_QUALITY", $risk + 2, $u, $t,
+                     "Bot edit with low quality score: " + $score, System.currentTimeMillis()));
+    retract($sa);
+end
+
+rule "CrossCorrelate_UserContent" salience 145
+when
+    $uc : UserContext( $u : user, reputation < 2, warnings > 0 )
+    $ca : ContentAnalysis( $t : title, sentiment < 0.4, complexity > 5 )
+    $e : WikiEvent( user == $u, title == $t )
+then
+    // BETA JOIN: UserContext + ContentAnalysis + WikiEvent on user/title
+    // Flag complex negative edits from low-rep users with warnings
+    insert(new Alert("HIGH_RISK_EDIT", 4, $u, $t,
+                     "Low-rep user with complex negative edit", System.currentTimeMillis()));
+end
+
+rule "CrossCorrelate_VerifiedContent" salience 140
+when
+    $ve : VerifiedEdit( $u : user, $t : title, $diff : diffBytes )
+    $ca : ContentAnalysis( title == $t, $sentiment : sentiment )
+    $qg : QualityGrade( title == $t, grade == "HIGH" )
+then
+    // BETA JOIN: VerifiedEdit + ContentAnalysis + QualityGrade on title
+    // Triple join for trusted content verification
+    insert(new Alert("VERIFIED_HIGH_QUALITY", 1, $u, $t,
+                     "Verified edit with high quality: " + $diff + " bytes", System.currentTimeMillis()));
+end
+
+
+// ============================================================================
+// CLEANUP RULES (Salience 50-40)
+// ============================================================================
+
+rule "Cleanup_UserContext" salience 50
+when
+    $uc : UserContext( $u : user )
+    $alert : Alert( user == $u )
+then
+    // Cleanup user context after alert generated
+    retract($uc);
+end
+
+rule "Cleanup_ContentAnalysis" salience 45
+when
+    $ca : ContentAnalysis( $t : title )
+    $alert : Alert( title == $t )
+then
+    // Cleanup content analysis after alert generated
+    retract($ca);
+end
+
+rule "Cleanup_Alerts" salience 40
+when
+    $alert : Alert()
+then
+    // Final cleanup of processed alerts
+    retract($alert);
+end
