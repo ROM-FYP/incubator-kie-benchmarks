@@ -301,11 +301,18 @@ java -jar target/benchmarks.jar BinanceRiskControlBenchmark \
 
 ## 🚀 Implementation Phases
 
-### Phase 1: Foundation ✅ (Partially Complete)
+### Phase 1: Foundation ✅ (Complete)
 
 - [x] Create module structure
 - [x] Copy `data-reference.md` (event replayer spec)
 - [x] Copy `taxonomy.drl` (70-rule baseline)
+- [x] **Upload sample dataset** (`run_20260216_0632_10sym`)
+  - **Duration**: 5 minutes 6 seconds
+  - **Total events**: 67,027 events
+  - **Symbols**: 10 (BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, AVAXUSDT, LINKUSDT, ARBUSDT)
+  - **Streams**: trade (39,541), book (24,652), mark (2,820), liquidation (14)
+  - **Average rate**: 219 events/sec
+  - **Storage**: 6.7 MB compressed (6 segments)
 - [ ] **Implement Java model classes** (MarketEvent, FeedHealth, BestBidAsk, etc.)
 - [ ] **Implement SegmentReader** (JSONL.gz decompression)
 - [ ] **Implement EventReplayController** (SessionPseudoClock integration)
