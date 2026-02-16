@@ -20,6 +20,8 @@
     <module>drools-benchmarks</module>
     <module>drools-benchmarks-module</module>
     <module>drools-benchmarks-reliability</module>
+    <module>drools-benchmarks-cep-wikimedia</module>
+    <module>drools-benchmarks-binance-cep</module>
   </modules>
 
   <dependencyManagement>
