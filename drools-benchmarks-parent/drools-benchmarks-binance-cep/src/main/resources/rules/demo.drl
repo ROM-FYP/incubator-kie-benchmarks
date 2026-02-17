@@ -1,0 +1,102 @@
+package com.example.market_risk;
+
+import org.kie.benchmark.binance.model.*;
+
+// Demo rule set for testing the Binance CEP benchmark
+// This contains 10 basic rules to verify the infrastructure works
+
+// Rule 1: Bootstrap - Create initial FeedHealth if missing
+rule "DEMO_INIT_FeedHealth"
+    salience 100
+when
+    $c : RiskConfig( $sym : symbol )
+    not( FeedHealth( symbol == $sym ) )
+then
+    insert(new FeedHealth($sym, "OK", 0L, 0L, 0L, 0L, 0L, 0, 0));
+end
+
+// Rule 2: Bootstrap - Create initial ModeState if missing
+rule "DEMO_INIT_ModeState"
+    salience 100
+when
+    $c : RiskConfig( $sym : symbol )
+    not( ModeState( symbol == $sym ) )
+then
+    insert(new ModeState($sym, "NORMAL", false, 0L, ""));
+end
+
+// Rule 3: Update last seen timestamp for TRADE events
+rule "DEMO_UPD_LastSeen_Trade"
+when
+    $h : FeedHealth( $sym : symbol )
+    $e : MarketEvent( symbol == $sym, eventType == "TRADE", $t : tsMs )
+then
+    modify($h) { setLastTradeTsMs($t) };
+end
+
+// Rule 4: Update last seen timestamp for DEPTH events
+rule "DEMO_UPD_LastSeen_Depth"
+when
+    $h : FeedHealth( $sym : symbol )
+    $e : MarketEvent( symbol == $sym, eventType == "DEPTH", $t : tsMs )
+then
+    modify($h) { setLastBookTsMs($t), setStatus("OK") };
+end
+
+// Rule 5: Create BestBidAsk from DEPTH events
+rule "DEMO_DERIVE_BestBidAsk"
+when
+    $e : MarketEvent( $sym : symbol, eventType == "DEPTH", $p1 : p1, $p2 : p2, $t : tsMs )
+    not( BestBidAsk( symbol == $sym ) )
+then
+    insert(new BestBidAsk($sym, $p1, $p2, $t));
+end
+
+// Rule 6: Update existing BestBidAsk
+rule "DEMO_UPDATE_BestBidAsk"
+when
+    $e : MarketEvent( $sym : symbol, eventType == "DEPTH", $p1 : p1, $p2 : p2, $t : tsMs )
+    $bba : BestBidAsk( symbol == $sym )
+then
+    modify($bba) { setBid($p1), setAsk($p2), setTsMs($t) };
+end
+
+// Rule 7: Calculate spread from BestBidAsk
+rule "DEMO_DERIVE_Spread"
+when
+    $bba : BestBidAsk( $sym : symbol, $bid : bid, $ask : ask, $t : tsMs, bid > 0, ask > 0 )
+    not( SpreadState( symbol == $sym ) )
+then
+    double spread = $ask - $bid;
+    double bps = ( spread / $bid ) * 10000;
+    insert(new SpreadState($sym, bps, "NORMAL", $t));
+end
+
+// Rule 8: Detect stale book(no DEPTH event for 10 seconds)
+rule "DEMO_ALERT_StaleBook"
+when
+    $c : RiskConfig( $sym : symbol, $staleMs : bookStaleMs )
+    $h : FeedHealth( symbol == $sym, $lastBook : lastBookTsMs, lastBookTsMs > 0 )
+    $e : MarketEvent( symbol == $sym, tsMs > ( $lastBook + $staleMs ) )
+then
+    modify($h) { setStatus("STALE_BOOK") };
+    insert(new RiskSignal($sym, "STALE_BOOK", "WARN", $e.getTsMs(), "No book updates for " + $staleMs + "ms"));
+end
+
+// Rule 9: Generate risk signal for high-value trades
+rule "DEMO_ALERT_LargeTrade"
+when
+    $e : MarketEvent( $sym : symbol, eventType == "TRADE", $p : p1, $q : p2 )
+    eval( $p * $q > 100000 ) // Trade notional > $100k
+then
+    insert(new RiskSignal($sym, "LARGE_TRADE", "INFO", $e.getTsMs(), "Large trade: " + $q + " @ " + $p));
+end
+
+// Rule 10: Detect wide spread(> 50 bps)
+rule "DEMO_ALERT_WideSpread"
+when
+    $c : RiskConfig( $sym : symbol )
+    $s : SpreadState( symbol == $sym, spreadBps > 50 )
+then
+    insert(new RiskSignal($sym, "WIDE_SPREAD", "WARN", $s.getTsMs(), "Spread: " + $s.getSpreadBps() + " bps"));
+end
