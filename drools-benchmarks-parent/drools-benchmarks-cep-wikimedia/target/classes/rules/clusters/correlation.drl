@@ -1,0 +1,510 @@
+package rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+import org.kie.benchmark.cep.wikimedia.memoization.ClusterOutput;
+
+import java.util.Map;
+
+// ============================================================================
+// CORRELATION SESSION RULES - SHARED STATE & CROSS-PIPELINE LOGIC
+// ============================================================================
+
+// --- SHARED STATE INITIALIZATION ---
+
+rule "InitializeUserActivity" salience 1000
+when
+    ( VandalismCandidate( $u : user ) or
+      ContentAddition( $u : user ) or
+      MinorEdit( $u : user ) or
+      BotProfile( $u : user ) )
+    not UserActivity( user == $u )
+then
+    insert(new UserActivity($u, 0, "INITIALIZING"));
+end
+
+rule "InitializeArticleQuality" salience 999
+when
+    ( VandalismAnalysis( $t : title ) or
+      ContentAddition( $t : title ) or
+      MinorEdit( $t : title ) )
+    not ArticleQuality( title == $t )
+then
+    insert(new ArticleQuality($t, 50, 0));
+end
+
+// --- VANDALISM PIPELINE CORRELATIONS ---
+
+// Stage 2: Analyze (Uses UserActivity)
+rule "Vandalism_Analyze_MassiveDeletion_NewUser" salience 499
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize > 500 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount < 3 )
+then
+    insert(new VandalismAnalysis($t, $u, 117, "NEW"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_MassiveDeletion_TrustedUser" salience 498
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize > 500 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount > 10, lastEditType not contains "VANDALISM" )
+then
+    insert(new VandalismAnalysis($t, $u, 63, "ESTABLISHED"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_MassiveDeletion_RegularUser" salience 497
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize > 500 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount >= 3, editCount <= 10 )
+then
+    insert(new VandalismAnalysis($t, $u, 90, "REGULAR"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_LargeDeletion_NewUser" salience 496
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize > 200, deletionSize <= 500 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount < 3 )
+then
+    insert(new VandalismAnalysis($t, $u, 78, "NEW"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_LargeDeletion_TrustedUser" salience 495
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize > 200, deletionSize <= 500 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount > 10, lastEditType not contains "VANDALISM" )
+then
+    insert(new VandalismAnalysis($t, $u, 42, "ESTABLISHED"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_LargeDeletion_RegularUser" salience 494
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize > 200, deletionSize <= 500 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount >= 3, editCount <= 10 )
+then
+    insert(new VandalismAnalysis($t, $u, 60, "REGULAR"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_ModerateDeletion_NewUser" salience 493
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize <= 200 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount < 3 )
+then
+    insert(new VandalismAnalysis($t, $u, 39, "NEW"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_ModerateDeletion_TrustedUser" salience 492
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize <= 200 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount > 10, lastEditType not contains "VANDALISM" )
+then
+    insert(new VandalismAnalysis($t, $u, 21, "ESTABLISHED"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+rule "Vandalism_Analyze_ModerateDeletion_RegularUser" salience 491
+when
+    $v : VandalismCandidate( $t : title, $u : user, deletionSize <= 200 )
+    $ua : UserActivity( user == $u, $count : editCount, editCount >= 3, editCount <= 10 )
+then
+    insert(new VandalismAnalysis($t, $u, 30, "REGULAR"));
+    retract($v);
+    modify($ua) { setEditCount($count + 1), setLastEditType("VANDALISM_SUSPECT") };
+end
+
+// Stage 3: Verify (Uses ArticleQuality)
+rule "Vandalism_Verify_HighRisk_HighQualityArticle" salience 490
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore > 70 )
+    $aq : ArticleQuality( title == $t, qualityScore > 80, $quality : qualityScore )
+then
+    insert(new VandalismVerified($t, $u, "HIGH", "HIGH_VALUE_ARTICLE"));
+    retract($v);
+    modify($aq) { setQualityScore(Math.max(0, $quality - 10)) };
+end
+
+rule "Vandalism_Verify_HighRisk_LowQualityArticle" salience 489
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore > 70 )
+    $aq : ArticleQuality( title == $t, qualityScore < 40, $quality : qualityScore )
+then
+    insert(new VandalismVerified($t, $u, "HIGH", "LOW_VALUE_ARTICLE"));
+    retract($v);
+    modify($aq) { setQualityScore(Math.max(0, $quality - 10)) };
+end
+
+rule "Vandalism_Verify_HighRisk_StandardArticle" salience 488
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore > 70 )
+    $aq : ArticleQuality( title == $t, qualityScore >= 40, qualityScore <= 80, $quality : qualityScore )
+then
+    insert(new VandalismVerified($t, $u, "HIGH", "STANDARD_ARTICLE"));
+    retract($v);
+    modify($aq) { setQualityScore(Math.max(0, $quality - 10)) };
+end
+
+rule "Vandalism_Verify_HighRisk_NoArticleData" salience 487
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore > 70 )
+    not ArticleQuality( title == $t )
+then
+    insert(new VandalismVerified($t, $u, "HIGH", "STANDARD_ARTICLE"));
+    retract($v);
+end
+
+rule "Vandalism_Verify_MediumRisk_HighQualityArticle" salience 486
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore > 40, riskScore <= 70 )
+    $aq : ArticleQuality( title == $t, qualityScore > 80, $quality : qualityScore )
+then
+    insert(new VandalismVerified($t, $u, "MEDIUM", "HIGH_VALUE_ARTICLE"));
+    retract($v);
+    modify($aq) { setQualityScore(Math.max(0, $quality - 10)) };
+end
+
+rule "Vandalism_Verify_MediumRisk_OtherArticles" salience 485
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore > 40, riskScore <= 70 )
+    ($aq : ArticleQuality( title == $t, qualityScore <= 80, $quality : qualityScore ) or
+     not ArticleQuality( title == $t ))
+then
+    insert(new VandalismVerified($t, $u, "MEDIUM", "STANDARD_ARTICLE"));
+    retract($v);
+end
+
+rule "Vandalism_Verify_LowRisk" salience 484
+when
+    $v : VandalismAnalysis( $t : title, $u : user, riskScore <= 40 )
+then
+    insert(new VandalismVerified($t, $u, "LOW", "STANDARD_ARTICLE"));
+    retract($v);
+end
+
+// Stage 4: Flag (Uses EditPattern)
+rule "Vandalism_Flag_HighSeverity_HighValue_RepeatOffender" salience 483
+when
+    $v : VandalismVerified( severity == "HIGH", articleImpact == "HIGH_VALUE_ARTICLE", $t : title, $u : user )
+    $ep : EditPattern( user == $u, pattern == "DESTRUCTIVE" )
+then
+    insert(new VandalismFlagged($t, $u, 100));
+    retract($v);
+    modify($ep) { setPattern("DESTRUCTIVE") };
+end
+
+rule "Vandalism_Flag_HighSeverity_HighValue_FirstTime" salience 482
+when
+    $v : VandalismVerified( severity == "HIGH", articleImpact == "HIGH_VALUE_ARTICLE", $t : title, $u : user )
+    not EditPattern( user == $u )
+then
+    insert(new VandalismFlagged($t, $u, 80));
+    retract($v);
+    insert(new EditPattern($u, $t, "DESTRUCTIVE"));
+end
+
+rule "Vandalism_Complete" salience 477
+when
+    $v : VandalismFlagged( $t : title )
+then
+    insert(new VandalismLogged($t));
+    retract($v);
+end
+
+rule "Vandalism_Logged_Complete" salience 470
+when
+    $v : VandalismLogged()
+then
+    retract($v);
+end
+
+// --- BOT PIPELINE CORRELATIONS ---
+
+rule "Bot_HealthCheck_Registered_RateLimitExceeded" salience 397
+when
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate > 5, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
+then
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true, $rate, $ts));
+end
+
+rule "Bot_HealthCheck_Registered_Healthy" salience 396
+when
+    $b : BotProfile( $u : user, category == "REGISTERED", activityRate <= 5, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
+then
+    insert(new BotHealthCheck($u, "HEALTHY", false, $rate, $ts));
+end
+
+rule "Bot_HealthCheck_Unverified_NewBot" salience 395
+when
+    $b : BotProfile( $u : user, category == "UNVERIFIED", activityRate > 2, $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
+then
+    insert(new BotHealthCheck($u, "RATE_LIMIT_EXCEEDED", true, $rate, $ts));
+end
+
+rule "Bot_HealthCheck_Unverified_Review" salience 394
+when
+    $b : BotProfile( $u : user, category == "UNVERIFIED", $rate : activityRate, $ts : timestamp )
+    not BotHealthCheck( user == $u, timestamp == $ts )
+then
+    insert(new BotHealthCheck($u, "REVIEW_NEEDED", false, $rate, $ts));
+end
+
+rule "Bot_Metrics" salience 392
+when
+    $b : BotHealthCheck( $u : user, $rate : activityRate, $ts : timestamp )
+    not BotMetrics( user == $u, timestamp == $ts )
+then
+    insert(new BotMetrics($u, $rate, $ts));
+end
+
+rule "Bot_Report" salience 391
+when
+    $b : BotMetrics( $u : user, activityRate > 10, $ts : timestamp )
+    not BotReported( user == $u, timestamp == $ts )
+then
+    insert(new BotReported($u, $ts));
+end
+
+rule "Bot_Complete" salience 390
+when
+    $b : BotReported( $u : user, $ts : timestamp )
+then
+    // Lifecycle handled by expiration
+end
+
+// --- CONTENT PIPELINE CORRELATIONS ---
+
+rule "Content_Review_Major_Experienced" salience 299
+when
+    $c : ContentAddition( addedBytes > 1000, $u : user, $t : title )
+    $ua : UserActivity( user == $u, editCount > 20 )
+then
+    insert(new ContentReview($t, $u, "MAJOR", "EXPERIENCED"));
+    retract($c);
+end
+
+rule "Content_Review_Major_New" salience 298
+when
+    $c : ContentAddition( addedBytes > 1000, $u : user, $t : title )
+    not UserActivity( user == $u, editCount > 20 )
+then
+    insert(new ContentReview($t, $u, "MAJOR", "NEW"));
+    retract($c);
+end
+
+rule "Content_Approve_Major" salience 289
+when
+    $c : ContentReview( qualityTier == "MAJOR", $t : title, $u : user )
+    $aq : ArticleQuality( title == $t, $q : qualityScore )
+then
+    insert(new ContentApproved($t, $u, 20, "MAJOR"));
+    retract($c);
+    modify($aq) { setQualityScore(Math.min(100, $q + 20)) };
+end
+
+rule "Content_Index_Track" salience 281
+when
+    $a : ContentApproved( $t : title, $tier : tier )
+then
+    insert(new ContentIndexed($t, $tier));
+    retract($a);
+end
+
+rule "Content_Cache_Cache" salience 280
+when
+    $i : ContentIndexed( $t : title, $tier : tier )
+then
+    insert(new ContentCached($t, $tier));
+    retract($i);
+end
+
+rule "Content_Log" salience 279
+when
+    $c : ContentCached()
+then
+    retract($c);
+end
+
+// --- MINOR PIPELINE CORRELATIONS ---
+
+rule "Minor_Validate_Trusted" salience 196
+when
+    $m : MinorClassified( frequency < 3, $t : title, $u : user )
+    $ua : UserActivity( user == $u, editCount > 50 )
+then
+    insert(new MinorValidated($t, $u, "HIGH"));
+    retract($m);
+end
+
+rule "Minor_Validate_Standard" salience 195
+when
+    $m : MinorClassified( $t : title, $u : user )
+    not MinorValidated( title == $t, user == $u )
+then
+    insert(new MinorValidated($t, $u, "STANDARD"));
+    retract($m);
+end
+
+rule "Minor_Accept" salience 191
+when
+    $m : MinorValidated( $t : title )
+then
+    insert(new MinorAccepted($t));
+    retract($m);
+end
+
+rule "Minor_Track_Track" salience 190
+when
+    $m : MinorAccepted( $t : title )
+then
+    insert(new MinorTracked($t));
+    retract($m);
+end
+
+rule "Minor_Complete" salience 189
+when
+    $m : MinorTracked()
+then
+    retract($m);
+end
+
+// --- DISCUSSION PIPELINE CORRELATIONS ---
+
+rule "Discussion_Sentiment" salience 97
+when
+    $d : DiscussionAnalyzed( $t : title )
+then
+    insert(new DiscussionSentiment($t, "NEUTRAL", "REGULAR"));
+    retract($d);
+end
+
+rule "Discussion_Route" salience 91
+when
+    $d : DiscussionSentiment( $t : title )
+then
+    insert(new DiscussionRouted($t));
+    retract($d);
+end
+
+rule "Discussion_Notify" salience 90
+when
+    $d : DiscussionRouted( $t : title )
+then
+    insert(new DiscussionNotified($t));
+    retract($d);
+end
+
+rule "Discussion_Complete" salience 89
+when
+    $d : DiscussionNotified()
+then
+    retract($d);
+end
+
+// --- CROSS-PIPELINE CORRELATIONS ---
+
+rule "CorrelateHighRiskUser" salience 50
+when
+    $va : VandalismAnalysis( $u : user, riskScore > 60 )
+    $bh : BotHealthCheck( user == $u, anomalyDetected == true )
+    not HighRiskUser( user == $u )
+then
+    insert(new HighRiskUser($u, "VANDALISM_AND_BOT_ANOMALY"));
+end
+
+rule "CorrelateArticleAttack" salience 45
+when
+    $vc1 : VandalismCandidate( $t : title, $ts1 : timestamp )
+    $vc2 : VandalismCandidate( title == $t, timestamp > $ts1, timestamp < ($ts1 + 30000), this != $vc1 )
+    not ArticleUnderAttack( title == $t )
+then
+    insert(new ArticleUnderAttack($t, 75));
+end
+
+rule "BoostVandalismPriorityForAttackedArticles" salience 40
+when
+    $vf : VandalismFlagged( $t : title, $priority : priority )
+    ArticleUnderAttack( title == $t )
+then
+    modify($vf) { setPriority($priority + 50) };
+end
+
+// ============================================================================
+// CLUSTEROUTPUT-BASED CORRELATION RULES (DUAL-FEED PATH)
+// ============================================================================
+
+// --- VANDALISM CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Vandalism_ToCandidate" salience 600
+when
+    $co : ClusterOutput( clusterId == 3, kind == "VANDALISM_DETECTED", $entityId : entityId, $ts : logicalTimestamp, $attrs : attributes )
+    not VandalismCandidate( user == $entityId, timestamp == $ts )
+then
+    int delSize = (Integer) $attrs.get("deletionSize");
+    insert(new VandalismCandidate("unknown", $entityId, delSize, $ts));
+    retract($co);
+end
+
+// --- BOT CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Bot_ToProfile" salience 590
+when
+    $co : ClusterOutput( clusterId == 2, kind == "BOT_DETECTED", $entityId : entityId, $ts : logicalTimestamp, $attrs : attributes )
+    not BotProfile( user == $entityId, timestamp == $ts )
+then
+    int activityRate = (Integer) $attrs.get("activityRate");
+    String category = (String) $attrs.get("category");
+    insert(new BotProfile($entityId, category, activityRate, $ts));
+    retract($co);
+end
+
+// --- CONTENT CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Content_ToAddition" salience 580
+when
+    $co : ClusterOutput( clusterId == 1, kind == "CONTENT_GROWTH_NOTED", $entityId : entityId, $ts : logicalTimestamp, $attrs : attributes )
+    not ContentAddition( title == $entityId, timestamp == $ts )
+then
+    int addedBytes = (Integer) $attrs.get("addedBytes");
+    insert(new ContentAddition($entityId, "unknown", addedBytes, $ts));
+    retract($co);
+end
+
+// --- MINOR CLUSTER OUTPUT PROCESSING ---
+
+rule "ClusterOutput_Minor_ToClassified" salience 570
+when
+    $co : ClusterOutput( clusterId == 0, kind == "MINOR_TRACKED", $entityId : entityId, $attrs : attributes )
+    not MinorClassified( user == $entityId )
+then
+    int frequency = (Integer) $attrs.get("frequency");
+    String editType = (String) $attrs.get("editType");
+    insert(new MinorClassified("unknown", $entityId, editType, frequency));
+    retract($co);
+end
+
+rule "ClusterOutput_Discussion_ToAnalyzed" salience 560
+when
+    $co : ClusterOutput( clusterId == 0, kind == "DISCUSSION_FLAGGED", $entityId : entityId, $attrs : attributes )
+    not DiscussionAnalyzed( title == $entityId )
+then
+    String topic = (String) $attrs.get("topic");
+    int quality = (Integer) $attrs.get("relatedArticleQuality");
+    insert(new DiscussionAnalyzed($entityId, topic, quality));
+    retract($co);
+end

@@ -1,0 +1,74 @@
+package rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+import org.kie.benchmark.cep.wikimedia.memoization.ClusterOutput;
+
+import java.util.HashMap;
+
+// ============================================================================
+// MINOR EDITS PIPELINE
+// ============================================================================
+
+// Minor edit signals stay here for local frequency analysis.
+
+rule "Minor_Detect" salience 200
+when
+    $e : WikiEvent( sizeDelta >= -50, sizeDelta <= 50, bot == false, $t : title, $u : user, $ts : timestamp )
+then
+    insert(new MinorEdit($t, $u, 0, $ts));
+end
+
+rule "Minor_Classify" salience 199
+when
+    $m : MinorEdit( $t : title, $u : user, $ts : timestamp )
+    $freq : Number() from accumulate(
+        $me : MinorEdit( title == $t, user == $u, timestamp > ($ts - 60000) ),
+        count($me)
+    )
+then
+    insert(new MinorClassified($t, $u, "CORRECTION", $freq.intValue()));
+    retract($m);
+end
+
+// DISCUSSION PIPELINE
+rule "Discussion_Detect" salience 100
+when
+    $e : WikiEvent( title matches "Talk:.*", $t : title, $u : user, $ts : timestamp )
+then
+    insert(new DiscussionPost($t, $u, $ts));
+end
+
+rule "Discussion_Analyze" salience 99
+when
+    $d : DiscussionPost( $t : title )
+then
+    insert(new DiscussionAnalyzed($t, "TOPIC", 50));
+    retract($d);
+end
+
+// ============================================================================
+// OUTPUT EMITTERS FOR MEMOIZATION
+// ============================================================================
+
+rule "Emit_ClusterOutput_MinorClassified" no-loop
+when
+    $m : MinorClassified( $t : title, $u : user, $editType : editType, $freq : frequency )
+then
+    HashMap<String, Object> attrs = new HashMap<>();
+    attrs.put("frequency", $freq);
+    attrs.put("editType", $editType);
+    ClusterOutput output = new ClusterOutput(0, "MINOR_TRACKED", $u, $freq, attrs);
+    insert(output);
+end
+
+rule "Emit_ClusterOutput_DiscussionAnalyzed" no-loop
+when
+    $d : DiscussionAnalyzed( $t : title, $topic : topic, $quality : relatedArticleQuality )
+then
+    HashMap<String, Object> attrs = new HashMap<>();
+    attrs.put("topic", $topic);
+    attrs.put("relatedArticleQuality", $quality);
+    ClusterOutput output = new ClusterOutput(0, "DISCUSSION_FLAGGED", $t, System.currentTimeMillis(), attrs);
+    insert(output);
+end

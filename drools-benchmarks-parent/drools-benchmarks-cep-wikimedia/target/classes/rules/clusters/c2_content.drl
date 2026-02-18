@@ -1,0 +1,34 @@
+package rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+import org.kie.benchmark.cep.wikimedia.memoization.ClusterOutput;
+
+import java.util.HashMap;
+
+// ============================================================================
+// CONTENT GROWTH PIPELINE
+// ============================================================================
+
+// Content addition signals stay here for local processing.
+
+rule "Content_Detect" salience 300
+when
+    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
+then
+    insert(new ContentAddition($t, $u, $size, $ts));
+end
+
+// ============================================================================
+// OUTPUT EMITTERS FOR MEMOIZATION
+// ============================================================================
+
+rule "Emit_ClusterOutput_ContentAddition" no-loop
+when
+    $c : ContentAddition( $t : title, $u : user, $size : addedBytes, $ts : timestamp )
+then
+    HashMap<String, Object> attrs = new HashMap<>();
+    attrs.put("addedBytes", $size);
+    ClusterOutput output = new ClusterOutput(1, "CONTENT_GROWTH_NOTED", $t, $ts, attrs);
+    insert(output);
+end

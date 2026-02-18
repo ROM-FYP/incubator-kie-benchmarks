@@ -1,0 +1,148 @@
+package org.drools.benchmark.wiki;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import java.util.List;
+
+// ============================================================================
+// FACT DECLARATIONS
+// ============================================================================
+
+declare WikiEvent @role(event) @expires(10s) end
+declare UserContext user : String @key; reputation : int; warnings : int; end
+
+declare SmallEdit @role(event) @expires(10s) user : String; size : int; rep : int; end
+declare LargeEdit @role(event) @expires(10s) user : String; size : int; rep : int; title : String; end
+declare BotSignal @role(event) @expires(10s) user : String; end
+declare SequenceEvent @role(event) @expires(10s) key : String; end
+
+declare MicroAlert @role(event) @expires(30s) user : String; msg : String; end
+declare ContentAlert @role(event) @expires(30s) user : String; msg : String; end
+declare BotAlert @role(event) @expires(30s) user : String; msg : String; end
+declare DriftAlert @role(event) @expires(30s) key : String; end
+
+declare HealthHeartbeat @role(event) @expires(20s) timestamp : long; end
+
+// ============================================================================
+// CLUSTER 1: USER METADATA
+// ============================================================================
+rule "C1_Initialize_User"
+when
+    $e : WikiEvent( $u : user )
+    not UserContext( user == $u )
+then
+    insert(new UserContext($u, Math.abs($u.hashCode()%100), 0));
+end
+
+// ============================================================================
+// CLUSTER 2: TRAFFIC ROUTER (Alpha Node Optimized)
+// ============================================================================
+rule "C2_Route_Small" 
+when 
+    $e:WikiEvent(sizeDelta > 0, sizeDelta < 100, $u:user) 
+    $uc:UserContext(user==$u) 
+then 
+    insert(new SmallEdit($u, $e.getSizeDelta(), $uc.getReputation())); 
+end
+
+rule "C2_Route_Large" 
+when 
+    $e:WikiEvent(sizeDelta >= 100, $u:user) 
+    $uc:UserContext(user==$u) 
+then 
+    insert(new LargeEdit($u, $e.getSizeDelta(), $uc.getReputation(), $e.getTitle())); 
+end
+
+rule "C2_Route_Bot"   
+when 
+    $e:WikiEvent(bot == true, $u:user) 
+then 
+    insert(new BotSignal($u)); 
+end
+
+rule "C2_Route_Seq"   
+when 
+    $e:WikiEvent(title matches "Talk:.*") 
+then 
+    insert(new SequenceEvent("talk")); 
+end
+
+// ============================================================================
+// CLUSTER 3: SMALL EDIT PIPELINE
+// ============================================================================
+rule "C3_R1_Small_Spam" when $s:SmallEdit(rep < 20, size < 10) then insert(new MicroAlert($s.getUser(), "Spam")); end
+rule "C3_R2_Small_Freq" 
+when 
+    $s1:SmallEdit($u:user) 
+    $c:Number(intValue > 3) from accumulate($s:SmallEdit(user==$u) over window:time(5s), count($s)) 
+then 
+    insert(new MicroAlert($u, "Freq")); 
+end
+rule "C3_R3_Small_Log"  when $a:MicroAlert() then end
+rule "C3_R4_Pattern_A"  when SmallEdit(size == 1) then end
+rule "C3_R5_Pattern_B"  when SmallEdit(size == 2) then end
+
+// ============================================================================
+// CLUSTER 4: CONTENT PIPELINE (Regex for Performance)
+// ============================================================================
+rule "C4_R1_Crypto" 
+when 
+    $l:LargeEdit(title matches ".*crypto.*", rep < 50) 
+then 
+    insert(new ContentAlert($l.getUser(), "Crypto")); 
+end
+
+rule "C4_R2_Massive" when $l:LargeEdit(size > 5000) then insert(new ContentAlert($l.getUser(), "Massive")); end
+rule "C4_R3_Scam"    when $l:LargeEdit(title matches ".*free.*") then insert(new ContentAlert($l.getUser(), "Scam")); end
+rule "C4_R4_Content_Sink" when $a:ContentAlert() then end
+rule "C4_R5_Audit"   when LargeEdit(rep > 90) then end
+
+// ============================================================================
+// CLUSTER 5: BOT ANALYTICS
+// ============================================================================
+rule "C5_R1_Vel" 
+when 
+    $s:BotSignal($u:user) 
+    $c:Number(intValue > 10) from accumulate($b:BotSignal(user==$u) over window:time(10s), count($b)) 
+then 
+    insert(new BotAlert($u, "High")); 
+end
+
+rule "C5_R2_Extreme" when BotAlert(msg == "High") then end
+rule "C5_R3_Bot_Log" when $a:BotAlert() then end
+rule "C5_R4_Quiet" when not BotSignal() over window:time(1m) then end
+rule "C5_R5_State" when BotSignal() then end
+
+// ============================================================================
+// CLUSTER 6: TEMPORAL DRIFT
+// ============================================================================
+rule "C6_R1_Burst" 
+when 
+    $e1:SequenceEvent($k:key) 
+    $e2:SequenceEvent(key==$k, this != $e1, this after[0,1s] $e1) 
+then 
+    insert(new DriftAlert($k)); 
+end
+
+rule "C6_R2_Slow"  
+when 
+    $e1:SequenceEvent($k:key) 
+    $e2:SequenceEvent(key==$k, this after[5s,10s] $e1) 
+then 
+end
+rule "C6_R3_Drift_Sink" when DriftAlert() then end
+
+// ============================================================================
+// CLUSTER 7: SYSTEM MONITORING
+// ============================================================================
+rule "C7_R1_Generate_HB" 
+when 
+    WikiEvent() 
+then 
+    insert(new HealthHeartbeat(System.currentTimeMillis())); 
+end
+
+rule "C7_R2_Monitor_HB" 
+when 
+    $c:Number() from accumulate($h:HealthHeartbeat() over window:time(10s), count($h)) 
+then 
+end
