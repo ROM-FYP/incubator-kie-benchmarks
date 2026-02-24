@@ -3,7 +3,7 @@
 // maven pom organized by organization.
 // ------------------------------------------------------------------
 
-drools-benchmarks-opensky-airTrafficking
+Drools :: Benchmarks :: OpenSky Air Trafficking
 
 
 From: 'an unknown organization'
@@ -11,7 +11,7 @@ From: 'an unknown organization'
   - Big Math (https://github.com/eobermuhlner/big-math) ch.obermuhlner:big-math:jar:2.0.1
     License: MIT License  (https://raw.githubusercontent.com/eobermuhlner/big-math/master/LICENSE.txt)
 
-  - javaparser-core (https://github.com/javaparser/javaparser-core) com.github.javaparser:javaparser-core:jar:3.26.4
+  - javaparser-core (https://github.com/javaparser/javaparser-core) com.github.javaparser:javaparser-core:jar:3.27.0
     License: GNU Lesser General Public License  (http://www.gnu.org/licenses/lgpl-3.0.html)
     License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
 
@@ -32,9 +32,6 @@ From: 'an unknown organization'
 
   - JPMML model (http://www.jpmml.org/pmml-model) org.jpmml:pmml-model:jar:1.6.4
     License: BSD 3-Clause License  (http://opensource.org/licenses/BSD-3-Clause)
-
-  - JMH Generators: Annotation Processors (http://openjdk.java.net/projects/code-tools/jmh/jmh-generator-annprocess/) org.openjdk.jmh:jmh-generator-annprocess:jar:1.37
-    License: GNU General Public License (GPL), version 2, with the Classpath exception  (http://openjdk.java.net/legal/gplv2+ce.html)
 
   - XML Resolver (https://github.com/xmlresolver/xmlresolver) org.xmlresolver:xmlresolver:jar:5.3.3
     License: Apache License version 2.0  (https://www.apache.org/licenses/LICENSE-2.0)
@@ -102,10 +99,10 @@ From: 'FasterXML' (http://fasterxml.com/)
   - Jackson-annotations (http://github.com/FasterXML/jackson) com.fasterxml.jackson.core:jackson-annotations:bundle:2.13.3
     License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
 
-  - Jackson-core (https://github.com/FasterXML/jackson-core) com.fasterxml.jackson.core:jackson-core:jar:2.18.4
+  - Jackson-core (https://github.com/FasterXML/jackson-core) com.fasterxml.jackson.core:jackson-core:jar:2.15.2
     License: The Apache Software License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
-  - jackson-databind (https://github.com/FasterXML/jackson) com.fasterxml.jackson.core:jackson-databind:jar:2.18.4
+  - jackson-databind (https://github.com/FasterXML/jackson) com.fasterxml.jackson.core:jackson-databind:jar:2.15.2
     License: The Apache Software License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
 
@@ -131,7 +128,7 @@ From: 'QOS.ch' (http://www.qos.ch)
     License: Eclipse Public License - v 1.0  (http://www.eclipse.org/legal/epl-v10.html)
     License: GNU Lesser General Public License  (http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
 
-  - SLF4J API Module (http://www.slf4j.org) org.slf4j:slf4j-api:jar:2.0.6
+  - SLF4J API Module (http://www.slf4j.org) org.slf4j:slf4j-api:jar:2.0.9
     License: MIT License  (http://www.opensource.org/licenses/mit-license.php)
 
 
@@ -374,7 +371,7 @@ From: 'The Apache Software Foundation' (https://apache.org/)
 
 From: 'The Apache Software Foundation' (https://www.apache.org/)
 
-  - Apache Commons Codec (https://commons.apache.org/proper/commons-codec/) commons-codec:commons-codec:jar:1.18.0
+  - Apache Commons Codec (https://commons.apache.org/proper/commons-codec/) commons-codec:commons-codec:jar:1.19.0
     License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
   - Apache Commons IO (https://commons.apache.org/proper/commons-io/) commons-io:commons-io:jar:2.18.0
@@ -389,7 +386,7 @@ From: 'The Apache Software Foundation' (https://www.apache.org/)
   - Apache Commons Lang (https://commons.apache.org/proper/commons-lang/) org.apache.commons:commons-lang3:jar:3.16.0
     License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
-  - Apache Commons Text (https://commons.apache.org/proper/commons-text) org.apache.commons:commons-text:jar:1.11.0
+  - Apache Commons Text (https://commons.apache.org/proper/commons-text) org.apache.commons:commons-text:jar:1.14.0
     License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
   - Apache Log4j API (https://logging.apache.org/log4j/2.x/log4j/log4j-api/) org.apache.logging.log4j:log4j-api:jar:2.24.3
