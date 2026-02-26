@@ -37,7 +37,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class BinanceRulesProvider {
 
-    private static final String DEFAULT_RULES_PATH = "/rules/demo.drl";
+    private static final String DEFAULT_RULES_PATH = "/rules/taxonomy.drl";
     private final String rulesPath;
     private final KieContainer kieContainer;
 

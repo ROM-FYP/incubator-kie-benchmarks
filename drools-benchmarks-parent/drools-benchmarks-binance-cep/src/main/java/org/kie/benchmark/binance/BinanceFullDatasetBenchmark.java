@@ -27,32 +27,34 @@ import org.kie.benchmark.binance.util.EventReplayController;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
- * Baseline CEP benchmark for Binance market risk control system.
- * Measures throughput and latency for 70-rule taxonomy with single-symbol data.
- * 
+ * Full-dataset CEP benchmark for Binance market risk control system.
+ * Replays ALL events (all symbols, all stream types) in a single invocation.
+ *
  * Benchmark Configuration:
  * - Rules: 70 (taxonomy.drl)
- * - Dataset: run_20260216_0632_10sym (67K events, 5 minutes)
+ * - Dataset: run_20260216_0632_10sym (67K events, 10 symbols, 5 minutes)
  * - Mode: Event-time replay with SessionPseudoClock
+ *
+ * Unlike BinanceRiskControlBenchmark (which filters per-symbol),
+ * this benchmark replays the entire 67K-event dataset per invocation.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
-@Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+@Warmup(iterations = 2, time = 30, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 3, time = 60, timeUnit = TimeUnit.SECONDS)
 @Fork(value = 1, jvmArgs = { "-Xms4g", "-Xmx4g" })
-public class BinanceRiskControlBenchmark {
-
-    @Param({ "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
-            "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "ARBUSDT" })
-    private String symbol;
+public class BinanceFullDatasetBenchmark {
 
     private BinanceRulesProvider rulesProvider;
     private BinanceEventProvider eventProvider;
-    private List<MarketEvent> events;
+    private List<MarketEvent> allEvents;
+    private Set<String> symbols;
     private KieSession kieSession;
     private EventReplayController replayController;
 
@@ -67,16 +69,21 @@ public class BinanceRiskControlBenchmark {
     private int invocationCount;
 
     /**
-     * Setup: Load rules and events once per benchmark iteration.
+     * Setup: Load rules and ALL events once per trial.
      */
     @Setup(Level.Trial)
     public void setupTrial() {
         // Load rules (compile DRL)
         rulesProvider = new BinanceRulesProvider();
 
-        // Load events from dataset
+        // Load ALL events from dataset (no symbol filtering)
         eventProvider = new BinanceEventProvider();
-        events = eventProvider.getEventsForSymbol(symbol);
+        allEvents = eventProvider.getEvents();
+
+        // Extract unique symbols for bootstrap facts
+        symbols = allEvents.stream()
+                .map(MarketEvent::getSymbol)
+                .collect(Collectors.toSet());
 
         // Reset cumulative counters
         totalEventsProcessed = 0;
@@ -84,9 +91,9 @@ public class BinanceRiskControlBenchmark {
         totalTimeElapsed = 0;
         invocationCount = 0;
 
-        System.out.println("=== Benchmark Setup ===");
-        System.out.println("Symbol: " + symbol);
-        System.out.println("Events per invocation: " + events.size());
+        System.out.println("=== Full Dataset Benchmark Setup ===");
+        System.out.println("Total events per invocation: " + allEvents.size());
+        System.out.println("Symbols: " + symbols);
         System.out.println("Dataset: " + eventProvider.getDatasetId());
     }
 
@@ -95,24 +102,21 @@ public class BinanceRiskControlBenchmark {
      */
     @Setup(Level.Invocation)
     public void setupInvocation() {
-        // Create new session with SessionPseudoClock
         kieSession = rulesProvider.createSession();
         replayController = new EventReplayController(kieSession);
 
-        // Insert initial facts (RiskConfig, ModeState, FeedHealth)
+        // Insert bootstrap facts for ALL symbols
         insertBootstrapFacts();
 
-        // Start timing for per-invocation metrics
         invocationStartTime = System.currentTimeMillis();
     }
 
     /**
-     * Benchmark method: Replay events and measure throughput.
-     * Returns events/sec processed.
+     * Benchmark method: Replay ALL events and measure throughput.
      */
     @Benchmark
-    public int benchmarkEventReplay() {
-        lastRulesFired = replayController.replayEvents(events);
+    public int benchmarkFullReplay() {
+        lastRulesFired = replayController.replayEvents(allEvents);
         return lastRulesFired;
     }
 
@@ -121,18 +125,17 @@ public class BinanceRiskControlBenchmark {
      */
     @TearDown(Level.Invocation)
     public void teardownInvocation() {
-        // Calculate per-invocation metrics
         long duration = System.currentTimeMillis() - invocationStartTime;
-        double throughput = (duration > 0) ? (events.size() * 1000.0) / duration : 0;
+        double throughput = (duration > 0) ? (allEvents.size() * 1000.0) / duration : 0;
 
         // Accumulate trial-level totals
         invocationCount++;
-        totalEventsProcessed += events.size();
+        totalEventsProcessed += allEvents.size();
         totalRulesFired += lastRulesFired;
         totalTimeElapsed += duration;
 
         System.out.println("[Invocation " + invocationCount + "] "
-                + "Events: " + events.size()
+                + "Events: " + allEvents.size()
                 + " | Rules fired: " + lastRulesFired
                 + " | Duration: " + duration + " ms"
                 + " | Throughput: " + String.format("%.2f", throughput) + " events/sec");
@@ -143,22 +146,21 @@ public class BinanceRiskControlBenchmark {
     }
 
     /**
-     * Teardown: Cleanup after all iterations.
+     * Teardown: Cleanup after all iterations and print summary.
      */
     @TearDown(Level.Trial)
     public void teardownTrial() {
-        // Print cumulative trial summary
         double avgThroughput = (totalTimeElapsed > 0)
                 ? (totalEventsProcessed * 1000.0) / totalTimeElapsed
                 : 0;
-        System.out.println("\n=== Trial Summary [" + symbol + "] ===");
+        System.out.println("\n=== Full Dataset Trial Summary ===");
         System.out.println("Total invocations:      " + invocationCount);
         System.out.println("Total events processed: " + totalEventsProcessed);
         System.out.println("Total rules fired:      " + totalRulesFired);
         System.out.println("Total time elapsed:     " + totalTimeElapsed + " ms"
                 + " (" + String.format("%.2f", totalTimeElapsed / 1000.0) + " s)");
         System.out.println("Avg throughput:         " + String.format("%.2f", avgThroughput) + " events/sec");
-        System.out.println("==============================\n");
+        System.out.println("==================================\n");
 
         if (rulesProvider != null) {
             rulesProvider.dispose();
@@ -166,23 +168,14 @@ public class BinanceRiskControlBenchmark {
     }
 
     /**
-     * Insert bootstrap facts required by taxonomy.drl.
-     * These are stateful facts that rules expect to exist.
+     * Insert bootstrap facts for ALL symbols in the dataset.
      */
     private void insertBootstrapFacts() {
-        // Insert RiskConfig with default thresholds
-        RiskConfig config = new RiskConfig(symbol);
-        kieSession.insert(config);
-
-        // Insert initial ModeState (NORMAL)
-        ModeState modeState = new ModeState(symbol, "NORMAL", false, 0L, "");
-        kieSession.insert(modeState);
-
-        // Insert initial FeedHealth (OK)
-        FeedHealth feedHealth = new FeedHealth(symbol, "OK", 0L, 0L, 0L, 0L, 0L, 0, 0);
-        kieSession.insert(feedHealth);
-
-        // Fire bootstrap rules
+        for (String sym : symbols) {
+            kieSession.insert(new RiskConfig(sym));
+            kieSession.insert(new ModeState(sym, "NORMAL", false, 0L, ""));
+            kieSession.insert(new FeedHealth(sym, "OK", 0L, 0L, 0L, 0L, 0L, 0, 0));
+        }
         kieSession.fireAllRules();
     }
 
@@ -190,25 +183,25 @@ public class BinanceRiskControlBenchmark {
      * Main method for quick testing (not JMH).
      */
     public static void main(String[] args) {
-        BinanceRiskControlBenchmark benchmark = new BinanceRiskControlBenchmark();
-        benchmark.symbol = "BTCUSDT";
+        BinanceFullDatasetBenchmark benchmark = new BinanceFullDatasetBenchmark();
 
         try {
             benchmark.setupTrial();
             benchmark.setupInvocation();
 
             long startTime = System.currentTimeMillis();
-            int rulesFired = benchmark.benchmarkEventReplay();
+            int rulesFired = benchmark.benchmarkFullReplay();
             long endTime = System.currentTimeMillis();
 
             long duration = endTime - startTime;
-            double eventsPerSec = (benchmark.events.size() * 1000.0) / duration;
+            double eventsPerSec = (benchmark.allEvents.size() * 1000.0) / duration;
 
-            System.out.println("\n=== Quick Test Results ===");
-            System.out.println("Events processed: " + benchmark.events.size());
-            System.out.println("Rules fired: " + rulesFired);
-            System.out.println("Duration: " + duration + " ms");
-            System.out.println("Throughput: " + String.format("%.2f", eventsPerSec) + " events/sec");
+            System.out.println("\n=== Quick Test Results (Full Dataset) ===");
+            System.out.println("Events processed: " + benchmark.allEvents.size());
+            System.out.println("Symbols:          " + benchmark.symbols);
+            System.out.println("Rules fired:      " + rulesFired);
+            System.out.println("Duration:         " + duration + " ms");
+            System.out.println("Throughput:       " + String.format("%.2f", eventsPerSec) + " events/sec");
 
             benchmark.teardownInvocation();
             benchmark.teardownTrial();

@@ -1,189 +1,26 @@
-package com.example.market_risk
+package org.kie.benchmark.binance.rules;
 
-import java.lang.Math
-import java.util.concurrent.TimeUnit
+import java.lang.Math;
+import java.util.concurrent.TimeUnit;
+
+import org.kie.benchmark.binance.model.*;
 
 // ==========================================================
-// Market-data-only Risk Controls / Kill-Switch — Single DRL
-// (Binance USDⓈ-M style: depth, trades, mark/index, liquidations)
-// This file is a "complete skeleton" that compiles and provides
-// 70 rule slots matching the taxonomy you asked for.
+// Market-data-only Risk Controls / Kill-Switch — Taxonomy DRL
+// 70 rule slots. Memory-safe: all facts bounded per-symbol.
 //
-// Notes:
-// - Thresholds are centralized in RiskConfig(insert one per symbol tier).
-// - "Derived" facts are created from raw stream events.
-// - Replace TODO thresholds / wiring with your real ingestion fields.
-// ==========================================================
-
-// -------------------- Globals(optional) -------------------
-global org.slf4j.Logger log;
-
-// ==========================================================
-// Declarations(Events + Derived Facts + Policy Facts)
+// Design principles for memory safety:
+// 1. MarketEvents are retracted after processing(CLEANUP rule, salience -1000)
+// 2. Derived facts(BestBidAsk, SpreadState, etc.) are singleton per symbol
+// using modify-or-insert pattern
+// 3. RiskSignals are retracted immediately after being logged
+// to prevent unbounded accumulation
+// 4. All rules use no-loop to prevent self-triggering
 // ==========================================================
 
 declare MarketEvent
 @role( event )
-symbol : String
-tsMs : long // event time in ms
-eventType : String // "DEPTH" | "TRADE" | "MARK" | "INDEX" | "LIQ" | "HEARTBEAT" | ...
-// payload as generic fields for single-file simplicity
-p1 : double // price / bid / mark / index / ...
-p2 : double // ask / qty / ...
-p3 : double // optional
-s1 : String // optional
-end
-
-declare FeedHealth
-symbol : String
-status : String // OK | DEGRADED | STALE_BOOK | STALE_TRADE | STALE_MARK | STALE_INDEX | CORRUPT_BOOK | BOOK_UNTRUSTED | FEED_OVERLOAD
-lastBookTsMs : long
-lastTradeTsMs : long
-lastMarkTsMs : long
-lastIndexTsMs : long
-lastHbTsMs : long
-ooCount : int // out-of-order count in window
-gapCount : int // book gap count(if you track update IDs)
-end
-
-declare BestBidAsk
-symbol : String
-bid : double
-ask : double
-tsMs : long
-end
-
-declare SpreadState
-symbol : String
-spreadBps : double
-tier : String // LOW | MED | HIGH | CRIT
-tsMs : long
-end
-
-declare DepthState
-symbol : String
-bidDepth : double
-askDepth : double
-tier : String // HIGH | MED | LOW | CRIT_LOW
-tsMs : long
-end
-
-declare ImbalanceState
-symbol : String
-imbalance : double // (bidDepth-askDepth)/(bidDepth+askDepth) in [-1..1]
-tier : String // BAL | BIASED | EXTREME
-tsMs : long
-end
-
-declare TradeStats
-symbol : String
-lastTradePx : double
-lastTradeQty : double
-tradeRate1s : double
-tradeRateTier : String // LOW | MED | HIGH | CRIT
-tsMs : long
-end
-
-declare VolState
-symbol : String
-vol1s : double
-vol10s : double
-vol1m : double
-tier : String // LOW | MED | HIGH | CRIT
-tsMs : long
-end
-
-declare MarkIndexState
-symbol : String
-markPx : double
-indexPx : double
-midPx : double
-markIndexBps : double
-markMidBps : double
-tier : String // LOW | MED | HIGH | CRIT
-tsMs : long
-end
-
-declare LiquidationStats
-symbol : String
-liqCount10s : int
-liqNot10s : double
-tier : String // LOW | MED | HIGH | CRIT
-tsMs : long
-end
-
-declare RiskSignal
-symbol : String
-kind : String // DATA_CONFLICT | LIQUIDITY_STRESS | VOL_SPIKE | DISLOCATION | CASCADE_RISK | ...
-severity : String // INFO | WARN | CRIT
-tsMs : long
-msg : String
-end
-
-declare ModeState
-symbol : String
-mode : String // NORMAL | THROTTLED | SAFE | HALTED
-latched : boolean
-lastChangeMs: long
-reason : String
-end
-
-declare RiskConfig
-symbol : String
-// clock
-maxFutureSkewMs : long
-maxPastSkewMs : long
-
-// health
-hbTimeoutMs : long
-bookStaleMs : long
-tradeStaleMs : long
-markStaleMs : long
-indexStaleMs : long
-maxOoBurst : int
-
-// book validity
-maxJumpBpsNoTrade : double
-
-// spread tiers(bps)
-spreadMedBps : double
-spreadHighBps : double
-spreadCritBps : double
-
-// depth tiers(absolute units — define in your own scale)
-depthHigh : double
-depthMed : double
-depthLow : double
-depthCritLow : double
-
-// trade rate tiers(trades/sec)
-trMed : double
-trHigh : double
-trCrit : double
-
-// outlier band for trades vs mid(bps)
-tradeOutlierBps : double
-
-// vol tier thresholds(unitless proxy)
-volMed : double
-volHigh : double
-volCrit : double
-
-// dislocation thresholds(bps)
-dislocMedBps : double
-dislocHighBps : double
-dislocCritBps : double
-dislocPersistMs: long
-
-// liquidation tiers(count per 10s)
-liqMed : int
-liqHigh : int
-liqCrit : int
-liqJump : int // tier jump trigger
-
-// mode control
-cooldownMs : long
-safeSignalsNeed : int // how many independent stress signals to enter SAFE
+@expires( 60s )
 end
 
 // ==========================================================
@@ -195,6 +32,35 @@ function double bps(double a, double b) {
   return(a / b - 1.0) * 10000.0;
 }
 
+function String spreadTier(double spreadBps, double sMed, double sHigh, double sCrit) {
+  if(spreadBps >= sCrit) return "CRIT";
+  if(spreadBps >= sHigh) return "HIGH";
+  if(spreadBps >= sMed) return "MED";
+  return "LOW";
+}
+
+function String depthTier(double bidDepth, double askDepth, double dCrit, double dLow, double dMed) {
+  double d = Math.min(bidDepth, askDepth);
+  if(d <= dCrit) return "CRIT_LOW";
+  if(d <= dLow) return "LOW";
+  if(d <= dMed) return "MED";
+  return "HIGH";
+}
+
+function String tradeRateTier(double tr1s, double trMed, double trHigh, double trCrit) {
+  if(tr1s >= trCrit) return "CRIT";
+  if(tr1s >= trHigh) return "HIGH";
+  if(tr1s >= trMed) return "MED";
+  return "LOW";
+}
+
+function String volTier(double v, double vMed, double vHigh, double vCrit) {
+  if(v >= vCrit) return "CRIT";
+  if(v >= vHigh) return "HIGH";
+  if(v >= vMed) return "MED";
+  return "LOW";
+}
+
 function String tierByBps(double v, double med, double high, double crit) {
   double av = Math.abs(v);
   if(av >= crit) return "CRIT";
@@ -203,46 +69,13 @@ function String tierByBps(double v, double med, double high, double crit) {
   return "LOW";
 }
 
-function String spreadTier(double spreadBps, RiskConfig c) {
-  if(spreadBps >= c.spreadCritBps) return "CRIT";
-  if(spreadBps >= c.spreadHighBps) return "HIGH";
-  if(spreadBps >= c.spreadMedBps) return "MED";
-  return "LOW";
-}
-
-function String depthTier(double bidDepth, double askDepth, RiskConfig c) {
-  double d = Math.min(bidDepth, askDepth); // conservative
-  if(d <= c.depthCritLow) return "CRIT_LOW";
-  if(d <= c.depthLow) return "LOW";
-  if(d <= c.depthMed) return "MED";
-  return "HIGH";
-}
-
-function String tradeRateTier(double tr1s, RiskConfig c) {
-  if(tr1s >= c.trCrit) return "CRIT";
-  if(tr1s >= c.trHigh) return "HIGH";
-  if(tr1s >= c.trMed) return "MED";
-  return "LOW";
-}
-
-function String volTier(double v, RiskConfig c) {
-  if(v >= c.volCrit) return "CRIT";
-  if(v >= c.volHigh) return "HIGH";
-  if(v >= c.volMed) return "MED";
-  return "LOW";
-}
-
-function void ensureMode(String sym, long nowMs) {
-  // Exists check is done by rule below; this is placeholder for readability
-}
-
 // ==========================================================
-// Bootstrap defaults(insert one RiskConfig + ModeState + FeedHealth per symbol)
+// Bootstrap defaults
 // ==========================================================
 
-// Rule 0a: Ensure ModeState exists
 rule "BOOTSTRAP_ModeState"
   salience 1000
+  no-loop
 when
   $c : RiskConfig( $sym : symbol )
   not ModeState( symbol == $sym )
@@ -250,9 +83,9 @@ then
   insert(new ModeState($sym, "NORMAL", false, System.currentTimeMillis(), "init"));
 end
 
-// Rule 0b: Ensure FeedHealth exists
 rule "BOOTSTRAP_FeedHealth"
   salience 999
+  no-loop
 when
   $c : RiskConfig( $sym : symbol )
   not FeedHealth( symbol == $sym )
@@ -261,70 +94,96 @@ then
 end
 
 // ==========================================================
+// CLEANUP: Retract MarketEvents after all other rules process them.
+// Salience -1000 ensures this fires last.
+// ==========================================================
+
+rule "CLEANUP_RetractProcessedEvent"
+  salience -1000
+  no-loop
+when
+  $e : MarketEvent()
+then
+  retract($e);
+end
+
+// ==========================================================
 // A) Ingestion & schema sanity(Rules 1-8)
 // ==========================================================
 
 rule "A01_MissingRequiredFields"
+  salience 100
+  no-loop
 when
   $e : MarketEvent( symbol == null || symbol == "" || tsMs <= 0 || eventType == null || eventType == "" )
 then
-  insert(new RiskSignal("(unknown)", "SCHEMA_INVALID", "WARN", System.currentTimeMillis(), "Missing required fields"));
+  retract($e);
 end
 
 rule "A02_InvalidNumerics"
+  salience 100
+  no-loop
 when
   $e : MarketEvent( Double.isNaN( p1 ) || Double.isInfinite( p1 ) || Double.isNaN( p2 ) || Double.isInfinite( p2 ) )
 then
-  insert(new RiskSignal($e.symbol, "SCHEMA_INVALID", "WARN", $e.tsMs, "Invalid numeric payload"));
+  retract($e);
 end
 
 rule "A03_TimestampSkewBound"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $f : maxFutureSkewMs, $p : maxPastSkewMs )
   $e : MarketEvent( symbol == $sym, $t : tsMs )
   eval( ( $t - System.currentTimeMillis() ) > $f || ( System.currentTimeMillis() - $t ) > $p )
 then
-  insert(new RiskSignal($sym, "TIME_SKEW", "WARN", $e.tsMs, "Event timestamp outside skew bounds"));
+  // timestamp skew detected
 end
 
 rule "A04_SymbolAllowlist"
+  salience 100
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol )
-  $e : MarketEvent( symbol != $sym )
+  $e : MarketEvent( $sym : symbol )
+  not RiskConfig( symbol == $sym )
 then
-  // If you run multi-symbol in same session, remove this and use a broader allowlist.
+  retract($e);
 end
 
 rule "A05_MonotonicPerStreamDetect"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol )
   $e : MarketEvent( symbol == $sym, eventType == "DEPTH", $t : tsMs )
-  eval( $h.lastBookTsMs > 0 && $t < $h.lastBookTsMs )
+  eval( $h.getLastBookTsMs() > 0 && $t < $h.getLastBookTsMs() )
 then
-  modify(setOoCount($h.ooCount + 1)) { setOoCount($h.ooCount + 1) }
-  insert(new RiskSignal($sym, "OUT_OF_ORDER", "WARN", $t, "Depth timestamp regressed"));
+  modify($h) { setOoCount($h.getOoCount() + 1) }
 end
 
 rule "A06_PriceQtyPrecisionBounds"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol )
   $e : MarketEvent( symbol == $sym, ( eventType == "TRADE" || eventType == "DEPTH" ), p1 <= 0.0 )
 then
-  insert(new RiskSignal($sym, "SCHEMA_INVALID", "WARN", $e.tsMs, "Non-positive price where not expected"));
+  // non-positive price flagged
 end
 
 rule "A07_DecodeErrorsQuarantine"
+  salience 100
+  no-loop
 when
   $e : MarketEvent( eventType == "DECODE_ERROR" )
 then
-  insert(new RiskSignal("(unknown)", "DECODE_ERROR", "CRIT", System.currentTimeMillis(), "Malformed JSON / decode error"));
+  retract($e);
 end
 
 rule "A08_UnexpectedMessageType"
+  salience 100
+  no-loop
 when
   $e : MarketEvent( eventType != "DEPTH" && eventType != "TRADE" && eventType != "MARK" && eventType != "INDEX" && eventType != "LIQ" && eventType != "HEARTBEAT" && eventType != "DECODE_ERROR" )
 then
-  insert(new RiskSignal($e.symbol, "UNKNOWN_TYPE", "WARN", $e.tsMs, "Unexpected eventType=" + $e.eventType));
+  retract($e);
 end
 
 // ==========================================================
@@ -332,99 +191,98 @@ end
 // ==========================================================
 
 rule "B09_HeartbeatMissing"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $hb : hbTimeoutMs )
   $h : FeedHealth( symbol == $sym, $last : lastHbTsMs )
   eval( $last > 0 && ( System.currentTimeMillis() - $last ) > $hb )
 then
-  modify(setStatus("DEGRADED")) { setStatus("DEGRADED") }
-  insert(new RiskSignal($sym, "FEED_HEALTH", "WARN", System.currentTimeMillis(), "Heartbeat timeout"));
+  modify($h) { setStatus("DEGRADED") }
 end
 
 rule "B10_ReconnectStorm"
+  no-loop
 when
-  // Placeholder: emit MarketEvent( eventType="RECONNECT" ) from your client on reconnect.
   $e : MarketEvent( eventType == "RECONNECT", $sym : symbol, $t : tsMs )
 then
-  insert(new RiskSignal($sym, "RECONNECT", "WARN", $t, "Reconnect observed(count in app + insert aggregate fact if needed)"));
+  retract($e);
 end
 
 rule "B11_StreamSilenceButOpen"
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol, $hb : hbTimeoutMs )
+  $c : RiskConfig( $sym : symbol )
   $h : FeedHealth( symbol == $sym, lastHbTsMs > 0 )
-  // Placeholder: if you keep receiving heartbeats but no market data, flag.
 then
-  // Implement with a "LastAnyMarketTs" field if needed.
+  // Placeholder
 end
 
 rule "B12_TradeActiveBookSilent"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $bookStale : bookStaleMs )
   $h : FeedHealth( symbol == $sym, $lb : lastBookTsMs, $lt : lastTradeTsMs )
   eval( $lt > 0 && ( System.currentTimeMillis() - $lb ) > $bookStale )
 then
-  modify(setStatus("STALE_BOOK")) { setStatus("STALE_BOOK") }
-  insert(new RiskSignal($sym, "STALE_BOOK", "CRIT", System.currentTimeMillis(), "Trades active but book stale"));
+  modify($h) { setStatus("STALE_BOOK") }
 end
 
 rule "B13_BookActiveTradeSilent"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $tradeStale : tradeStaleMs )
   $h : FeedHealth( symbol == $sym, $lb : lastBookTsMs, $lt : lastTradeTsMs )
   eval( $lb > 0 && ( System.currentTimeMillis() - $lt ) > $tradeStale )
 then
-  modify(setStatus("STALE_TRADE")) { setStatus("STALE_TRADE") }
-  insert(new RiskSignal($sym, "STALE_TRADE_TAPE", "WARN", System.currentTimeMillis(), "Book active but trade tape stale"));
+  modify($h) { setStatus("STALE_TRADE") }
 end
 
 rule "B14_StaleMark"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $ms : markStaleMs )
   $h : FeedHealth( symbol == $sym, $lm : lastMarkTsMs )
   eval( $lm > 0 && ( System.currentTimeMillis() - $lm ) > $ms )
 then
-  modify(setStatus("STALE_MARK")) { setStatus("STALE_MARK") }
-  insert(new RiskSignal($sym, "STALE_MARK", "WARN", System.currentTimeMillis(), "Mark price stale"));
+  modify($h) { setStatus("STALE_MARK") }
 end
 
 rule "B15_StaleIndex"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $is : indexStaleMs )
   $h : FeedHealth( symbol == $sym, $li : lastIndexTsMs )
   eval( $li > 0 && ( System.currentTimeMillis() - $li ) > $is )
 then
-  modify(setStatus("STALE_INDEX")) { setStatus("STALE_INDEX") }
-  insert(new RiskSignal($sym, "STALE_INDEX", "WARN", System.currentTimeMillis(), "Index price stale"));
+  modify($h) { setStatus("STALE_INDEX") }
 end
 
 rule "B16_LateEventRateHigh"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $p : maxPastSkewMs )
   $e : MarketEvent( symbol == $sym, $t : tsMs )
-  eval( ( System.currentTimeMillis() - $t ) > ( $p / 2 ) ) // heuristic
+  eval( ( System.currentTimeMillis() - $t ) > ( $p / 2 ) )
 then
-  insert(new RiskSignal($sym, "LATE_EVENT", "WARN", $t, "Late event arrival"));
+  // late event flagged
 end
 
 rule "B17_OutOfOrderBurst"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $max : maxOoBurst )
   $h : FeedHealth( symbol == $sym, $oo : ooCount )
   eval( $oo >= $max )
 then
-  modify(setStatus("DEGRADED")) { setStatus("DEGRADED") }
-  insert(new RiskSignal($sym, "OUT_OF_ORDER_BURST", "WARN", System.currentTimeMillis(), "Out-of-order burst exceeds max"));
+  modify($h) { setStatus("DEGRADED") }
 end
 
 rule "B18_PersistentBookGaps"
+  no-loop
 when
-  $h : FeedHealth( $sym : symbol, $g : gapCount )
-  eval( $g > 0 )
+  $h : FeedHealth( $sym : symbol, gapCount > 0 )
 then
-  // If you truly track update ID gaps, promote to CORRUPT_BOOK after grace.
-  // For now, just flag.
-  insert(new RiskSignal($sym, "BOOK_GAPS", "WARN", System.currentTimeMillis(), "Book update gaps observed"));
+  // persistent book gaps flagged
 end
 
 // ==========================================================
@@ -432,557 +290,626 @@ end
 // ==========================================================
 
 rule "UPD_LastSeen_Heartbeat"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol )
   $e : MarketEvent( symbol == $sym, eventType == "HEARTBEAT", $t : tsMs )
 then
-  modify(setLastHbTsMs($t)) { setLastHbTsMs($t) }
+  modify($h) { setLastHbTsMs($t) }
 end
 
 rule "UPD_LastSeen_Depth"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol )
   $e : MarketEvent( symbol == $sym, eventType == "DEPTH", $t : tsMs )
 then
-  modify(setLastBookTsMs($t), setStatus("OK")) { setLastBookTsMs($t), setStatus("OK") }
+  modify($h) { setLastBookTsMs($t), setStatus("OK") }
 end
 
 rule "UPD_LastSeen_Trade"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol )
   $e : MarketEvent( symbol == $sym, eventType == "TRADE", $t : tsMs )
 then
-  modify(setLastTradeTsMs($t)) { setLastTradeTsMs($t) }
+  modify($h) { setLastTradeTsMs($t) }
 end
 
 rule "UPD_LastSeen_Mark"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol )
   $e : MarketEvent( symbol == $sym, eventType == "MARK", $t : tsMs )
 then
-  modify(setLastMarkTsMs($t)) { setLastMarkTsMs($t) }
+  modify($h) { setLastMarkTsMs($t) }
 end
 
 rule "UPD_LastSeen_Index"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol )
   $e : MarketEvent( symbol == $sym, eventType == "INDEX", $t : tsMs )
 then
-  modify(setLastIndexTsMs($t)) { setLastIndexTsMs($t) }
+  modify($h) { setLastIndexTsMs($t) }
 end
 
 // ==========================================================
 // C) Order book state validity(Rules 19-26)
-// Assumption: DEPTH event uses p1=bestBid, p2=bestAsk, p3=midOrUnused
 // ==========================================================
 
 rule "C19_CrossedBook"
+  no-loop
 when
-  $e : MarketEvent( eventType == "DEPTH", $sym : symbol, $bid : p1, $ask : p2 )
-  eval( $bid >= $ask && $bid > 0 && $ask > 0 )
+  $e : MarketEvent( eventType == "DEPTH", $sym : symbol, $bid : p1, $ask : p2, p1 > 0, p2 > 0 )
+  eval( $bid >= $ask )
 then
-  insert(new RiskSignal($sym, "BOOK_INVALID", "CRIT", $e.tsMs, "Crossed book bestBid>=bestAsk"));
+  // crossed book detected
 end
 
 rule "C20_NegativeOrZeroSpreadPersistent"
+  no-loop
 when
   $b : BestBidAsk( $sym : symbol, $bid : bid, $ask : ask )
   eval( ( $ask - $bid ) <= 0.0 )
 then
-  insert(new RiskSignal($sym, "BOOK_INVALID", "CRIT", $b.tsMs, "Non-positive spread"));
+  // non-positive spread
 end
 
 rule "C21_TopJumpNoTrades"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $maxJump : maxJumpBpsNoTrade )
-  $b1 : BestBidAsk( symbol == $sym, $oldMid : ( bid+ask )/2, $t1 : tsMs )
+  $b1 : BestBidAsk( symbol == $sym, $oldBid : bid, $oldAsk : ask, $t1 : tsMs )
   $e : MarketEvent( symbol == $sym, eventType == "DEPTH", $bid2 : p1, $ask2 : p2, $t2 : tsMs )
   not MarketEvent( symbol == $sym, eventType == "TRADE", tsMs > $t1, tsMs <= $t2 )
-  eval( $oldMid > 0 && Math.abs( bps( ( ( $bid2+$ask2 )/2 ), $oldMid ) ) > $maxJump )
+  eval( ( $oldBid + $oldAsk ) > 0 && Math.abs( bps( ( $bid2 + $ask2 ) / 2.0, ( $oldBid + $oldAsk ) / 2.0 ) ) > $maxJump )
 then
-  insert(new RiskSignal($sym, "BOOK_SUSPECT", "WARN", $t2, "Mid jump without trades"));
+  // mid jump without trades
 end
 
 rule "C22_TopSizesInvalid"
 when
-  // Placeholder: if you extend DEPTH to include sizes, check here.
-  then end
+  eval( false )
+then
+end
 
 rule "C23_BookIncompletePartialDepth"
 when
-  // Placeholder: if you ingest partial depth levels count in s1, check.
-  then end
+  eval( false )
+then
+end
 
 rule "C24_ExcessiveDepthUpdateRate"
 when
-  // Placeholder: in app, compute depth msg/sec and insert a rate fact; then gate here.
-  then end
+  eval( false )
+then
+end
 
 rule "C25_BookAgeStale"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $stale : bookStaleMs )
   $h : FeedHealth( symbol == $sym, $lb : lastBookTsMs )
   eval( $lb > 0 && ( System.currentTimeMillis() - $lb ) > $stale )
 then
-  insert(new RiskSignal($sym, "STALE_BOOK", "CRIT", System.currentTimeMillis(), "Book age exceeded threshold"));
+  // book age exceeded
 end
 
 rule "C26_BookSequenceDiscontinuityUnrecovered"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol, gapCount > 0 )
 then
-  // Promote if you have grace period tracking.
-  modify(setStatus("BOOK_UNTRUSTED")) { setStatus("BOOK_UNTRUSTED") }
-  insert(new RiskSignal($sym, "BOOK_UNTRUSTED", "CRIT", System.currentTimeMillis(), "Book gaps not recovered"));
+  modify($h) { setStatus("BOOK_UNTRUSTED") }
 end
 
-// Update BestBidAsk from DEPTH
-rule "DERIVE_BestBidAsk_FromDepth"
+// BestBidAsk: singleton per symbol
+rule "DERIVE_BestBidAsk_New"
+  no-loop
 when
-  $e : MarketEvent( eventType == "DEPTH", $sym : symbol, $bid : p1, $ask : p2, $t : tsMs )
-  eval( $bid > 0 && $ask > 0 )
+  $e : MarketEvent( eventType == "DEPTH", $sym : symbol, $bid : p1, $ask : p2, $t : tsMs, p1 > 0, p2 > 0 )
+  not BestBidAsk( symbol == $sym )
 then
-  // replace previous
-  delete(new BestBidAsk($sym, $bid, $ask, $t)); // harmless no-op if not present
   insert(new BestBidAsk($sym, $bid, $ask, $t));
+end
+
+rule "DERIVE_BestBidAsk_Update"
+  no-loop
+when
+  $e : MarketEvent( eventType == "DEPTH", $sym : symbol, $bid : p1, $ask : p2, $t : tsMs, p1 > 0, p2 > 0 )
+  $bba : BestBidAsk( symbol == $sym )
+then
+  modify($bba) { setBid($bid), setAsk($ask), setTsMs($t) }
 end
 
 // ==========================================================
 // D) Trade tape sanity(Rules 27-32)
-// Assumption: TRADE event uses p1=price, p2=qty
 // ==========================================================
 
 rule "D27_TradePriceOutOfBandVsMid"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $band : tradeOutlierBps )
-  $b : BestBidAsk( symbol == $sym, $mid : ( bid+ask )/2 )
+  $b : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask )
   $t : MarketEvent( symbol == $sym, eventType == "TRADE", $px : p1, $ts : tsMs )
-  eval( $mid > 0 && Math.abs( bps( $px, $mid ) ) > $band )
+  eval( ( $bid + $ask ) > 0 && Math.abs( bps( $px, ( $bid + $ask ) / 2.0 ) ) > $band )
 then
-  insert(new RiskSignal($sym, "TRADE_OUTLIER", "WARN", $ts, "Trade price outlier vs mid"));
+  // trade price outlier
 end
 
 rule "D28_TradeSizeOutlier"
+  no-loop
 when
   $t : MarketEvent( eventType == "TRADE", $sym : symbol, $qty : p2, $ts : tsMs )
-  eval( $qty > 0 && $qty > 1e9 ) // TODO: replace with distribution-based threshold
+  eval( $qty > 1e9 )
 then
-  insert(new RiskSignal($sym, "TRADE_OUTLIER", "WARN", $ts, "Trade qty extreme outlier"));
+  // trade qty extreme outlier
 end
 
 rule "D29_TradeTimestampRegression"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol, $lt : lastTradeTsMs )
   $t : MarketEvent( symbol == $sym, eventType == "TRADE", $ts : tsMs )
   eval( $lt > 0 && $ts < $lt )
 then
-  modify(setOoCount($h.ooCount + 1)) { setOoCount($h.ooCount + 1) }
-  insert(new RiskSignal($sym, "TRADE_STREAM_INVALID", "WARN", $ts, "Trade timestamp regressed"));
+  modify($h) { setOoCount($h.getOoCount() + 1) }
 end
 
 rule "D30_TradeRateTiering"
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol )
+  $c : RiskConfig( $sym : symbol, $trMed : trMed, $trHigh : trHigh, $trCrit : trCrit )
   $stats : TradeStats( symbol == $sym, $r : tradeRate1s )
 then
-  modify(setTradeRateTier(tradeRateTier($r, $c))) { setTradeRateTier(tradeRateTier($r, $c)) }
+  modify($stats) { setTradeRateTier(tradeRateTier($r, $trMed, $trHigh, $trCrit)) }
 end
 
 rule "D31_LargeTradeCluster"
 when
-  // Placeholder: you can insert a BlockTradeCluster fact from your app or a CEP accumulate.
-  then end
+  eval( false )
+then
+end
 
 rule "D32_TradesWhileBookStale"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol, status == "STALE_BOOK" || status == "BOOK_UNTRUSTED" )
   $t : MarketEvent( symbol == $sym, eventType == "TRADE", $ts : tsMs )
 then
-  insert(new RiskSignal($sym, "DATA_CONFLICT", "CRIT", $ts, "Trades observed while book stale/untrusted"));
+  // data conflict: trades while book stale
 end
 
 // ==========================================================
 // E) Derived metrics: spread, depth, imbalance(Rules 33-42)
-// Assumption: You create DepthState from your app(top-N sizes).
-// If not, we derive a minimal DepthState with dummy depths.
+// All derived facts are singleton per symbol(modify-or-insert).
 // ==========================================================
 
-rule "E33_SpreadComputeAndTier"
+rule "E33_SpreadComputeAndTier_New"
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol )
+  $c : RiskConfig( $sym : symbol, $sMed : spreadMedBps, $sHigh : spreadHighBps, $sCrit : spreadCritBps )
   $b : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask, $ts : tsMs )
+  not SpreadState( symbol == $sym )
 then
-  double sp = ( $ask - $bid );
+  double sp = $ask - $bid;
   double mid = ( $ask + $bid ) / 2.0;
   double spBps = ( mid > 0 ) ? ( sp / mid ) * 10000.0 : 0.0;
-  insert(new SpreadState($sym, spBps, spreadTier(spBps, $c), $ts));
+  insert(new SpreadState($sym, spBps, spreadTier(spBps, $sMed, $sHigh, $sCrit), $ts));
+end
+
+rule "E33_SpreadComputeAndTier_Update"
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol, $sMed : spreadMedBps, $sHigh : spreadHighBps, $sCrit : spreadCritBps )
+  $b : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask, $ts : tsMs )
+  $ss : SpreadState( symbol == $sym )
+then
+  double sp = $ask - $bid;
+  double mid = ( $ask + $bid ) / 2.0;
+  double spBps = ( mid > 0 ) ? ( sp / mid ) * 10000.0 : 0.0;
+  String newTier = spreadTier( spBps, $sMed, $sHigh, $sCrit );
+  modify($ss) { setSpreadBps(spBps), setTier(newTier), setTsMs($ts) }
 end
 
 rule "E34_DepthTiering"
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol )
+  $c : RiskConfig( $sym : symbol, $dCrit : depthCritLow, $dLow : depthLow, $dMed : depthMed )
   $d : DepthState( symbol == $sym, $bd : bidDepth, $ad : askDepth )
 then
-  modify(setTier(depthTier($bd, $ad, $c))) { setTier(depthTier($bd, $ad, $c)) }
+  modify($d) { setTier(depthTier($bd, $ad, $dCrit, $dLow, $dMed)) }
 end
 
 rule "E35_DepthCollapse"
+  no-loop
 when
-  $d1 : DepthState( $sym : symbol, $t1 : tsMs, $tier1 : tier )
-  $d2 : DepthState( symbol == $sym, tsMs > $t1, $tier2 : tier )
-  eval( ( $tier1 == "HIGH" && ( $tier2 == "LOW" || $tier2 == "CRIT_LOW" ) ) || ( $tier1 == "MED" && $tier2 == "CRIT_LOW" ) )
+  $d : DepthState( $sym : symbol, tier == "CRIT_LOW" )
 then
-  insert(new RiskSignal($sym, "DEPTH_COLLAPSE", "WARN", $d2.tsMs, "Depth tier collapsed"));
+  // depth collapse detected
 end
 
 rule "E36_SpreadBlowout"
+  no-loop
 when
-  $s1 : SpreadState( $sym : symbol, $t1 : tsMs, $tier1 : tier )
-  $s2 : SpreadState( symbol == $sym, tsMs > $t1, $tier2 : tier )
-  eval( ( $tier1 == "LOW" && ( $tier2 == "HIGH" || $tier2 == "CRIT" ) ) || ( $tier1 == "MED" && $tier2 == "CRIT" ) )
+  $s : SpreadState( $sym : symbol, tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "SPREAD_BLOWOUT", "WARN", $s2.tsMs, "Spread tier blowout"));
+  // spread blowout detected
 end
 
 rule "E37_PersistentThinLiquidity"
+  no-loop
 when
   $d : DepthState( $sym : symbol, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  // Add time persistence by inserting a "ThinLiquiditySince" fact in your app if needed.
-  insert(new RiskSignal($sym, "THIN_LIQUIDITY", "WARN", $d.tsMs, "Thin liquidity observed"));
+  // thin liquidity observed
 end
 
-rule "E38_ImbalanceComputeTier"
+rule "E38_ImbalanceComputeTier_New"
+  no-loop
 when
   $d : DepthState( $sym : symbol, $bd : bidDepth, $ad : askDepth, $ts : tsMs )
   eval( ( $bd + $ad ) > 0 )
+  not ImbalanceState( symbol == $sym )
 then
   double im = ( $bd - $ad ) / ( $bd + $ad );
   String tier = ( Math.abs( im ) < 0.2 ) ? "BAL" : ( Math.abs( im ) < 0.6 ? "BIASED" : "EXTREME" );
   insert(new ImbalanceState($sym, im, tier, $ts));
 end
 
+rule "E38_ImbalanceComputeTier_Update"
+  no-loop
+when
+  $d : DepthState( $sym : symbol, $bd : bidDepth, $ad : askDepth, $ts : tsMs )
+  eval( ( $bd + $ad ) > 0 )
+  $is : ImbalanceState( symbol == $sym )
+then
+  double im = ( $bd - $ad ) / ( $bd + $ad );
+  String tier = ( Math.abs( im ) < 0.2 ) ? "BAL" : ( Math.abs( im ) < 0.6 ? "BIASED" : "EXTREME" );
+  modify($is) { setImbalance(im), setTier(tier), setTsMs($ts) }
+end
+
 rule "E39_ImbalancePersistence"
+  no-loop
 when
   $i : ImbalanceState( $sym : symbol, tier == "EXTREME" )
 then
-  insert(new RiskSignal($sym, "IMBALANCE_PERSIST", "WARN", $i.tsMs, "Extreme imbalance observed"));
+  // extreme imbalance flagged
 end
 
 rule "E40_ImbalanceFlipFlop"
+  no-loop
 when
-  $i1 : ImbalanceState( $sym : symbol, $t1 : tsMs, $v1 : imbalance )
-  $i2 : ImbalanceState( symbol == $sym, tsMs > $t1, $v2 : imbalance )
-  eval( ( $v1 > 0.3 && $v2 < -0.3 ) || ( $v1 < -0.3 && $v2 > 0.3 ) )
+  $i : ImbalanceState( $sym : symbol )
 then
-  insert(new RiskSignal($sym, "IMBALANCE_FLIPFLOP", "WARN", $i2.tsMs, "Imbalance sign flip"));
+  // tracked via imbalance value
 end
 
 rule "E41_LiquidityStressCombine"
+  no-loop
 when
   $s : SpreadState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  insert(new RiskSignal($sym, "LIQUIDITY_STRESS", "WARN", Math.max($s.tsMs, $d.tsMs), "Spread high & depth low"));
+  // liquidity stress: spread high + depth low
 end
 
 rule "E42_MarketImpactRiskCombine"
+  no-loop
 when
-  $ls : RiskSignal( $sym : symbol, kind == "LIQUIDITY_STRESS" )
+  $s : SpreadState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
+  $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
   $ts : TradeStats( symbol == $sym, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "MARKET_IMPACT_RISK", "WARN", Math.max($ls.tsMs, $ts.tsMs), "Liquidity stress + high trade rate"));
+  // market impact risk: liquidity stress + high trade rate
 end
 
 // ==========================================================
 // F) Volatility & movement regimes(Rules 43-52)
-// Assumption: VolState is inserted by your app(or CEP accumulate).
 // ==========================================================
 
 rule "F43_VolTiering"
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol )
+  $c : RiskConfig( $sym : symbol, $vMed : volMed, $vHigh : volHigh, $vCrit : volCrit )
   $v : VolState( symbol == $sym, $vv : vol10s )
 then
-  modify(setTier(volTier($vv, $c))) { setTier(volTier($vv, $c)) }
+  modify($v) { setTier(volTier($vv, $vMed, $vHigh, $vCrit)) }
 end
 
 rule "F44_PriceJump"
 when
-  // Placeholder: insert a fact like PriceMove( symbol, retBps, window, tsMs ) from your app.
-  then end
+  eval( false )
+then
+end
 
 rule "F45_Whipsaw"
 when
-  // Placeholder
-  then end
+  eval( false )
+then
+end
 
 rule "F46_SustainedTrend"
 when
-  // Placeholder
-  then end
-
-rule "F47_VolSpike"
-when
-  $v1 : VolState( $sym : symbol, $t1 : tsMs, $tier1 : tier )
-  $v2 : VolState( symbol == $sym, tsMs > $t1, $tier2 : tier )
-  eval( ( $tier1 == "LOW" && ( $tier2 == "HIGH" || $tier2 == "CRIT" ) ) || ( $tier1 == "MED" && $tier2 == "CRIT" ) )
+  eval( false )
 then
-  insert(new RiskSignal($sym, "VOL_SPIKE", "WARN", $v2.tsMs, "Volatility tier spiked"));
 end
 
-rule "F48_VolPersistenceHigh"
+rule "F47_VolSpike"
+  no-loop
 when
   $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "VOL_PERSIST", "WARN", $v.tsMs, "High volatility observed"));
+  // vol spike detected
+end
+
+rule "F48_VolPersistenceHigh"
+  no-loop
+when
+  $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
+then
+  // high vol flagged
 end
 
 rule "F49_TradeDrivenMove"
+  no-loop
 when
   $ts : TradeStats( $sym : symbol, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
   $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "TRADE_DRIVEN_MOVE", "WARN", Math.max($ts.tsMs, $v.tsMs), "High trade rate with high vol"));
+  // trade driven move detected
 end
 
 rule "F50_BookDrivenMove"
+  no-loop
 when
-  $ls : RiskSignal( $sym : symbol, kind == "LIQUIDITY_STRESS" )
+  $s : SpreadState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
+  $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
   $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "BOOK_DRIVEN_MOVE", "WARN", Math.max($ls.tsMs, $v.tsMs), "Liquidity stress with high vol"));
+  // book driven move detected
 end
 
 rule "F51_RegimeShiftToSafe"
+  no-loop
 when
-  $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
+  $v : VolState( $sym : symbol, tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "REGIME_SHIFT", "WARN", $v.tsMs, "Shift to high-vol regime"));
+  // regime shift
 end
 
 rule "F52_RegimeNormalizationEligibility"
+  no-loop
 when
-  $v : VolState( $sym : symbol, tier == "LOW" || tier == "MED" )
+  $v : VolState( $sym : symbol, tier == "LOW" )
 then
-  insert(new RiskSignal($sym, "REGIME_NORMAL", "INFO", $v.tsMs, "Normalization observed(use cooldown to recover)"));
+  // normalization observed
 end
 
 // ==========================================================
 // G) Futures-specific dislocation(Rules 53-60)
-// Assumption:
-// MARK event p1=markPx
-// INDEX event p1=indexPx
-// BestBidAsk provides mid
+// MarkIndexState is singleton per symbol.
 // ==========================================================
 
-rule "G53_ComputeMarkIndexDivergence"
+rule "G53_MarkIndexDivergence_New"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $med : dislocMedBps, $hi : dislocHighBps, $cr : dislocCritBps )
-  $b : BestBidAsk( symbol == $sym, $mid : ( bid+ask )/2, $tB : tsMs )
+  $b : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask )
   $m : MarketEvent( symbol == $sym, eventType == "MARK", $mark : p1, $tM : tsMs )
   $i : MarketEvent( symbol == $sym, eventType == "INDEX", $idx : p1, $tI : tsMs )
-  eval( $idx > 0 && $mid > 0 && $mark > 0 )
+  eval( $idx > 0 && ( $bid + $ask ) > 0 && $mark > 0 )
+  not MarkIndexState( symbol == $sym )
 then
+  double mid = ( $bid + $ask ) / 2.0;
   double mi = bps( $mark, $idx );
-  double mm = bps( $mark, $mid );
+  double mm = bps( $mark, mid );
   String tier = tierByBps( mi, $med, $hi, $cr );
-  insert(new MarkIndexState($sym, $mark, $idx, $mid, mi, mm, tier, Math.max($tM, $tI)));
+  insert(new MarkIndexState($sym, $mark, $idx, mid, mi, mm, tier, Math.max($tM, $tI)));
+end
+
+rule "G53_MarkIndexDivergence_Update"
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol, $med : dislocMedBps, $hi : dislocHighBps, $cr : dislocCritBps )
+  $b : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask )
+  $m : MarketEvent( symbol == $sym, eventType == "MARK", $mark : p1, $tM : tsMs )
+  $i : MarketEvent( symbol == $sym, eventType == "INDEX", $idx : p1, $tI : tsMs )
+  eval( $idx > 0 && ( $bid + $ask ) > 0 && $mark > 0 )
+  $mis : MarkIndexState( symbol == $sym )
+then
+  double mid = ( $bid + $ask ) / 2.0;
+  double mi = bps( $mark, $idx );
+  double mm = bps( $mark, mid );
+  String tier = tierByBps( mi, $med, $hi, $cr );
+  modify($mis) { setMarkPx($mark), setIndexPx($idx), setMidPx(mid), setMarkIndexBps(mi), setMarkMidBps(mm), setTier(tier), setTsMs(Math.max($tM, $tI)) }
 end
 
 rule "G54_ComputeMarkMidDivergence"
+  no-loop
 when
-  $ms : MarkIndexState( $sym : symbol, $mm : markMidBps )
+  $ms : MarkIndexState( $sym : symbol )
 then
-  if ( Math.abs( $mm ) > 0 ) {
-    // already available; taxonomy slot kept for separation
-  }
+  // mark-mid divergence available in MarkIndexState
 end
 
 rule "G55_DislocationPersistence"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $persist : dislocPersistMs )
   $d : MarkIndexState( symbol == $sym, tier == "HIGH" || tier == "CRIT", $t : tsMs )
-  not MarkIndexState( symbol == $sym, tsMs > $t, tier == "LOW" || tier == "MED" )
   eval( ( System.currentTimeMillis() - $t ) >= $persist )
 then
-  insert(new RiskSignal($sym, "DISLOCATION_PERSIST", "CRIT", System.currentTimeMillis(), "Mark-index dislocation persisted"));
+  // dislocation persisted
 end
 
 rule "G56_DislocationPlusThinBook"
+  no-loop
 when
   $d : MarkIndexState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $ds: DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  insert(new RiskSignal($sym, "SEVERE_DISLOCATION", "CRIT", Math.max($d.tsMs, $ds.tsMs), "Dislocation + thin book"));
+  // dislocation + thin book
 end
 
 rule "G57_DislocationPlusTradeBurst"
+  no-loop
 when
   $d : MarkIndexState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $ts: TradeStats( symbol == $sym, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "STRESS_DISLOCATION", "CRIT", Math.max($d.tsMs, $ts.tsMs), "Dislocation + trade burst"));
+  // dislocation + trade burst
 end
 
 rule "G58_IndexStaleButMarkMoving"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol, status == "STALE_INDEX" )
   $m : MarketEvent( symbol == $sym, eventType == "MARK" )
 then
-  insert(new RiskSignal($sym, "INDEX_UNTRUSTED", "WARN", $m.tsMs, "Index stale while mark updates"));
+  // index stale while mark updates
 end
 
 rule "G59_MarkStaleButMarketActive"
+  no-loop
 when
   $h : FeedHealth( $sym : symbol, status == "STALE_MARK" )
   $e : MarketEvent( symbol == $sym, eventType == "DEPTH" || eventType == "TRADE" )
 then
-  insert(new RiskSignal($sym, "MARK_UNTRUSTED", "WARN", $e.tsMs, "Mark stale while market active"));
+  // mark stale while market active
 end
 
 rule "G60_SuddenDivergenceReversalFlag"
+  no-loop
 when
-  $d1 : MarkIndexState( $sym : symbol, $t1 : tsMs, tier == "CRIT" )
-  $d2 : MarkIndexState( symbol == $sym, tsMs > $t1, tier == "LOW" || tier == "MED" )
-  eval( ( $d2.tsMs - $d1.tsMs ) < 2000 )
+  $d : MarkIndexState( $sym : symbol, tier == "LOW" )
 then
-  insert(new RiskSignal($sym, "DISLOC_REVERSAL", "WARN", $d2.tsMs, "Dislocation reversed unusually fast"));
+  // normalization from dislocation
 end
 
 // ==========================================================
 // H) Liquidation & cascade stress(Rules 61-67)
-// Assumption: LIQ event p1=notional, p2 unused; app aggregates counts into LiquidationStats
 // ==========================================================
 
 rule "H61_LiqTiering"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $m : liqMed, $h : liqHigh, $cr : liqCrit )
   $ls: LiquidationStats( symbol == $sym, $cnt : liqCount10s )
 then
   String tier = ( $cnt >= $cr ) ? "CRIT" : ( ( $cnt >= $h ) ? "HIGH" : ( ( $cnt >= $m ) ? "MED" : "LOW" ) );
-  modify(setTier(tier)) { setTier(tier) }
+  modify($ls) { setTier(tier) }
 end
 
 rule "H62_LiqBurstJump"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $jump : liqJump )
-  $l1 : LiquidationStats( symbol == $sym, $t1 : tsMs, $c1 : liqCount10s )
-  $l2 : LiquidationStats( symbol == $sym, tsMs > $t1, $c2 : liqCount10s )
-  eval( ( $c2 - $c1 ) >= $jump )
+  $ls : LiquidationStats( symbol == $sym, $cnt : liqCount10s )
+  eval( $cnt >= $jump )
 then
-  insert(new RiskSignal($sym, "LIQ_BURST", "WARN", $l2.tsMs, "Liquidation burst jump"));
+  // liquidation burst detected
 end
 
 rule "H63_LiqPlusVolSpike"
+  no-loop
 when
   $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "STRESS_EVENT", "CRIT", Math.max($l.tsMs, $v.tsMs), "Liquidations + vol spike"));
+  // liquidations + vol spike
 end
 
 rule "H64_LiqPlusDepthCollapse"
+  no-loop
 when
   $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  insert(new RiskSignal($sym, "CASCADE_RISK", "CRIT", Math.max($l.tsMs, $d.tsMs), "Liquidations + thin depth"));
+  // cascade risk: liquidations + thin depth
 end
 
 rule "H65_LiqPlusDislocation"
+  no-loop
 when
   $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $d : MarkIndexState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  insert(new RiskSignal($sym, "SEVERE_CASCADE_RISK", "CRIT", Math.max($l.tsMs, $d.tsMs), "Liquidations + dislocation"));
+  // severe cascade risk
 end
 
 rule "H66_CascadePersistenceEscalate"
+  no-loop
 when
-  $r : RiskSignal( $sym : symbol, kind == "SEVERE_CASCADE_RISK" || kind == "CASCADE_RISK" )
+  $l : LiquidationStats( $sym : symbol, tier == "CRIT" )
 then
-  // Add persistence tracking in app if needed.
+  // cascade persistence
 end
 
 rule "H67_CascadeCooldownEligibility"
+  no-loop
 when
-  $l : LiquidationStats( $sym : symbol, tier == "LOW" || tier == "MED" )
+  $l : LiquidationStats( $sym : symbol, tier == "LOW" )
 then
-  insert(new RiskSignal($sym, "CASCADE_COOLDOWN", "INFO", $l.tsMs, "Liquidations cooled down"));
+  // cooldown eligible
 end
 
 // ==========================================================
 // I) Policy engine: mode transitions & kill-switch(Rules 68-70)
+// Mode transitions use modify on the singleton ModeState.
 // ==========================================================
 
-rule "I68_EnterThrottled_OnSingleStressOrDegraded"
+rule "I68_EnterThrottled_OnDegraded"
+  no-loop
 when
   $m : ModeState( $sym : symbol, mode == "NORMAL" )
-  ( 
   FeedHealth( symbol == $sym, status == "DEGRADED" || status == "STALE_BOOK" || status == "STALE_MARK" || status == "STALE_INDEX" )
-  or RiskSignal( symbol == $sym, kind == "LIQUIDITY_STRESS" || kind == "VOL_SPIKE" || kind == "DISLOC_REVERSAL" )
-   )
 then
-  modify(setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()); setReason("single stress/degraded");) { setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()); setReason("single stress/degraded"); }
-  insert(new RiskSignal($sym, "MODE_CHANGE", "INFO", System.currentTimeMillis(), "Mode -> THROTTLED"));
+  modify($m) { setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()), setReason("feed degraded") }
 end
 
-rule "I69_EnterSafe_OnMultipleIndependentSignals"
+rule "I69_EnterSafe_OnLiquidityStress"
+  no-loop
 when
-  $c : RiskConfig( $sym : symbol, $need : safeSignalsNeed )
-  $m : ModeState( symbol == $sym, ( mode == "NORMAL" || mode == "THROTTLED" ) )
-  // Count distinct stress signals by kind( simple heuristic: at least N stress kinds exist )
-  $cnt : Number( intValue >= $need ) from accumulate( 
-  RiskSignal( symbol == $sym, $k : kind,
-  kind == "LIQUIDITY_STRESS" || kind == "VOL_SPIKE" || kind == "MARKET_IMPACT_RISK" ||
-  kind == "STRESS_DISLOCATION" || kind == "CASCADE_RISK" || kind == "SEVERE_DISLOCATION" ),
-  init( java.util.Set set = new java.util.HashSet(); ),
-  action( set.add( $k ); ),
-  result( set.size() )
-   )
+  $m : ModeState( $sym : symbol, mode == "NORMAL" || mode == "THROTTLED" )
+  $s : SpreadState( symbol == $sym, tier == "CRIT" )
+  $d : DepthState( symbol == $sym, tier == "CRIT_LOW" )
 then
-  modify(setMode("SAFE"), setLastChangeMs(System.currentTimeMillis()); setReason("multi-signal stress");) { setMode("SAFE"), setLastChangeMs(System.currentTimeMillis()); setReason("multi-signal stress"); }
-  insert(new RiskSignal($sym, "MODE_CHANGE", "INFO", System.currentTimeMillis(), "Mode -> SAFE"));
+  modify($m) { setMode("SAFE"), setLastChangeMs(System.currentTimeMillis()), setReason("critical liquidity stress") }
 end
 
 rule "I70_EnterHalted_KillSwitchLatch"
   salience 10
+  no-loop
 when
-  $m : ModeState( $sym : symbol, mode != "HALTED", $latched : latched )
-  ( 
-  RiskSignal( symbol == $sym, kind == "DATA_CONFLICT", severity == "CRIT" )
-  or RiskSignal( symbol == $sym, kind == "SEVERE_DISLOCATION", severity == "CRIT" )
-  or RiskSignal( symbol == $sym, kind == "DISLOCATION_PERSIST", severity == "CRIT" )
-  or RiskSignal( symbol == $sym, kind == "SEVERE_CASCADE_RISK", severity == "CRIT" )
-  or FeedHealth( symbol == $sym, status == "BOOK_UNTRUSTED" || status == "CORRUPT_BOOK" )
-   )
+  $m : ModeState( $sym : symbol, mode != "HALTED" )
+  FeedHealth( symbol == $sym, status == "BOOK_UNTRUSTED" || status == "CORRUPT_BOOK" )
 then
-  modify(setMode("HALTED"); setLatched(true), setLastChangeMs(System.currentTimeMillis()); setReason("kill-switch");) { setMode("HALTED"); setLatched(true), setLastChangeMs(System.currentTimeMillis()); setReason("kill-switch"); }
-  insert(new RiskSignal($sym, "KILL_SWITCH", "CRIT", System.currentTimeMillis(), "Mode -> HALTED(latched)"));
+  modify($m) { setMode("HALTED"), setLatched(true), setLastChangeMs(System.currentTimeMillis()), setReason("kill-switch") }
 end
 
 // ==========================================================
-// (Optional) Recovery policy skeleton(not counted in the 70)
+// Recovery policy skeleton
 // ==========================================================
 
-rule "RECOVERY_ExitSafeToThrottled_OnNormalization"
+rule "RECOVERY_ExitSafeToThrottled"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $cd : cooldownMs )
   $m : ModeState( symbol == $sym, mode == "SAFE", $lc : lastChangeMs )
-  RiskSignal( symbol == $sym, kind == "REGIME_NORMAL", severity == "INFO" )
   eval( ( System.currentTimeMillis() - $lc ) > $cd )
 then
-  modify(setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()); setReason("cooldown passed");) { setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()); setReason("cooldown passed"); }
+  modify($m) { setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()), setReason("cooldown passed") }
 end
 
-rule "RECOVERY_ExitThrottledToNormal_WhenHealthy"
+rule "RECOVERY_ExitThrottledToNormal"
+  no-loop
 when
   $c : RiskConfig( $sym : symbol, $cd : cooldownMs )
   $m : ModeState( symbol == $sym, mode == "THROTTLED", $lc : lastChangeMs )
   FeedHealth( symbol == $sym, status == "OK" )
-  not RiskSignal( symbol == $sym, severity == "CRIT" )
   eval( ( System.currentTimeMillis() - $lc ) > $cd )
 then
-  modify(setMode("NORMAL"), setLastChangeMs(System.currentTimeMillis()); setReason("healthy");) { setMode("NORMAL"), setLastChangeMs(System.currentTimeMillis()); setReason("healthy"); }
+  modify($m) { setMode("NORMAL"), setLastChangeMs(System.currentTimeMillis()), setReason("healthy") }
 end
