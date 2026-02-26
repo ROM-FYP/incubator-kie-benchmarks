@@ -231,13 +231,12 @@ end
 rule "R021_DeltaVelocityOver10s"
 when
     $s1 : OpenSkyStateVector( $id:icao24, velocityMps != null, $t1:lastContact )
-    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, velocityMps != null, $t0:lastContact, $t0 < $t1 )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, velocityMps != null,
+                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
 then
     double dt = ($t1 - $t0);
-    if(dt > 0 && dt <= 15){
-      System.out.println("[DRL] R021_DeltaVelocityOver10s -> " + $id + " dt=" + dt);
-      insert(new KinematicDelta($id, $s1.getVelocityMps()-$s0.getVelocityMps(), 0.0, 0.0, dt));
-    }
+    System.out.println("[DRL] R021_DeltaVelocityOver10s -> " + $id + " dt=" + dt);
+    insert(new KinematicDelta($id, $s1.getVelocityMps()-$s0.getVelocityMps(), 0.0, 0.0, dt));
 end
 
 rule "R022_SuddenSpeedJumpAudit"
@@ -256,26 +255,22 @@ end
 
 rule "R024_SuddenTurnRateApproxAudit"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, trueTrackDeg != null, $t1:lastContact )
-    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, trueTrackDeg != null, $t0:lastContact, $t0 < $t1 )
+    $s1 : OpenSkyStateVector( $id:icao24, $trk1:trueTrackDeg != null, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, $trk0:trueTrackDeg != null,
+                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
+    eval( Math.min(Math.abs($trk1 - $trk0), 360 - Math.abs($trk1 - $trk0)) / ($t1 - $t0) > 10 )
 then
-    double dt = ($t1 - $t0);
-    if(dt > 0 && dt <= 15){
-      double d = Math.abs($s1.getTrueTrackDeg()-$s0.getTrueTrackDeg());
-      if(d > 180) d = 360-d;
-      if(d/dt > 10) insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "high turn rate approx"));
-    }
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "high turn rate approx"));
 end
 
 rule "R025_AltitudeJumpAudit"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, geoAltitudeM != null, $t1:lastContact )
-    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, geoAltitudeM != null, $t0:lastContact, $t0 < $t1 )
+    $s1 : OpenSkyStateVector( $id:icao24, $alt1:geoAltitudeM != null, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, geoAltitudeM != null,
+                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15,
+                              Math.abs(geoAltitudeM - $alt1) > 1200 )
 then
-    double dt = ($t1 - $t0);
-    if(dt > 0 && dt <= 15){
-      if(Math.abs($s1.getGeoAltitudeM()-$s0.getGeoAltitudeM()) > 1200) insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "altitude jump"));
-    }
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "altitude jump"));
 end
 
 rule "R026_OnGroundStateFlipAudit"
@@ -373,18 +368,12 @@ then
     insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "callsign blank"));
 end
 
-rule "R039_OriginCountryPresentAudit"
+rule "R039_OriginCountryMissingAudit"
 when
-    $s : OpenSkyStateVector()
+    $s : OpenSkyStateVector( originCountry == null )
 then
-    // placeholder: origin_country can be tracked for analytics
-end
-
-rule "R040_KinematicsReady"
-when
-    $s : OpenSkyStateVector( lat != null, lon != null, onGround == false )
-then
-    // marker rule
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000,
+           "origin country null"));
 end
 
 
@@ -415,9 +404,9 @@ end
 
 rule "R043_NoPairIfSameAircraft"
 when
-    PairCandidate( a == b )
+    $pc : PairCandidate( a == b )
 then
-    // should never happen
+    retract($pc);
 end
 
 rule "R044_PairInhibitByCell"
@@ -471,12 +460,6 @@ then
     retract($pc);
 end
 
-rule "R050_PairCandidateAudit"
-when
-    $pc : PairCandidate()
-then
-    // optional audit
-end
 
 rule "R051_PairDedupGuard"
 when
@@ -486,32 +469,32 @@ then
     retract($pc);
 end
 
-rule "R052_PairCandidateReady"
+rule "R052_FinalPairReadyForConflictCheck"
 when
     $pc : PairCandidate()
 then
+    insert(new AuditEvent("PAIR_READY", $pc.getA()+"|"+$pc.getB(),
+           clock.getCurrentTime() / 1000,
+           "pair passed all filters, entering conflict check cell=" + $pc.getCellId()));
 end
 
-rule "R053_ClearGridCellsEachCycle"
+rule "R053_BusyAirspaceCellAudit"
 when
-    $g : GridCell()
+    $g : GridCell( $cell:cellId )
+    Number( intValue >= 5 ) from accumulate(
+        GridCell( cellId == $cell ), count(1) )
 then
-    System.out.println("[DRL] R053_ClearGridCellsEachCycle -> " + $g.getCellId() + ":" + $g.getIcao24());
-    retract($g);
+    insert(new AuditEvent("OPS_PATTERN", $cell, clock.getCurrentTime() / 1000,
+           "busy cell with 5+ aircraft"));
 end
 
-rule "R054_ClearPairCandidatesEachCycle"
+rule "R055_HighAccelerationAudit"
 when
-    $pc : PairCandidate()
+    KinematicDelta( $id:icao24, dVel != null, dt > 0,
+                   Math.abs(dVel) / dt > 5 )
 then
-    // keep for conflict computation rules in same cycle
-end
-
-rule "R055_ClearKinematicDeltaEachCycle"
-when
-    $d : KinematicDelta()
-then
-    retract($d);
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000,
+           "high linear acceleration " + String.format("%.1f", Math.abs(dVel)/dt) + " m/s2"));
 end
 
 
@@ -538,12 +521,10 @@ then
     double rel = Math.abs($avel - $bvel);
     double ttc = (rel > 1.0) ? (d / rel) : Double.POSITIVE_INFINITY;
 
-    String sev = "INFO";
-    if(d <= metersFromNm($p.getWarnDistNm()) || ttc <= $p.getWarnTtcSec()) sev = "WARN";
-    if(d <= metersFromNm($p.getAlertDistNm()) || ttc <= $p.getAlertTtcSec()) sev = "ALERT";
-
-    System.out.println("[DRL] R056_BuildConflictCandidate -> " + $a + "|" + $b + " dist=" + String.format("%.0f",d) + "m sev=" + sev);
-    insert(new ConflictCandidate($a,$b,d,vert,closing,ttc,sev));
+    // Severity is always seeded as "INFO" here.
+    // Classification to WARN / ALERT is fully delegated to R057-R062 via modify().
+    System.out.println("[DRL] R056_BuildConflictCandidate -> " + $a + "|" + $b + " dist=" + String.format("%.0f",d) + "m");
+    insert(new ConflictCandidate($a,$b,d,vert,closing,ttc,"INFO"));
 end
 
 rule "R057_DowngradeIfVerticalSeparationLarge"

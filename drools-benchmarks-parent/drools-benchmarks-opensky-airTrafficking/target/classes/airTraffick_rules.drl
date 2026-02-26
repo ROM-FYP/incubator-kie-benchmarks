@@ -134,7 +134,7 @@ when
     $s : OpenSkyStateVector()
     TrackQuality( icao24 == $s.icao24, missingPos == true )
 then
-    // filtering intent: tracks with missing position are excluded from pairing
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: missing position"));
 end
 
 rule "R010_FilterStalePositionFromPairing"
@@ -142,6 +142,7 @@ when
     $s : OpenSkyStateVector()
     TrackQuality( icao24 == $s.icao24, stalePos == true )
 then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: stale position"));
 end
 
 rule "R011_FilterBadVelocityFromPairing"
@@ -149,6 +150,7 @@ when
     $s : OpenSkyStateVector()
     TrackQuality( icao24 == $s.icao24, badVel == true )
 then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: bad velocity"));
 end
 
 rule "R012_FilterBadAltitudeFromPairing"
@@ -156,14 +158,16 @@ when
     $s : OpenSkyStateVector()
     TrackQuality( icao24 == $s.icao24, badAlt == true )
 then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: bad altitude"));
 end
 
-rule "R013_DataQualitySummaryEvent"
+rule "R013_FilterStaleContactFromPairing"
 when
-    $q : TrackQuality()
+    $s : OpenSkyStateVector()
+    TrackQuality( icao24 == $s.icao24, staleAny == true )
 then
-    System.out.println("[DRL] R013_DataQualitySummaryEvent -> " + $q.getIcao24() + " reason=" + $q.getReason());
-    insert(new AuditEvent("TRACK_QUALITY", $q.getIcao24(), clock.getCurrentTime() / 1000, $q.getReason()));
+    System.out.println("[DRL] R013_FilterStaleContactFromPairing -> " + $s.getIcao24());
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: stale contact"));
 end
 
 rule "R014_StalePosClearsOldAlerts"
@@ -190,11 +194,12 @@ then
     insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "category unknown"));
 end
 
-rule "R017_PositionSourceAudit"
+rule "R017_NonAdsbPositionSourceAudit"
 when
-    $s : OpenSkyStateVector()
+    $s : OpenSkyStateVector( positionSource != null && positionSource != 0 )
 then
-    // placeholder: position_source useful for tuning false-alert causes
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000,
+           "non-ADS-B position source=" + $s.getPositionSource()));
 end
 
 rule "R018_TooFastForAltitudeBandAudit"
