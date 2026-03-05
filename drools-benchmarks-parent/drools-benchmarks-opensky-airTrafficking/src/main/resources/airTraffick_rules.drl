@@ -50,7 +50,6 @@ salience 1000
 when
     not Params()
 then
-    System.out.println("[DRL] R000_LoadDefaultParams FIRED");
     Params p = new Params();
     p.setGridDeg(0.25);
     p.setStalePosSec(20L);
@@ -74,7 +73,6 @@ rule "R001_MissingPositionFlag"
 when
     $s : OpenSkyStateVector( lat == null || lon == null )
 then
-    System.out.println("[DRL] R001_MissingPositionFlag -> " + $s.getIcao24());
     insert(new TrackQuality($s.getIcao24(), false, false, true, false, false, "missing lat/lon"));
 end
 
@@ -166,7 +164,6 @@ when
     $s : OpenSkyStateVector()
     TrackQuality( icao24 == $s.icao24, staleAny == true )
 then
-    System.out.println("[DRL] R013_FilterStaleContactFromPairing -> " + $s.getIcao24());
     insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: stale contact"));
 end
 
@@ -190,7 +187,6 @@ rule "R016_CategoryUnknownAudit"
 when
     $s : OpenSkyStateVector( category == null || category == 0 )
 then
-    System.out.println("[DRL] R016_CategoryUnknownAudit -> " + $s.getIcao24());
     insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "category unknown"));
 end
 
@@ -388,7 +384,6 @@ when
 then
     int gx = (int)Math.floor($s.getLat() / $p.getGridDeg());
     int gy = (int)Math.floor($s.getLon() / $p.getGridDeg());
-    System.out.println("[DRL] R041_AssignGridCell -> " + $s.getIcao24() + " cell=" + gx + "_" + gy);
     insert(new GridCell(gx+"_"+gy, $s.getIcao24()));
 end
 
@@ -398,7 +393,6 @@ when
     $c2 : GridCell( cellId == $cell, $b:icao24, this != $c1 )
     eval($a.compareTo($b) < 0)
 then
-    System.out.println("[DRL] R042_PairWithinCell -> " + $a + "|" + $b + " cell=" + $cell);
     insert(new PairCandidate($a, $b, $cell));
 end
 
@@ -490,11 +484,11 @@ end
 
 rule "R055_HighAccelerationAudit"
 when
-    KinematicDelta( $id:icao24, dVel != null, dt > 0,
-                   Math.abs(dVel) / dt > 5 )
+    KinematicDelta( $id:icao24, $dVel:dVel != null, $dt:dtSec != null, dtSec > 0,
+                   Math.abs(dVel) / dtSec > 5 )
 then
     insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000,
-           "high linear acceleration " + String.format("%.1f", Math.abs(dVel)/dt) + " m/s2"));
+           "high linear acceleration " + String.format("%.1f", Math.abs($dVel)/$dt) + " m/s2"));
 end
 
 
@@ -523,14 +517,17 @@ then
 
     // Severity is always seeded as "INFO" here.
     // Classification to WARN / ALERT is fully delegated to R057-R062 via modify().
-    System.out.println("[DRL] R056_BuildConflictCandidate -> " + $a + "|" + $b + " dist=" + String.format("%.0f",d) + "m");
     insert(new ConflictCandidate($a,$b,d,vert,closing,ttc,"INFO"));
 end
 
 rule "R057_DowngradeIfVerticalSeparationLarge"
 when
     $p : Params()
-    $c : ConflictCandidate( vertSepM == vertSepM, vertSepM > ( ($p.vertMinFt*0.3048) * 2.0 ), severity != "INFO" )
+    // Only downgrade when the aircraft are NOT within the closeness thresholds of any upgrade rule
+    // (R058 fires at <1.5nm; R059/R060 fire at <3nm) — mutual exclusion prevents toggle loops.
+    $c : ConflictCandidate( distM >= metersFromNm(3.0),
+                            vertSepM == vertSepM, vertSepM > ( ($p.vertMinFt*0.3048) * 2.0 ),
+                            severity != "INFO" )
 then
     modify($c){ setSeverity("INFO"); }
 end
@@ -590,6 +587,7 @@ then
 end
 
 rule "R065_ConflictCandidateAudit_WARN"
+    no-loop true
 when
     $c : ConflictCandidate( severity == "WARN" )
 then
@@ -597,6 +595,7 @@ then
 end
 
 rule "R066_ConflictCandidateAudit_ALERT"
+    no-loop true
 when
     $c : ConflictCandidate( severity == "ALERT" )
 then
@@ -620,10 +619,65 @@ then
 end
 
 rule "R068_ClearOldConflictCandidates"
+    salience -100
 when
     $c : ConflictCandidate()
 then
     retract($c);
+end
+
+
+/* ============================================================
+   R068b: Compute CPA metrics from PairCandidates
+   (bridges PairCandidate → CpaMetrics → R069–R072 pipeline)
+   ============================================================ */
+
+rule "R068b_ComputeCpaMetrics"
+when
+    $pc : PairCandidate( $a:a, $b:b )
+    $sa : OpenSkyStateVector( icao24 == $a, lat != null, lon != null,
+                              velocityMps != null, trueTrackDeg != null,
+                              $alat:lat, $alon:lon, $avel:velocityMps, $atrk:trueTrackDeg )
+    $sb : OpenSkyStateVector( icao24 == $b, lat != null, lon != null,
+                              velocityMps != null, trueTrackDeg != null,
+                              $blat:lat, $blon:lon, $bvel:velocityMps, $btrk:trueTrackDeg )
+    not CpaMetrics( a == $a, b == $b )
+then
+    // ── Flat-earth relative position (East=x, North=y) in metres ──
+    double latMidRad = Math.toRadians(($alat + $blat) / 2.0);
+    double mPerLonDeg = Math.cos(latMidRad) * 111320.0;
+    double dx = ($blon - $alon) * mPerLonDeg;           // B east of A
+    double dy = ($blat - $alat) * 111320.0;             // B north of A
+
+    // ── Heading → velocity vector components (m/s) ──
+    double vax = $avel * Math.sin(Math.toRadians($atrk));  // A east vel
+    double vay = $avel * Math.cos(Math.toRadians($atrk));  // A north vel
+    double vbx = $bvel * Math.sin(Math.toRadians($btrk));  // B east vel
+    double vby = $bvel * Math.cos(Math.toRadians($btrk));  // B north vel
+
+    // ── Relative velocity of B w.r.t. A ──
+    double dvx = vbx - vax;
+    double dvy = vby - vay;
+
+    // ── Time to CPA (seconds); positive = future, negative = past ──
+    double tCpa = timeToCpaSec(dx, dy, dvx, dvy);
+    boolean closing = tCpa > 0 && tCpa < Double.POSITIVE_INFINITY;
+
+    // ── Distance at CPA ──
+    double dCpaM = Math.sqrt(Math.pow(dx + tCpa * dvx, 2) + Math.pow(dy + tCpa * dvy, 2));
+
+    // ── Vertical separation at CPA (null-safe) ──
+    Double vertAtCpa = null;
+    Double aa = ($sa.getGeoAltitudeM() != null ? $sa.getGeoAltitudeM() : $sa.getBaroAltitudeM());
+    Double ba = ($sb.getGeoAltitudeM() != null ? $sb.getGeoAltitudeM() : $sb.getBaroAltitudeM());
+    if (aa != null && ba != null) {
+        double dva = ($sa.getVerticalRateMps() != null ? $sa.getVerticalRateMps() : 0.0);
+        double dvb = ($sb.getVerticalRateMps() != null ? $sb.getVerticalRateMps() : 0.0);
+        vertAtCpa = Math.abs((aa + dva * tCpa) - (ba + dvb * tCpa));
+    }
+
+    insert(new CpaMetrics($a, $b, (double)(clock.getCurrentTime() / 1000),
+                          tCpa, dCpaM, vertAtCpa, closing));
 end
 
 
@@ -677,11 +731,11 @@ when
     $c : ConflictCandidate( $k:(a+"|"+b) )
     not PairRiskState( key == $k )
 then
-    System.out.println("[DRL] R073_InitPairRiskState -> " + $k);
     insert(new PairRiskState($k, (double)(clock.getCurrentTime() / 1000), 0, 0, 0));
 end
 
 rule "R074a_UpdateStreaks_ALERT"
+    no-loop true
 when
     $c : ConflictCandidate( $k:(a+"|"+b), severity == "ALERT" )
     $s : PairRiskState( key == $k )
@@ -695,6 +749,7 @@ then
 end
 
 rule "R074b_UpdateStreaks_WARN"
+    no-loop true
 when
     $c : ConflictCandidate( $k:(a+"|"+b), severity == "WARN" )
     $s : PairRiskState( key == $k )
@@ -708,6 +763,7 @@ then
 end
 
 rule "R074c_UpdateStreaks_INFO"
+    no-loop true
 when
     $c : ConflictCandidate( $k:(a+"|"+b), severity == "INFO" )
     $s : PairRiskState( key == $k )
@@ -726,7 +782,6 @@ when
     $s : PairRiskState( key == $k, alertStreak >= 2 )
     not Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
 then
-    System.out.println("[DRL] R075_RaiseAlertsOnlyAfterPersistence -> " + $a + "|" + $b);
     insert(new Alert($a,$b,"SAFETY_ALERT","ALERT",(double)(clock.getCurrentTime() / 1000),"CPA-based persistent ALERT"));
 end
 
@@ -753,6 +808,7 @@ then
 end
 
 rule "R078_InhibitMustBeKnown_Audit"
+    no-loop true
 when
     $i : AlertInhibit( enabled == true )
 then
@@ -765,6 +821,7 @@ end
    ============================================================ */
 
 rule "R079_MultiConflictHotspotEscalation"
+    no-loop true
 when
     $c1 : ConflictCandidate( severity == "ALERT", $x:a )
     $c2 : ConflictCandidate( severity == "ALERT", a == $x, this != $c1 )
@@ -774,6 +831,7 @@ then
 end
 
 rule "R080_RecordCPAForAnalysis"
+    no-loop true
 when
     $m : CpaMetrics()
 then
@@ -791,7 +849,6 @@ when
     $c : ConflictCandidate( severity == "WARN", $a:a, $b:b )
     not Alert( a == $a, b == $b, type == "TRAFFIC_ADVISORY" )
 then
-    System.out.println("[DRL] R081_RaiseTrafficAdvisoryOnWARN -> " + $a + "|" + $b);
     insert(new Alert($a,$b,"TRAFFIC_ADVISORY","WARN",(double)(clock.getCurrentTime() / 1000),"WARN conflict candidate"));
 end
 
@@ -800,7 +857,6 @@ when
     $c : ConflictCandidate( severity == "ALERT", $a:a, $b:b )
     not Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
 then
-    System.out.println("[DRL] R082_RaiseSafetyAlertOnALERT -> " + $a + "|" + $b);
     insert(new Alert($a,$b,"SAFETY_ALERT","ALERT",(double)(clock.getCurrentTime() / 1000),"ALERT conflict candidate"));
 end
 
@@ -849,6 +905,7 @@ then
 end
 
 rule "R088_InhibitionMustBeKnown_Audit"
+    no-loop true
 when
     $i : AlertInhibit( enabled == true )
 then
@@ -856,6 +913,7 @@ then
 end
 
 rule "R089_StatusWhenNotAvailable"
+    no-loop true
 when
     Status( stcaAvailable == false )
 then
@@ -865,6 +923,7 @@ end
 rule "R090_SafetyAlertPriorityAudit"
 when
     $al : Alert( type == "SAFETY_ALERT" )
+    not AuditEvent( kind == "PRIORITY", key == ($al.getA()+"|"+$al.getB()) )
 then
     insert(new AuditEvent("PRIORITY", $al.getA()+"|"+$al.getB(), clock.getCurrentTime() / 1000, "safety alert priority concept"));
 end
@@ -872,6 +931,7 @@ end
 rule "R091_TrafficAdvisoryAudit"
 when
     $al : Alert( type == "TRAFFIC_ADVISORY" )
+    not AuditEvent( kind == "ADVISORY", key == ($al.getA()+"|"+$al.getB()) )
 then
     insert(new AuditEvent("ADVISORY", $al.getA()+"|"+$al.getB(), clock.getCurrentTime() / 1000, "traffic advisory issued"));
 end
@@ -914,6 +974,7 @@ end
    ============================================================ */
 
 rule "R096_RecordEverySafetyAlert"
+    no-loop true
 when
     $al : Alert( type == "SAFETY_ALERT" )
 then
@@ -921,6 +982,7 @@ then
 end
 
 rule "R097_RecordEveryTrafficAdvisory"
+    no-loop true
 when
     $al : Alert( type == "TRAFFIC_ADVISORY" )
 then
@@ -943,5 +1005,5 @@ end
 rule "R100_EndOfCycleMarker"
 when
 then
-    System.out.println("[DRL] R100_EndOfCycleMarker FIRED");
+    // no-op: cycle marker placeholder
 end

@@ -14,93 +14,88 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmark for replaying OpenSky state vectors through Drools rules.
+ * JMH CEP-stream benchmark for the OpenSky air-traffic Drools rules.
  *
- * <p>Each benchmark operation replays one snapshot (one 5-second cadence)
- * through the rule engine and measures throughput/latency.</p>
+ * <p>Pattern follows {@code AbstractCEPBenchmark} from the drools-benchmarks module:
+ * a <strong>fresh KieSession</strong> is created for every JMH measurement iteration,
+ * and the {@code @Benchmark} method processes a fixed-size sliding window of events
+ * (default: {@value #WINDOW_SIZE}) per operation. The pseudo-clock is advanced per
+ * event so that {@code @Expires} annotations correctly expire stale derived facts.</p>
+ *
+ * <p>Throughput is reported in windows/second; average time is reported in ms/window.</p>
  */
 @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
 @OutputTimeUnit(TimeUnit.SECONDS)
-@State(Scope.Benchmark)
+@State(Scope.Thread)
 @Fork(1)
 @Warmup(iterations = 3, time = 5)
 @Measurement(iterations = 5, time = 10)
 public class OpenSkyReplayDroolsBenchmark {
 
-    // ---- @Param fields ----
+    /** Number of events ingested per benchmark operation (one sliding window). */
+    private static final int WINDOW_SIZE = 200;
 
     @Param({"data/opensky_flat_20260217_160412.jsonl"})
     private String dataset;
 
-    @Param({"GROUP_BY_SNAPSHOT"})
-    private String mode;
+    // ---- loaded once at trial setup ----
+    private List<OpenSkyStateVector> events;
 
-    @Param({"PSEUDO"})
-    private String clock;
-
-    @Param({"UPSERT_BY_ICAO24"})
-    private String updateStrategy;
-
-    @Param({"RETRACT_PREVIOUS_SNAPSHOT"})
-    private String cleanupStrategy;
-
-    @Param({"FIRE_ALL_PER_SNAPSHOT"})
-    private String fireStrategy;
-
-    @Param({"0"})
-    private int batchSize;
-
-    // ---- runtime state ----
-
-    private List<List<OpenSkyStateVector>> snapshots;
+    // ---- fresh per iteration (like AbstractCEPBenchmark) ----
     private OpenSkyReplayEngine engine;
-    private int snapshotIndex;
+    private int eventIndex;
 
+    // -------------------------------------------------------------------------
+    // JMH lifecycle
+    // -------------------------------------------------------------------------
+
+    /** Load event list once for the entire trial. */
     @Setup(Level.Trial)
-    public void setup() throws IOException {
-        // Load data
+    public void loadData() throws IOException {
         OpenSkyJsonlLoader loader = new OpenSkyJsonlLoader();
-        OpenSkyJsonlLoader.Mode loaderMode = OpenSkyJsonlLoader.Mode.valueOf(mode);
-        snapshots = loader.load(dataset, loaderMode);
-        System.out.println("[Setup] Loaded " + snapshots.size() + " snapshots");
+        events = loader.loadFlat(dataset);
+        System.out.println("[Setup] Loaded " + events.size() + " events");
+    }
 
-        // Create engine
+    /**
+     * Create a fresh KieSession for each measurement iteration.
+     * This matches the pattern used by the reference CEP benchmarks and prevents
+     * unbounded accumulation of derived facts (PairRiskState, etc.) across iterations.
+     */
+    @Setup(Level.Iteration)
+    public void setupIteration() {
         engine = new OpenSkyReplayEngine();
-        engine.setUpdateStrategy(OpenSkyReplayEngine.UpdateStrategy.valueOf(updateStrategy));
-        engine.setCleanupStrategy(OpenSkyReplayEngine.CleanupStrategy.valueOf(cleanupStrategy));
-        engine.setFireStrategy(OpenSkyReplayEngine.FireStrategy.valueOf(fireStrategy));
         engine.init();
-        System.out.println("[Setup] Engine initialized");
-
-        snapshotIndex = 0;
+        eventIndex = 0;
     }
 
+    @TearDown(Level.Iteration)
+    public void tearDownIteration() {
+        if (engine != null) engine.dispose();
+    }
+
+    /**
+     * Ingest one window of {@value #WINDOW_SIZE} events.
+     * Wraps back to the start of the event list (without engine reset) when exhausted,
+     * so the benchmark can run for the full measurement duration.
+     *
+     * @return total rule activations fired across the window
+     */
     @Benchmark
-    public int replayOneSnapshot() {
-        if (snapshotIndex >= snapshots.size()) {
-            // Wrap around for continuous measurement
-            snapshotIndex = 0;
-            // Re-initialize engine for clean state
-            engine.dispose();
-            engine = new OpenSkyReplayEngine();
-            engine.setUpdateStrategy(OpenSkyReplayEngine.UpdateStrategy.valueOf(updateStrategy));
-            engine.setCleanupStrategy(OpenSkyReplayEngine.CleanupStrategy.valueOf(cleanupStrategy));
-            engine.setFireStrategy(OpenSkyReplayEngine.FireStrategy.valueOf(fireStrategy));
-            engine.init();
+    public int ingestWindow() {
+        int total = 0;
+        for (int i = 0; i < WINDOW_SIZE; i++) {
+            if (eventIndex >= events.size()) {
+                eventIndex = 0;  // wrap — session stays alive, clock keeps advancing
+            }
+            total += engine.ingestEvent(events.get(eventIndex++));
         }
-
-        List<OpenSkyStateVector> snapshot = snapshots.get(snapshotIndex++);
-        return engine.replaySnapshot(snapshot);
+        return total;
     }
 
-    @TearDown(Level.Trial)
-    public void tearDown() {
-        if (engine != null) {
-            engine.dispose();
-        }
-    }
-
-    // ---- Main: run from uber-jar ----
+    // -------------------------------------------------------------------------
+    // Main — run from uber-jar
+    // -------------------------------------------------------------------------
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()

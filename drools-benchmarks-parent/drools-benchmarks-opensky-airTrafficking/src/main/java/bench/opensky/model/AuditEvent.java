@@ -7,7 +7,7 @@ import org.kie.api.definition.type.Expires;
  * Audit trail entry.
  */
 @Role(Role.Type.EVENT)
-@Expires("30s")
+@Expires("5s")
 public class AuditEvent {
 
     private String kind;

@@ -17,53 +17,35 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Manages a KieSession with pseudo clock and replays OpenSky snapshots.
+ * CEP stream engine: ingests one {@link OpenSkyStateVector} at a time,
+ * advances the pseudo-clock to the event's timestamp, and fires all rules.
+ *
+ * <p>Fact lifecycle is handled entirely by {@code @Expires} annotations on
+ * the model POJOs — no manual retraction is needed.</p>
  */
 public class OpenSkyReplayEngine {
 
     private static final Logger LOG = LoggerFactory.getLogger(OpenSkyReplayEngine.class);
 
-    public enum UpdateStrategy {
-        /** Upsert by icao24 — retract old fact for same icao24 before insert. */
-        UPSERT_BY_ICAO24,
-        /** Insert only — no retraction of previous state vectors. */
-        INSERT_ONLY
-    }
-
-    public enum CleanupStrategy {
-        /** No cleanup between snapshots. */
-        NONE,
-        /** Retract all state vectors from the previous snapshot before inserting new ones. */
-        RETRACT_PREVIOUS_SNAPSHOT
-    }
-
-    public enum FireStrategy {
-        /** Fire all rules after each snapshot. */
-        FIRE_ALL_PER_SNAPSHOT
-    }
-
     private KieBase kieBase;
     private KieSession session;
     private SessionPseudoClock pseudoClock;
 
-    private final Map<String, FactHandle> handlesByIcao24 = new HashMap<>();
-    private final List<FactHandle> previousSnapshotHandles = new ArrayList<>();
+    /** Timestamp (ms) of the last event ingested; used to advance the clock monotonically. */
+    private long lastEventTimeMs = -1L;
 
-    private long lastSnapshotTimeSec = -1;
+    public OpenSkyReplayEngine() { }
 
-    private UpdateStrategy updateStrategy = UpdateStrategy.UPSERT_BY_ICAO24;
-    private CleanupStrategy cleanupStrategy = CleanupStrategy.RETRACT_PREVIOUS_SNAPSHOT;
-    private FireStrategy fireStrategy = FireStrategy.FIRE_ALL_PER_SNAPSHOT;
-
-    public OpenSkyReplayEngine() {
-    }
+    // -------------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------------
 
     /**
-     * Initialize the engine: build KieBase from classpath DRL and create KieSession.
+     * Build the KieBase from the classpath DRL and create a pseudo-clock KieSession.
+     * Inserts a singleton {@link Params} fact so rules that depend on it are ready.
      */
     public void init() {
         LOG.info("Building KieBase from DRL...");
@@ -91,12 +73,12 @@ public class OpenSkyReplayEngine {
         KieModule km = kb.getKieModule();
         KieContainer kc = ks.newKieContainer(km.getReleaseId());
 
-        // Configure KieBase for STREAM mode (required for @expires to work)
+        // STREAM mode — required for @Expires / temporal reasoning
         org.kie.api.KieBaseConfiguration kbConfig = ks.newKieBaseConfiguration();
         kbConfig.setOption(EventProcessingOption.STREAM);
         kieBase = kc.newKieBase(kbConfig);
 
-        // Create session with pseudo clock
+        // Pseudo clock — we drive time ourselves
         KieSessionConfiguration config = ks.newKieSessionConfiguration();
         config.setOption(ClockTypeOption.PSEUDO);
         session = kieBase.newKieSession(config, null);
@@ -108,76 +90,56 @@ public class OpenSkyReplayEngine {
     }
 
     /**
-     * Replay a single snapshot (list of state vectors for one snapshot_time).
+     * Ingest a single state-vector event into the CEP engine.
+     *
+     * <ol>
+     *   <li>Advance the pseudo-clock to {@code sv.getSnapshotTime()} (seconds → ms),
+     *       which triggers expiration of stale derived facts.</li>
+     *   <li>Insert the event — {@code @Expires("10s")} on {@link OpenSkyStateVector}
+     *       ensures it auto-expires without any manual retraction.</li>
+     *   <li>Fire all rules and return the activation count.</li>
+     * </ol>
+     *
+     * @param sv the state vector to ingest
+     * @return number of rule activations fired
      */
-    public int replaySnapshot(List<OpenSkyStateVector> snapshot) {
-        if (snapshot.isEmpty()) return 0;
-
-        long snapshotTimeSec = snapshot.get(0).getSnapshotTime();
-
-        // Advance pseudo clock
-        if (snapshotTimeSec > lastSnapshotTimeSec) {
+    public int ingestEvent(OpenSkyStateVector sv) {
+        // Advance clock monotonically
+        long targetMs = sv.getSnapshotTime() * 1000L;
+        if (targetMs > lastEventTimeMs) {
             long nowMs = pseudoClock.getCurrentTime();
-            long targetMs = snapshotTimeSec * 1000L;
             if (targetMs > nowMs) {
                 pseudoClock.advanceTime(targetMs - nowMs, TimeUnit.MILLISECONDS);
             }
-            lastSnapshotTimeSec = snapshotTimeSec;
+            lastEventTimeMs = targetMs;
         }
 
-        // Cleanup
-        if (cleanupStrategy == CleanupStrategy.RETRACT_PREVIOUS_SNAPSHOT) {
-            for (FactHandle fh : previousSnapshotHandles) {
-                try { session.delete(fh); } catch (Exception ignore) { }
-            }
-            previousSnapshotHandles.clear();
-        }
+        // Insert — lifecycle managed by @Expires
+        session.insert(sv);
 
-        // Insert new state vectors
-        for (OpenSkyStateVector sv : snapshot) {
-            if (updateStrategy == UpdateStrategy.UPSERT_BY_ICAO24) {
-                FactHandle old = handlesByIcao24.get(sv.getIcao24());
-                if (old != null) {
-                    try { session.delete(old); } catch (Exception ignore) { }
-                }
-                FactHandle fh = session.insert(sv);
-                handlesByIcao24.put(sv.getIcao24(), fh);
-                previousSnapshotHandles.add(fh);
-            } else {
-                FactHandle fh = session.insert(sv);
-                previousSnapshotHandles.add(fh);
-            }
-        }
-
-        // Fire rules
-        int fired = 0;
-        if (fireStrategy == FireStrategy.FIRE_ALL_PER_SNAPSHOT) {
-            fired = session.fireAllRules();
-        }
-
-        return fired;
+        // Fire — capped to prevent runaway activations on dense timestamps
+        return session.fireAllRules(5000);
     }
 
-    /**
-     * Dispose the KieSession.
-     */
+    /** Dispose the KieSession, releasing all resources. */
     public void dispose() {
         if (session != null) {
             session.dispose();
             session = null;
         }
+        lastEventTimeMs = -1L;
     }
 
-    // ---- config ----
+    // -------------------------------------------------------------------------
+    // Accessors (used by tests / profiling)
+    // -------------------------------------------------------------------------
 
-    public void setUpdateStrategy(UpdateStrategy updateStrategy) { this.updateStrategy = updateStrategy; }
-    public void setCleanupStrategy(CleanupStrategy cleanupStrategy) { this.cleanupStrategy = cleanupStrategy; }
-    public void setFireStrategy(FireStrategy fireStrategy) { this.fireStrategy = fireStrategy; }
-
-    public KieSession getSession() { return session; }
+    public KieSession getSession()          { return session; }
     public SessionPseudoClock getPseudoClock() { return pseudoClock; }
 
-    // ---- internal ----
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
 
     private String loadDrl(String resourceName) {
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourceName)) {

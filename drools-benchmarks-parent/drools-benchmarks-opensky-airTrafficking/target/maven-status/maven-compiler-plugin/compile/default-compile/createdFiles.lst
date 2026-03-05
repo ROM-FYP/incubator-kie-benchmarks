@@ -1,9 +1,7 @@
+bench\opensky\benchmark\jmh_generated\OpenSkyReplayDroolsBenchmark_ingestWindow_jmhTest.class
 bench\opensky\model\PairRiskState.class
 bench\opensky\model\TrackQuality.class
-bench\opensky\benchmark\jmh_generated\OpenSkyReplayDroolsBenchmark_replayOneSnapshot_jmhTest.class
-bench\opensky\replay\OpenSkyReplayEngine$FireStrategy.class
 bench\opensky\model\CpaMetrics.class
-bench\opensky\replay\OpenSkyReplayEngine$CleanupStrategy.class
 bench\opensky\model\OpenSkyFlatRecord$BBox.class
 bench\opensky\benchmark\jmh_generated\OpenSkyReplayDroolsBenchmark_jmhType_B2.class
 bench\opensky\replay\OpenSkyJsonlLoader.class
@@ -11,7 +9,6 @@ bench\opensky\model\OpenSkyFlatRecord.class
 bench\opensky\util\RuleMathUtil.class
 bench\opensky\model\GridCell.class
 META-INF\CompilerHints
-bench\opensky\replay\OpenSkyReplayEngine$UpdateStrategy.class
 bench\opensky\benchmark\OpenSkyReplayDroolsBenchmark.class
 bench\opensky\model\ConflictCandidate.class
 bench\opensky\benchmark\jmh_generated\OpenSkyReplayDroolsBenchmark_jmhType_B3.class

@@ -133,15 +133,15 @@ Inserted by R042. Progressively filtered by R043–R051. Surviving instances rea
 ---
 
 ### `AlertInhibit`
-**Role:** Operator-configured suppression entry.
+**Role:** Operator-configured suppression entry. Inserted externally (by operator tooling or test harness); never created by a DRL rule.
 
-Prevents conflict alerts from being raised for specific aircraft, pairs, or airspace zones. Matched by R044–R047.
+Prevents conflict detection and alerting for specific aircraft, pairs, or airspace zones.
 
 | Field | Meaning |
 |-------|---------|
-| `kind` | `"AIRSPACE"`, `"FLIGHT"`, or `"FLIGHTPAIR"` |
-| `key` | Cell ID, icao24, or `"a\|b"` pair key |
-| `enabled` | Whether the inhibit is active |
+| `kind` | `"AIRSPACE"` — suppress an entire grid cell; `"FLIGHT"` — suppress one aircraft by icao24; `"FLIGHTPAIR"` — suppress one specific pair |
+| `key` | Grid cell ID, icao24, or `"a\|b"` pair key (always the lexicographically ordered pair) |
+| `enabled` | `true` = active suppression; `false` = configured but paused |
 
 ---
 
@@ -162,7 +162,63 @@ One instance per pair. Stores how long the pair has been in conflict. Used by ru
 ### `Alert`
 **Role:** A confirmed, persistent conflict alert raised to the operator.
 
-Produced by R082+ after `PairRiskState` confirms persistence. Carries severity, timestamps, and acknowledgement state.
+Produced by R081/R082 (and persistence-gated by R075). Carries severity, timestamps, and acknowledgement state.
+
+---
+
+## 1b. Alert Inhibition — Concept
+
+**Alert Inhibition** is the mechanism by which operators can suppress conflict alerts for known situations that do not represent actual safety risks. An `AlertInhibit` fact is inserted into the session externally and matched by multiple rules.
+
+### Three Inhibit Kinds
+
+| Kind | Scope | Example use case |
+|------|-------|-----------------|
+| `AIRSPACE` | Entire grid cell | Military exercise area, restricted airspace, aerobatic display zone |
+| `FLIGHT` | Single aircraft (icao24) | Known test transponder, persistently bad data source, VFR training aircraft |
+| `FLIGHTPAIR` | Specific pair `"a\|b"` | Formation flying, air-to-air refuelling, escort missions where close proximity is intentional |
+
+### Two-Layer Architecture
+
+Inhibition is enforced at **two independent points** in the pipeline:
+
+```
+OpenSkyStateVector
+       │
+       ▼ R041/R042
+   GridCell → PairCandidate
+       │
+   ┌───┴────────────────────────────────────────┐
+   │  LAYER 1 — Early inhibit (R044–R047)       │
+   │  Retract PairCandidate before geometry     │
+   │  computation. Saves CPU on R056/R068b.     │
+   └───┬────────────────────────────────────────┘
+       │
+       ▼ R056, R068b
+   ConflictCandidate → severity upgrade → Alert
+                                            │
+   ┌────────────────────────────────────────┴───┐
+   │  LAYER 2 — Late inhibit (R086–R087)        │
+   │  Retract Alert after it has been raised.   │
+   │  Handles dynamically added inhibits.       │
+   └────────────────────────────────────────────┘
+```
+
+**Why two layers?**
+- **Layer 1** (early) is efficient: it stops pairs from ever reaching geometry computation. If the inhibit is known upfront, no processing is wasted.
+- **Layer 2** (late) is necessary because inhibits can be **inserted at any time during session execution** — including after an `Alert` fact has already been created. Without Layer 2, a just-inserted inhibit would only take effect for *future* snapshot cycles; existing alerts would linger indefinitely.
+
+### Related Rules
+
+| Rules | Layer | Kind handled |
+|-------|-------|-------------|
+| R044 | Early | `AIRSPACE` |
+| R045, R046 | Early | `FLIGHT` (one rule per aircraft in the pair) |
+| R047 | Early | `FLIGHTPAIR` |
+| R077 | Late | `FLIGHTPAIR` — specifically for `SAFETY_ALERT` type |
+| R086 | Late | `FLIGHT` — for any `Alert` type |
+| R087 | Late | `FLIGHTPAIR` — for any `Alert` type |
+| R078, R088 | Audit | Log all active inhibits to `AuditEvent("INHIBIT_SET", ...)` |
 
 ---
 
@@ -767,9 +823,35 @@ The 60-second window (wider than kinematics rules) accounts for the time a pilot
 ### R068 — `R068_ClearOldConflictCandidates`
 **Group:** Conflict Cleanup
 
-**What it does:** Retracts every `ConflictCandidate` unconditionally.
+**What it does:** Retracts every `ConflictCandidate` unconditionally. Has `salience -100` so it fires **after** all default-salience rules.
 
 **Why it exists:** `ConflictCandidate` facts are transient — they represent the conflict state for *this snapshot cycle*. After R065/R066 have audited them and R075/R081/R082 have raised any necessary `Alert` facts, the candidates should not linger across cycles. This ensures the working memory stays bounded.
+
+**Salience note:** The `salience -100` guarantees that R081/R082 (which read `ConflictCandidate` to raise `Alert` facts) always fire before R068 cleans them up. Without this ordering guarantee the cleanup could race against alerting.
+
+---
+
+### R068b — `R068b_ComputeCpaMetrics` *(added to bridge orphaned CPA pipeline)*
+**Group:** CPA Computation | **Inputs:** `PairCandidate`, two `OpenSkyStateVector`
+
+**What it does:** For each surviving `PairCandidate(a, b)` that has not yet produced a `CpaMetrics` fact, performs full **vector-based Closest Point of Approach geometry** and inserts a `CpaMetrics` fact:
+
+1. **Flat-earth relative position** — converts `(lat, lon)` of both aircraft to a local Cartesian frame (East=x, North=y) in metres, corrected for latitude using `cos(latMid)`
+2. **Velocity decomposition** — converts each aircraft's `(velocityMps, trueTrackDeg)` into East/North velocity components `(vx, vy)` using `sin(heading)` / `cos(heading)`
+3. **Relative velocity** — `dvx = vbx − vax`, `dvy = vby − vay`
+4. **Time to CPA** — calls `timeToCpaSec(dx, dy, dvx, dvy)` from `RuleMathUtil`: computes `t = −(r·dv)/(dv·dv)`. Positive means CPA is in the future; negative means they have already passed their closest approach
+5. **Distance at CPA** — `dCpaM = ||(dx + t·dvx, dy + t·dvy)||`
+6. **Vertical separation at CPA** — projects both altitudes forward using their `verticalRateMps`: `vertAtCpa = |(altA + rateA·t) − (altB + rateB·t)|`
+
+Inserts `CpaMetrics(a, b, computedAt, tCpa, dCpaM, vertAtCpa, closing)` where `closing = (tCpa > 0)`.
+
+**The `not CpaMetrics(a==$a, b==$b)` guard:** Prevents duplicate insertions when the same aircraft pair was discovered via multiple grid cells (possible for aircraft near a cell boundary).
+
+**Why this rule was needed:** The `CpaMetrics` class and rules R069–R072 were written but `CpaMetrics` was **never inserted anywhere** — neither in Java nor in any existing DRL rule. R068b closes this gap entirely inside the DRL without touching any Java code.
+
+**Why in the DRL rather than Java:** Keeping the computation in a Drools rule means it participates in the Rete network naturally. When a `PairCandidate` is inserted, R068b activates automatically. No external orchestration or pre-processing step is required.
+
+**Accuracy vs R056:** R056 approximates TTC as `d / |vel_A − vel_B|` (scalar speed difference, ignoring headings). R068b uses the full dot-product formula which accounts for the actual directions both aircraft are heading. This is critical when two aircraft are nearly parallel — their scalar speeds may be similar (small `|vel_A − vel_B|`) giving an absurdly large TTC in R056, while the true CPA geometry shows they are slowly converging at an angle.
 
 ---
 
@@ -880,18 +962,37 @@ The 60-second window (wider than kinematics rules) accounts for the time a pilot
 ### R081 — `R081_RaiseTrafficAdvisoryOnWARN`
 **Group:** Alert Lifecycle
 
-**What it does:** Inserts `Alert(type="TRAFFIC_ADVISORY", severity="WARN")` when a WARN `ConflictCandidate` exists and no TRAFFIC_ADVISORY already exists for that pair.
+**What it does:** Inserts `Alert(type="TRAFFIC_ADVISORY", severity="WARN")` when a WARN `ConflictCandidate` exists and no `TRAFFIC_ADVISORY` already exists for that pair.
 
-**Why it exists:** TRAFFIC_ADVISORY is the lighter-weight alert — informing the controller that the situation requires monitoring but is not yet an emergency. The `not Alert(...)` guard is idempotent: the advisory is raised once and persists until explicitly cleared.
+**Why it exists:** `TRAFFIC_ADVISORY` is the lighter-weight alert tier — informing the controller that the situation requires monitoring but is not yet an emergency. The `not Alert(a==$a, b==$b, type=="TRAFFIC_ADVISORY")` guard makes this rule **idempotent**: it fires at most once per pair. The advisory is created once, persists in working memory, and is only retracted by R093 (superseded by a SAFETY_ALERT), R094 (aged out at 120 s), or R086/R087 (inhibited).
 
 ---
 
 ### R082 — `R082_RaiseSafetyAlertOnALERT`
 **Group:** Alert Lifecycle
 
-**What it does:** Inserts `Alert(type="SAFETY_ALERT", severity="ALERT")` when an ALERT `ConflictCandidate` exists and no SAFETY_ALERT already exists for that pair.
+**What it does:** Inserts `Alert(type="SAFETY_ALERT", severity="ALERT")` when an ALERT-severity `ConflictCandidate` exists and no `SAFETY_ALERT` already exists for that pair.
 
-**Why it exists:** This is the primary safety alerting rule — the one that puts an actionable conflict on the controller's screen. Like R081, the `not Alert(...)` guard prevents duplicate alerts per pair.
+**Why it exists:** This is the **primary safety alerting rule** — the one that puts an actionable, highest-priority conflict on the controller's display.
+
+**The `not Alert(...)` idempotency guard:** Without this guard, R082 would re-fire every `fireAllRules()` cycle as long as the ALERT `ConflictCandidate` exists, inserting a new duplicate `SAFETY_ALERT` each time. The `not Alert(a==$a, b==$b, type=="SAFETY_ALERT")` pattern ensures the alert is created **exactly once** per pair, regardless of how many snapshot cycles the conflict persists.
+
+**Difference from R075:** R075 also raises a `SAFETY_ALERT` but only after `alertStreak >= 2` (two consecutive ALERT snapshots). R082 raises it immediately on the **first** ALERT snapshot. These two rules coexist deliberately:
+- **R082** provides an immediate, unfiltered alert for the most severe geometries — zero latency
+- **R075** provides a persistence-filtered alert that suppresses one-shot data noise
+
+In a production system you would likely use only one of these paths (and remove the other), but for the benchmark both are present to exercise the full alert lifecycle machinery.
+
+**Alert lifecycle summary:**
+```
+ConflictCandidate(ALERT) → R082 inserts SAFETY_ALERT
+    │
+    ├─ R084: if AlertAck exists → severity = "ACK"
+    ├─ R085: if ACK + 30s passed → retract Alert
+    ├─ R086: if flightInhibit exists → retract Alert  
+    ├─ R087: if pairInhibit exists → retract Alert
+    └─ R093: superseded by SAFETY_ALERT → retract TRAFFIC_ADVISORY
+```
 
 ---
 
@@ -925,9 +1026,27 @@ The 60-second window (wider than kinematics rules) accounts for the time a pilot
 ### R086 — `R086_InhibitAlertsByFlight`
 **Group:** Alert Inhibition
 
-**What it does:** Retracts any `Alert` where either aircraft `a` or `b` has an individual `AlertInhibit(kind="FLIGHT")`.
+**What it does:** Retracts any `Alert` where either aircraft `a` or `b` has a matching `AlertInhibit(kind="FLIGHT", key=icao24, enabled=true)`.
 
-**Why it exists:** Individual flight inhibition at the alert level — the equivalent of R045/R046 (which filtered `PairCandidate` earlier in the pipeline) but applied here to already-raised `Alert` facts. Necessary because inhibits can be added dynamically while alerts are already active.
+**Why it exists — the two-layer inhibition design:**
+
+Inhibition is applied at **two points** in the pipeline intentionally:
+
+| Layer | Rules | Acts on | Purpose |
+|---|---|---|---|
+| **Early (pair level)** | R044–R047 | `PairCandidate` | Prevents expensive geometry computation for known-suppressed pairs |
+| **Late (alert level)** | R086–R087 | `Alert` | Catches suppression applied *after* an alert already exists |
+
+R086 exists because **inhibits are dynamic** — an operator can insert an `AlertInhibit` at any time, including *after* an alert has already been raised for that aircraft. If inhibition were only enforced at the `PairCandidate` stage (R045/R046), any alert already in working memory would remain active even after the inhibit was inserted. R086 closes this gap by retractng live `Alert` facts retroactively.
+
+**Concrete scenario:** Formation display aircraft are flying deliberately close. At T=0 no inhibit exists → a `SAFETY_ALERT` is raised (geometry is genuinely within STCA minima). At T=30s the operator inserts `AlertInhibit(kind="FLIGHT", key="formationLead")`. R086 immediately matches and retracts the active alert.
+
+**Why `a` OR `b`:** An `AlertInhibit` is keyed to a single icao24. Either aircraft in the pair may be the inhibited one. Since Drools cannot efficiently OR-match against two different bound variables in a single constraint, this uses an `or` block in the `when` clause:
+```drool
+( AlertInhibit( kind == "FLIGHT", key == $a, enabled == true )
+  or
+  AlertInhibit( kind == "FLIGHT", key == $b, enabled == true ) )
+```
 
 ---
 
