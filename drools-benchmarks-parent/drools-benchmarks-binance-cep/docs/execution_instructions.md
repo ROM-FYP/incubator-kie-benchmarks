@@ -134,6 +134,81 @@ java -jar target/drools-benchmarks-binance-cep.jar BinanceRiskControlBenchmark -
 java -jar target/drools-benchmarks-binance-cep.jar BinanceRiskControlBenchmark -p symbol=BTCUSDT,ETHUSDT,SOLUSDT
 ```
 
+### Trace Logging (Process Mining)
+
+The benchmark includes an optional **MiningTraceLogger** that records every rule firing to a CSV file for process mining analysis (e.g., with ProM, Disco, or PM4Py).
+
+**CSV format:** `CaseID,SequenceNr,Activity,Timestamp`
+- **CaseID** — Each benchmark invocation gets a unique CaseID (auto-incremented)
+- **SequenceNr** — Order of rule firings within a single invocation
+- **Activity** — The name of the Drools rule that fired
+- **Timestamp** — Wall-clock epoch millis at fire time
+
+By default, trace logging is **disabled** (zero performance overhead). Enable it with `-p enableTraceLog=true`.
+
+#### How to Enable
+
+> [!IMPORTANT]
+> You must **rebuild the uber JAR** after any code changes before running with the flag:
+> ```bash
+> cd drools-benchmarks-parent/drools-benchmarks-binance-cep
+> mvn clean package
+> ```
+
+**Per-symbol benchmark with trace logging:**
+```bash
+java -jar target/drools-benchmarks-binance-cep.jar BinanceRiskControlBenchmark \
+  -p symbol=BTCUSDT -p enableTraceLog=true
+```
+
+**Full dataset benchmark with trace logging:**
+```bash
+java -jar target/drools-benchmarks-binance-cep.jar BinanceFullDatasetBenchmark \
+  -p enableTraceLog=true
+```
+
+**Without trace logging (default):**
+```bash
+java -jar target/drools-benchmarks-binance-cep.jar BinanceRiskControlBenchmark
+# or explicitly:
+java -jar target/drools-benchmarks-binance-cep.jar BinanceRiskControlBenchmark \
+  -p enableTraceLog=false
+```
+
+#### Output Files
+
+Files are created in the working directory:
+- `binance-risk-<SYMBOL>-<timestamp>.csv` — for per-symbol benchmark
+- `binance-full-<timestamp>.csv` — for full dataset benchmark
+
+One CSV file is generated per **trial** (contains all invocations within that trial, separated by CaseID).
+
+#### Logger Lifecycle (JMH Integration)
+
+| JMH Phase | Logger Action |
+|-----------|---------------|
+| `@Setup(Level.Trial)` | Logger created, CSV file opened, header written |
+| `@Setup(Level.Invocation)` | Logger registered on the new `KieSession` via `addEventListener()` |
+| `@Benchmark` | `startNewTransaction()` called → increments CaseID, resets sequence counter |
+| `@TearDown(Level.Trial)` | Logger flushed and closed |
+
+#### Analyzing the CSV
+
+Quick inspection:
+```bash
+# View first 10 entries
+head -10 binance-risk-BTCUSDT-*.csv
+
+# Count total rule firings
+wc -l binance-risk-BTCUSDT-*.csv
+
+# See which rules fire most frequently
+tail -n +2 binance-risk-BTCUSDT-*.csv | cut -d',' -f3 | sort | uniq -c | sort -rn | head -20
+```
+
+> [!TIP]
+> Trace logging adds I/O overhead. For accurate throughput benchmarks, run **without** logging. Enable logging only when you need the rule-firing trace for analysis.
+
 ---
 
 ## Benchmark Variants

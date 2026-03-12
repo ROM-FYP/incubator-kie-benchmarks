@@ -24,6 +24,7 @@ import org.kie.benchmark.binance.model.*;
 import org.kie.benchmark.binance.provider.BinanceEventProvider;
 import org.kie.benchmark.binance.provider.BinanceRulesProvider;
 import org.kie.benchmark.binance.util.EventReplayController;
+import org.kie.benchmark.binance.util.MiningTraceLogger;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.List;
@@ -50,11 +51,15 @@ public class BinanceRiskControlBenchmark {
             "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "ARBUSDT" })
     private String symbol;
 
+    @Param({ "false" })
+    private boolean enableTraceLog;
+
     private BinanceRulesProvider rulesProvider;
     private BinanceEventProvider eventProvider;
     private List<MarketEvent> events;
     private KieSession kieSession;
     private EventReplayController replayController;
+    private MiningTraceLogger traceLogger;
 
     // Per-invocation metrics
     private long invocationStartTime;
@@ -84,10 +89,16 @@ public class BinanceRiskControlBenchmark {
         totalTimeElapsed = 0;
         invocationCount = 0;
 
+        // Initialize trace logger if enabled (one CSV per trial)
+        if (enableTraceLog) {
+            traceLogger = new MiningTraceLogger("binance-risk-" + symbol + "-" + System.currentTimeMillis() + ".csv");
+        }
+
         System.out.println("=== Benchmark Setup ===");
         System.out.println("Symbol: " + symbol);
         System.out.println("Events per invocation: " + events.size());
         System.out.println("Dataset: " + eventProvider.getDatasetId());
+        System.out.println("Trace logging: " + (enableTraceLog ? "ENABLED" : "DISABLED"));
     }
 
     /**
@@ -98,6 +109,11 @@ public class BinanceRiskControlBenchmark {
         // Create new session with SessionPseudoClock
         kieSession = rulesProvider.createSession();
         replayController = new EventReplayController(kieSession);
+
+        // Register trace logger on this session
+        if (traceLogger != null) {
+            kieSession.addEventListener(traceLogger);
+        }
 
         // Insert initial facts (RiskConfig, ModeState, FeedHealth)
         insertBootstrapFacts();
@@ -112,6 +128,9 @@ public class BinanceRiskControlBenchmark {
      */
     @Benchmark
     public int benchmarkEventReplay() {
+        if (traceLogger != null) {
+            traceLogger.startNewTransaction();
+        }
         lastRulesFired = replayController.replayEvents(events);
         return lastRulesFired;
     }
@@ -159,6 +178,12 @@ public class BinanceRiskControlBenchmark {
                 + " (" + String.format("%.2f", totalTimeElapsed / 1000.0) + " s)");
         System.out.println("Avg throughput:         " + String.format("%.2f", avgThroughput) + " events/sec");
         System.out.println("==============================\n");
+
+        // Close trace logger
+        if (traceLogger != null) {
+            traceLogger.close();
+            System.out.println("Trace log saved.");
+        }
 
         if (rulesProvider != null) {
             rulesProvider.dispose();

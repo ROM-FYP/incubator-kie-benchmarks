@@ -24,6 +24,7 @@ import org.kie.benchmark.binance.model.*;
 import org.kie.benchmark.binance.provider.BinanceEventProvider;
 import org.kie.benchmark.binance.provider.BinanceRulesProvider;
 import org.kie.benchmark.binance.util.EventReplayController;
+import org.kie.benchmark.binance.util.MiningTraceLogger;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.List;
@@ -51,12 +52,16 @@ import java.util.stream.Collectors;
 @Fork(value = 1, jvmArgs = { "-Xms4g", "-Xmx4g" })
 public class BinanceFullDatasetBenchmark {
 
+    @Param({ "false" })
+    private boolean enableTraceLog;
+
     private BinanceRulesProvider rulesProvider;
     private BinanceEventProvider eventProvider;
     private List<MarketEvent> allEvents;
     private Set<String> symbols;
     private KieSession kieSession;
     private EventReplayController replayController;
+    private MiningTraceLogger traceLogger;
 
     // Per-invocation metrics
     private long invocationStartTime;
@@ -91,10 +96,16 @@ public class BinanceFullDatasetBenchmark {
         totalTimeElapsed = 0;
         invocationCount = 0;
 
+        // Initialize trace logger if enabled (one CSV per trial)
+        if (enableTraceLog) {
+            traceLogger = new MiningTraceLogger("binance-full-" + System.currentTimeMillis() + ".csv");
+        }
+
         System.out.println("=== Full Dataset Benchmark Setup ===");
         System.out.println("Total events per invocation: " + allEvents.size());
         System.out.println("Symbols: " + symbols);
         System.out.println("Dataset: " + eventProvider.getDatasetId());
+        System.out.println("Trace logging: " + (enableTraceLog ? "ENABLED" : "DISABLED"));
     }
 
     /**
@@ -108,6 +119,11 @@ public class BinanceFullDatasetBenchmark {
         // Insert bootstrap facts for ALL symbols
         insertBootstrapFacts();
 
+        // Register trace logger on this session
+        if (traceLogger != null) {
+            kieSession.addEventListener(traceLogger);
+        }
+
         invocationStartTime = System.currentTimeMillis();
     }
 
@@ -116,6 +132,9 @@ public class BinanceFullDatasetBenchmark {
      */
     @Benchmark
     public int benchmarkFullReplay() {
+        if (traceLogger != null) {
+            traceLogger.startNewTransaction();
+        }
         lastRulesFired = replayController.replayEvents(allEvents);
         return lastRulesFired;
     }
@@ -161,6 +180,12 @@ public class BinanceFullDatasetBenchmark {
                 + " (" + String.format("%.2f", totalTimeElapsed / 1000.0) + " s)");
         System.out.println("Avg throughput:         " + String.format("%.2f", avgThroughput) + " events/sec");
         System.out.println("==================================\n");
+
+        // Close trace logger
+        if (traceLogger != null) {
+            traceLogger.close();
+            System.out.println("Trace log saved.");
+        }
 
         if (rulesProvider != null) {
             rulesProvider.dispose();
