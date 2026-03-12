@@ -33,6 +33,7 @@ public class OpenSkyReplayEngine {
     private KieBase kieBase;
     private KieSession session;
     private SessionPseudoClock pseudoClock;
+    private CsvLoggingRuleListener csvLogger;
 
     /** Timestamp (ms) of the last event ingested; used to advance the clock monotonically. */
     private long lastEventTimeMs = -1L;
@@ -127,7 +128,26 @@ public class OpenSkyReplayEngine {
             session.dispose();
             session = null;
         }
+        if (csvLogger != null) {
+            csvLogger.close();
+            csvLogger = null;
+        }
         lastEventTimeMs = -1L;
+    }
+
+    /**
+     * Optional: Enable CSV tracing of rule firings and Alerts. 
+     * Must be called AFTER init() so the SessionPseudoClock is available, 
+     * but BEFORE ingestEvent().
+     */
+    public void enableCsvLogging(String alertsFile, String rulesFile) {
+        if (session == null || pseudoClock == null) {
+            throw new IllegalStateException("Engine must be init() before enabling CSV logging");
+        }
+        this.csvLogger = new CsvLoggingRuleListener(alertsFile, rulesFile, pseudoClock);
+        session.addEventListener(csvLogger.getRuleRuntimeEventListener());
+        session.addEventListener(csvLogger.getAgendaEventListener());
+        LOG.info("CSV Logging enabled: alerts={} rules={}", alertsFile, rulesFile);
     }
 
     // -------------------------------------------------------------------------

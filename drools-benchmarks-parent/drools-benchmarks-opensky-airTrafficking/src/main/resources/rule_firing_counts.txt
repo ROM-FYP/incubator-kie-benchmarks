@@ -1,0 +1,75 @@
+Total Rows: 612,971
+Unique Rules Fired: 64
+
+Rule Name                                               Fire Count
+------------------------------------------------------------------
+R098_PerformanceCountersPlaceholder                     178512
+R053_BusyAirspaceCellAudit                              59859
+R021_DeltaVelocityOver10s                               45367
+R016_CategoryUnknownAudit                               37748
+R042_PairWithinCell                                     37107
+R041_AssignGridCell                                     32218
+R056_BuildConflictCandidateBasic                        30898
+R051_PairDedupGuard                                     26984
+R079_MultiConflictHotspotEscalation                     22038
+R010_FilterStalePositionFromPairing                     14898
+R067b_DedupeConflictCandidates_KeepFirst                12455
+R013_FilterStaleContactFromPairing                      12062
+R066_ConflictCandidateAudit_ALERT                       7803
+R049_SkipIfAnyTrackQualityBad                           7165
+R068_ClearOldConflictCandidates                         6986
+R012_FilterBadAltitudeFromPairing                       6664
+R011_FilterBadVelocityFromPairing                       6198
+R054_NoFlightPlanAudit                                  5793
+R044_PairInhibitByCell                                  5741
+R023_InvalidTrackAssumedZero                            5373
+R034_OnGroundInvalidAltitude                            5142
+R019_MissingTrueTrackAudit                              5141
+R020_MissingVelocityAudit                               5141
+R065_ConflictCandidateAudit_WARN                        4895
+R003_StaleContactFlag                                   4435
+R063_SuppressIfNotClosingAndFar                         4424
+R060_AlertIfBelowPrototypeRadarMinima                   4196
+R090_SafetyAlertPriorityAudit                           3959
+R059_WarnIfBelowPrototypeRadarMinima                    3896
+R061_WarnIfTTCWithinWarningTime                         3694
+R072_UpgradeToALERT_UsingCPA                            3605
+R080_RecordCPAForAnalysis                               2118
+R071_UpgradeToWARN_UsingCPA                             1769
+R067a_DedupeConflictCandidates_KeepALERT                1593
+R069_CreateConflictFromCpaMetrics                       1575
+R058_UpgradeIfVeryClose                                 1379
+R062_AlertIfTTCWithinAlertTime                          1193
+R074b_UpdateStreaks_WARN                                944
+R091_TrafficAdvisoryAudit                               666
+R073_InitPairRiskState                                  528
+R096_RecordEverySafetyAlert                             491
+R082_RaiseSafetyAlertOnALERT                            401
+R007_MissingCallsignAudit                               379
+R036_SquawkChangedAudit                                 307
+R074c_UpdateStreaks_INFO                                268
+R024_SuddenTurnRateApproxAudit                          180
+R030_BaroGeoDisagreeAudit                               167
+R064_SuppressIfAnyOnGround                              153
+R081_RaiseTrafficAdvisoryOnWARN                         139
+R097_RecordEveryTrafficAdvisory                         139
+R093_EscalateFromAdvisoryToSafetyAlert                  95
+R075_RaiseAlertsOnlyAfterPersistence                    90
+R038_CallsignWhitespaceAudit                            60
+R026_OnGroundStateFlipAudit                             53
+R014_StalePosClearsOldAlerts                            52
+R025_AltitudeJumpAudit                                  29
+R008_SquawkSpecialPurposeAudit                          16
+R037_SpiSetAudit                                        16
+R055_HighAccelerationAudit                              8
+R006_OnGroundButHighSpeed                               3
+R076_Hysteresis_ClearOnlyAfterSafePersistence           2
+R048_SkipOnGroundPairs                                  2
+R000_LoadDefaultParams                                  1
+R100_EndOfCycleMarker                                   1
+
+------------------------------------------------------------------
+Final JMH Performance Metrics
+Throughput: 18.057 ops/s
+Average Time: 0.051 s/op
+

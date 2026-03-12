@@ -231,7 +231,6 @@ when
                               $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
 then
     double dt = ($t1 - $t0);
-    System.out.println("[DRL] R021_DeltaVelocityOver10s -> " + $id + " dt=" + dt);
     insert(new KinematicDelta($id, $s1.getVelocityMps()-$s0.getVelocityMps(), 0.0, 0.0, dt));
 end
 
@@ -380,7 +379,7 @@ end
 rule "R041_AssignGridCell"
 when
     $p : Params()
-    $s : OpenSkyStateVector( lat != null, lon != null )
+    $s : OpenSkyStateVector( lat != null, lon != null, onGround == false, velocityMps != null, velocityMps > 10 )
 then
     int gx = (int)Math.floor($s.getLat() / $p.getGridDeg());
     int gy = (int)Math.floor($s.getLon() / $p.getGridDeg());
@@ -454,6 +453,17 @@ then
     retract($pc);
 end
 
+rule "R049b_RetractConflictIfTrackQualityBad"
+    salience 100
+when
+    $c : ConflictCandidate( $a:a, $b:b )
+    ( TrackQuality( icao24 == $a, (missingPos==true || stalePos==true || badAlt==true || badVel==true) )
+      or
+      TrackQuality( icao24 == $b, (missingPos==true || stalePos==true || badAlt==true || badVel==true) ) )
+then
+    retract($c);
+end
+
 
 rule "R051_PairDedupGuard"
 when
@@ -523,11 +533,17 @@ end
 rule "R057_DowngradeIfVerticalSeparationLarge"
 when
     $p : Params()
-    // Only downgrade when the aircraft are NOT within the closeness thresholds of any upgrade rule
-    // (R058 fires at <1.5nm; R059/R060 fire at <3nm) — mutual exclusion prevents toggle loops.
+    // Only downgrade when:
+    //   1. currently far apart (>= 3nm) — R058/R059/R060 won't fire
+    //   2. vertically well-separated
+    //   3. TTC is also safe (>= warnTtcSec) — mutual exclusion with R061/R062
     $c : ConflictCandidate( distM >= metersFromNm(3.0),
                             vertSepM == vertSepM, vertSepM > ( ($p.vertMinFt*0.3048) * 2.0 ),
+                            ttcSec >= $p.warnTtcSec,
                             severity != "INFO" )
+    //   4. CPA is also safe — mutual exclusion with R071/R072
+    not CpaMetrics( a == $c.a, b == $c.b, 
+                    ( dCpaM <= metersFromNm($p.getWarnDistNm()) || tCpaSec <= $p.getWarnTtcSec() ) )
 then
     modify($c){ setSeverity("INFO"); }
 end
@@ -848,6 +864,7 @@ rule "R081_RaiseTrafficAdvisoryOnWARN"
 when
     $c : ConflictCandidate( severity == "WARN", $a:a, $b:b )
     not Alert( a == $a, b == $b, type == "TRAFFIC_ADVISORY" )
+    not Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
 then
     insert(new Alert($a,$b,"TRAFFIC_ADVISORY","WARN",(double)(clock.getCurrentTime() / 1000),"WARN conflict candidate"));
 end
@@ -938,8 +955,8 @@ end
 
 rule "R092_DoNotSpamNuisanceAlerts"
 when
-    $al : Alert( $a:a, $b:b, $t:createdAt )
-    Alert( this != $al, a == $a, b == $b, (clock.getCurrentTime() / 1000 - $t) < 10 )
+    $al : Alert( $a:a, $b:b, $t:createdAt, $type:type )
+    Alert( this != $al, a == $a, b == $b, type == $type, (clock.getCurrentTime() / 1000 - $t) < 10 )
 then
     retract($al);
 end

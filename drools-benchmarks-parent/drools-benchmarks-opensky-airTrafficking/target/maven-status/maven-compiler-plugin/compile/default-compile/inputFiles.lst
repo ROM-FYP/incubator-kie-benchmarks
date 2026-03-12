@@ -3,6 +3,7 @@ D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\AuditEvent.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\PairRiskState.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\AlertAck.java
+D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\replay\CsvLoggingRuleListener.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\benchmark\OpenSkyReplayDroolsBenchmark.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\util\RuleMathUtil.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\TrackQuality.java
