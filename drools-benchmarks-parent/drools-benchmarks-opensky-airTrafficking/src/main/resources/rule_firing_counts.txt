@@ -69,7 +69,35 @@ R000_LoadDefaultParams                                  1
 R100_EndOfCycleMarker                                   1
 
 ------------------------------------------------------------------
-Final JMH Performance Metrics
-Throughput: 18.057 ops/s
-Average Time: 0.051 s/op
+Detailed JMH + JFR Performance Report (Warmup: 10, Measurement: 5)
+------------------------------------------------------------------
+
+Warmup Iterations (Latency & Wall-Clock Duration):
+- Warmup 1:  0.521 s/op | Duration: ~20s
+- Warmup 2:  0.233 s/op | Duration: ~7s
+- Warmup 3:  0.154 s/op | Duration: ~7s
+- Warmup 4:  0.108 s/op | Duration: ~6s
+- Warmup 5:  0.112 s/op | Duration: ~6s
+- Warmup 6:  0.103 s/op | Duration: ~6s
+- Warmup 7:  0.115 s/op | Duration: ~6s
+- Warmup 8:  0.106 s/op | Duration: ~6s
+- Warmup 9:  0.106 s/op | Duration: ~6s
+- Warmup 10: 0.107 s/op | Duration: ~7s
+
+Measurement Iterations (Latency, Memory & Wall-Clock Duration):
+- Iteration 1: 0.284 s/op | 12.69 MB/op | Duration: ~13s
+- Iteration 2: 2.522 s/op | 28.96 MB/op | Duration: ~17s (High Latency Spike)
+- Iteration 3: 0.231 s/op | 12.72 MB/op | Duration: ~14s
+- Iteration 4: 0.155 s/op | 13.29 MB/op | Duration: ~12s
+- Iteration 5: 0.110 s/op | 13.05 MB/op | Duration: ~1s (End of Run)
+
+Final Averages:
+- Throughput (ops/s): 3.085
+- Average Latency (s/op): 0.661
+- Avg Memory per Op (gc.alloc.rate.norm): 16.14 MB/op
+- Avg Allocation Rate (gc.alloc.rate): 50.05 MB/sec
+- Total GC Count: 22
+- Total GC Time: 804 ms
+
+JFR Recording Generated: bench.opensky.benchmark.OpenSkyReplayDroolsBenchmark.ingestWindow.../profile.jfr
 
