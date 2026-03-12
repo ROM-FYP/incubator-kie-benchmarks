@@ -217,6 +217,7 @@ public class BinanceRiskControlBenchmark {
     public static void main(String[] args) {
         BinanceRiskControlBenchmark benchmark = new BinanceRiskControlBenchmark();
         benchmark.symbol = "BTCUSDT";
+        benchmark.enableTraceLog = Boolean.parseBoolean(System.getProperty("binance.enableTraceLog", "false"));
 
         try {
             benchmark.setupTrial();

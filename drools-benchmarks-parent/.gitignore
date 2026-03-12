@@ -22,3 +22,8 @@ hs_err_pid*
 /*.ipr
 /*.iws
 /*.iml
+
+binance-full-1773241194650.csv
+binance-full-1773241737406.csv
+binance-risk-BTCUSDT-1773240609275.csv
+*.csv

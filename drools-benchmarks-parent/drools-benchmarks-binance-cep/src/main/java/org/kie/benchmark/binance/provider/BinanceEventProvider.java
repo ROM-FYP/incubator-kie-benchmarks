@@ -35,8 +35,8 @@ import java.util.List;
  */
 public class BinanceEventProvider {
 
-    private static final String DEFAULT_DATASET = "run_20260216_0632_10sym";
-
+    private static final String DEFAULT_DATASET = System.getProperty("binance.dataset",
+            "run_20260216_0632_10sym_extreme");
     private List<MarketEvent> events;
     private String datasetId;
 
