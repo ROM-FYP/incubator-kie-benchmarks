@@ -98,6 +98,28 @@ Final Averages:
 - Avg Allocation Rate (gc.alloc.rate): 50.05 MB/sec
 - Total GC Count: 22
 - Total GC Time: 804 ms
+------------------------------------------------------------------
+Rule Triggering Depth Analysis
+------------------------------------------------------------------
+The OpenSky Air Traffic rules exhibit a sophisticated multi-stage firing 
+cascade. A single input event can trigger a chain of up to 9 sequential 
+logical hops as facts are transformed and escalated:
 
-JFR Recording Generated: bench.opensky.benchmark.OpenSkyReplayDroolsBenchmark.ingestWindow.../profile.jfr
+Depth | Rule (Example) | Fact Produced / Modified
+------|----------------|-------------------------
+1     | R041           | OpenSkyStateVector -> GridCell
+2     | R042           | GridCell -> PairCandidate
+3     | R068b          | PairCandidate -> CpaMetrics
+4     | R069           | CpaMetrics -> ConflictCandidate
+5     | R071 / R072    | [Modifies] ConflictCandidate (Severity Upgrade)
+6     | R073           | ConflictCandidate -> PairRiskState
+7     | R074a          | [Modifies] PairRiskState (Streak Counter)
+8     | R075 / R081    | PairRiskState -> Alert (Traffic Advisory / Safety Alert)
+9     | R090 / R096    | Alert -> AuditEvent (Logic Output / Recording)
+
+Maximum Observed Depth: 9 Hops (Verified via rule_firings.csv Trace)
+This depth highlights the complexity of the "Hysteresis and Persistence" 
+logic. Trace verification (e.g., Seq #247 to #261) confirms aircraft 
+interaction cascading from spatial pairing through conflict escalation 
+and temporal streaks to the final audit recording in one cycle.
 
