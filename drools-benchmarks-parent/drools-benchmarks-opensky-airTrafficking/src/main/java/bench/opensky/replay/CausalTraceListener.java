@@ -3,6 +3,7 @@ package bench.opensky.replay;
 import org.kie.api.event.rule.*;
 import org.kie.api.runtime.rule.FactHandle;
 import org.kie.api.runtime.rule.Match;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -38,6 +39,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * </pre>
  */
 public class CausalTraceListener {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // -------------------------------------------------------------------------
     // State
@@ -204,6 +207,14 @@ public class CausalTraceListener {
         sb.append(",\"fact_id\":\"").append(factId).append("\"");
         sb.append(",\"fact_type\":\"").append(escapeJson(factType)).append("\"");
         sb.append(",\"producer\":\"").append(escapeJson(producer)).append("\"");
+        
+        try {
+            String factData = MAPPER.writeValueAsString(fact);
+            sb.append(",\"fact_data\":").append(factData);
+        } catch (Exception e) {
+            sb.append(",\"fact_data\":{}");
+        }
+        
         sb.append("}");
         return sb.toString();
     }
