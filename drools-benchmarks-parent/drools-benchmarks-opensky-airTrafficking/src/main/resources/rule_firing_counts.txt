@@ -119,7 +119,79 @@ Depth | Rule (Example) | Fact Produced / Modified
 
 Maximum Observed Depth: 9 Hops (Verified via rule_firings.csv Trace)
 This depth highlights the complexity of the "Hysteresis and Persistence" 
-logic. Trace verification (e.g., Seq #247 to #261) confirms aircraft 
-interaction cascading from spatial pairing through conflict escalation 
+logic. Trace verification (e.g., Seq #247 to #261) confirms aircraft interaction cascading from spatial pairing through conflict escalation 
 and temporal streaks to the final audit recording in one cycle.
 
+------------------------------------------------------------------
+Per-Rule CPU Cost Profiling (RHS)
+------------------------------------------------------------------
+Captured via ProfilingRuleListener (ThreadMXBean)
+Overhead: ~60% throughput reduction
+
+Rule Name                                     | Count      | Total CPU(ms) | Avg CPU(us)
+-------------------------------------------------------------------------------------
+R013_FilterStaleContactFromPairing            | 320875     | 828.125      | 2.58      
+R098_PerformanceCountersPlaceholder           | 980832     | 750.000      | 0.76      
+R053_BusyAirspaceCellAudit                    | 227689     | 734.375      | 3.23      
+R010_FilterStalePositionFromPairing           | 323963     | 656.250      | 2.03      
+R042_PairWithinCell                           | 120013     | 312.500      | 2.60      
+R021_DeltaVelocityOver10s                     | 70864      | 250.000      | 3.53      
+R056_BuildConflictCandidateBasic              | 30898      | 234.375      | 7.59      
+R016_CategoryUnknownAudit                     | 51200      | 171.875      | 3.36      
+R049_SkipIfAnyTrackQualityBad                 | 88998      | 125.000      | 1.40      
+R041_AssignGridCell                           | 43689      | 109.375      | 2.50      
+R002_StalePositionFlag                        | 17067      | 93.750       | 5.49      
+R066_ConflictCandidateAudit_ALERT             | 7803       | 62.500       | 8.01      
+R067b_DedupeConflictCandidates_KeepFirst      | 12455      | 62.500       | 5.02      
+R003_StaleContactFlag                         | 16367      | 46.875       | 2.86      
+R051_PairDedupGuard                           | 26984      | 46.875       | 1.74      
+R068b_ComputeCpaMetrics                       | 2994       | 46.875       | 15.66     
+R074a_UpdateStreaks_ALERT                     | 5774       | 46.875       | 8.12      
+R079_MultiConflictHotspotEscalation           | 22038      | 46.875       | 2.13      
+R059_WarnIfBelowPrototypeRadarMinima          | 3062       | 31.250       | 10.21     
+R073_InitPairRiskState                        | 528        | 31.250       | 59.19     
+R081_RaiseTrafficAdvisoryOnWARN               | 139        | 31.250       | 224.82    
+R061_WarnIfTTCWithinWarningTime               | 4748       | 15.625       | 3.29      
+R030_BaroGeoDisagreeAudit                     | 218        | 15.625       | 71.67     
+R065_ConflictCandidateAudit_WARN              | 6098       | 15.625       | 2.56      
+R064_SuppressIfAnyOnGround                    | 153        | 15.625       | 102.12    
+R062_AlertIfTTCWithinAlertTime                | 1193       | 15.625       | 13.10     
+R008_SquawkSpecialPurposeAudit                | 16         | 15.625       | 976.56    
+R052_FinalPairReadyForConflictCheck           | 2994       | 15.625       | 5.22      
+R069_CreateConflictFromCpaMetrics             | 1575       | 15.625       | 9.92      
+R091_TrafficAdvisoryAudit                     | 666        | 15.625       | 23.46     
+R063_SuppressIfNotClosingAndFar               | 5627       | 15.625       | 2.78      
+R037_SpiSetAudit                              | 16         | 0.000        | 0.00      
+R000_LoadDefaultParams                        | 1          | 0.000        | 0.00      
+R048_SkipOnGroundPairs                        | 1197       | 0.000        | 0.00      
+R058_UpgradeIfVeryClose                       | 1379       | 0.000        | 0.00      
+R090_SafetyAlertPriorityAudit                 | 4485       | 0.000        | 0.00      
+R080_RecordCPAForAnalysis                     | 2994       | 0.000        | 0.00      
+R029_ClimbWhileOnGroundAudit                  | 2          | 0.000        | 0.00      
+R019_NullAltitudesAudit                       | 6785       | 0.000        | 0.00      
+R074b_UpdateStreaks_WARN                      | 944        | 0.000        | 0.00      
+R014_StalePosClearsOldAlerts                  | 237        | 0.000        | 0.00      
+R007_MissingCallsignAudit                     | 483        | 0.000        | 0.00      
+R071_UpgradeToWARN_UsingCPA                   | 2611       | 0.000        | 0.00      
+R060_AlertIfBelowPrototypeRadarMinima         | 3062       | 0.000        | 0.00      
+R096_RecordEverySafetyAlert                   | 491        | 0.000        | 0.00      
+R072_UpgradeToALERT_UsingCPA                  | 2186       | 0.000        | 0.00      
+R036_SquawkChangedAudit                       | 1356       | 0.000        | 0.00      
+R100_EndOfCycleMarker                         | 1          | 0.000        | 0.00      
+R070_SuppressIfNotClosingOrPastCPA            | 5659       | 0.000        | 0.00      
+R075_RaiseAlertsOnlyAfterPersistence          | 90         | 0.000        | 0.00      
+R082_RaiseSafetyAlertOnALERT                  | 401        | 0.000        | 0.00      
+R068_ClearOldConflictCandidates               | 6986       | 0.000        | 0.00      
+R026_OnGroundStateFlipAudit                   | 124        | 0.000        | 0.00      
+R024_SuddenTurnRateApproxAudit                | 251        | 0.000        | 0.00      
+R025_AltitudeJumpAudit                        | 49         | 0.000        | 0.00      
+R074c_UpdateStreaks_INFO                      | 268        | 0.000        | 0.00      
+R076_Hysteresis_ClearOnlyAfterSafePersistence | 2          | 0.000        | 0.00      
+R093_EscalateFromAdvisoryToSafetyAlert        | 95         | 0.000        | 0.00      
+R097_RecordEveryTrafficAdvisory               | 139        | 0.000        | 0.00      
+R055_HighAccelerationAudit                    | 8          | 0.000        | 0.00      
+R006_OnGroundButHighSpeed                     | 4          | 0.000        | 0.00      
+R038_CallsignWhitespaceAudit                  | 81         | 0.000        | 0.00      
+R099_IgnoreNonJustifiedAlertPlaceholder       | 6098       | 0.000        | 0.00      
+R067a_DedupeConflictCandidates_KeepALERT      | 1593       | 0.000        | 0.00      
+------------------------------------------------------------------

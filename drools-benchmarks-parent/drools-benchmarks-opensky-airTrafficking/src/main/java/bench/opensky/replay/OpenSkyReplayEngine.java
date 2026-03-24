@@ -34,6 +34,8 @@ public class OpenSkyReplayEngine {
     private KieSession session;
     private SessionPseudoClock pseudoClock;
     private CsvLoggingRuleListener csvLogger;
+    private ProfilingRuleListener profilingLogger;
+    private CausalTraceListener causalTraceListener;
 
     /** Timestamp (ms) of the last event ingested; used to advance the clock monotonically. */
     private long lastEventTimeMs = -1L;
@@ -132,6 +134,10 @@ public class OpenSkyReplayEngine {
             csvLogger.close();
             csvLogger = null;
         }
+        if (causalTraceListener != null) {
+            causalTraceListener.close();
+            causalTraceListener = null;
+        }
         lastEventTimeMs = -1L;
     }
 
@@ -148,6 +154,45 @@ public class OpenSkyReplayEngine {
         session.addEventListener(csvLogger.getRuleRuntimeEventListener());
         session.addEventListener(csvLogger.getAgendaEventListener());
         LOG.info("CSV Logging enabled: alerts={} rules={}", alertsFile, rulesFile);
+    }
+
+    /**
+     * Optional: Enable CPU profiling of individual rule actions.
+     */
+    public void enableProfiling() {
+        if (session == null) {
+            throw new IllegalStateException("Engine must be init() before enabling profiling");
+        }
+        this.profilingLogger = new ProfilingRuleListener();
+        session.addEventListener(profilingLogger);
+        LOG.info("CPU Profiling enabled.");
+    }
+
+    public ProfilingRuleListener getProfilingLogger() {
+        return profilingLogger;
+    }
+
+    /**
+     * Optional: Enable causal trace logging to a JSON-lines file.
+     * Each line is a structured event (FACT_INSERT, FACT_UPDATE, FACT_DELETE,
+     * ACTIVATION_CREATED, ACTIVATION_FIRED) that captures full fact provenance.
+     *
+     * Must be called AFTER init() and BEFORE ingestEvent().
+     *
+     * @param outputFile path to the trace output file (will be overwritten)
+     */
+    public void enableCausalTracing(String outputFile) {
+        if (session == null) {
+            throw new IllegalStateException("Engine must be init() before enabling causal tracing");
+        }
+        this.causalTraceListener = new CausalTraceListener(outputFile);
+        session.addEventListener(causalTraceListener.agendaListener());
+        session.addEventListener(causalTraceListener.runtimeListener());
+        LOG.info("Causal trace logging enabled → {}", outputFile);
+    }
+
+    public CausalTraceListener getCausalTraceListener() {
+        return causalTraceListener;
     }
 
     // -------------------------------------------------------------------------

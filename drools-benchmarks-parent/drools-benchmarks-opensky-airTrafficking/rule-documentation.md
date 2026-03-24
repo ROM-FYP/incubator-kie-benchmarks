@@ -973,26 +973,7 @@ Inserts `CpaMetrics(a, b, computedAt, tCpa, dCpaM, vertAtCpa, closing)` where `c
 
 **What it does:** Inserts `Alert(type="SAFETY_ALERT", severity="ALERT")` when an ALERT-severity `ConflictCandidate` exists and no `SAFETY_ALERT` already exists for that pair.
 
-**Why it exists:** This is the **primary safety alerting rule** — the one that puts an actionable, highest-priority conflict on the controller's display.
-
-**The `not Alert(...)` idempotency guard:** Without this guard, R082 would re-fire every `fireAllRules()` cycle as long as the ALERT `ConflictCandidate` exists, inserting a new duplicate `SAFETY_ALERT` each time. The `not Alert(a==$a, b==$b, type=="SAFETY_ALERT")` pattern ensures the alert is created **exactly once** per pair, regardless of how many snapshot cycles the conflict persists.
-
-**Difference from R075:** R075 also raises a `SAFETY_ALERT` but only after `alertStreak >= 2` (two consecutive ALERT snapshots). R082 raises it immediately on the **first** ALERT snapshot. These two rules coexist deliberately:
-- **R082** provides an immediate, unfiltered alert for the most severe geometries — zero latency
-- **R075** provides a persistence-filtered alert that suppresses one-shot data noise
-
-In a production system you would likely use only one of these paths (and remove the other), but for the benchmark both are present to exercise the full alert lifecycle machinery.
-
-**Alert lifecycle summary:**
-```
-ConflictCandidate(ALERT) → R082 inserts SAFETY_ALERT
-    │
-    ├─ R084: if AlertAck exists → severity = "ACK"
-    ├─ R085: if ACK + 30s passed → retract Alert
-    ├─ R086: if flightInhibit exists → retract Alert  
-    ├─ R087: if pairInhibit exists → retract Alert
-    └─ R093: superseded by SAFETY_ALERT → retract TRAFFIC_ADVISORY
-```
+**Why it exists:** This is the primary safety alerting rule — the one that puts an actionable conflict on the controller's screen. Like R081, the `not Alert(...)` guard prevents duplicate alerts per pair.
 
 ---
 
@@ -1028,25 +1009,7 @@ ConflictCandidate(ALERT) → R082 inserts SAFETY_ALERT
 
 **What it does:** Retracts any `Alert` where either aircraft `a` or `b` has a matching `AlertInhibit(kind="FLIGHT", key=icao24, enabled=true)`.
 
-**Why it exists — the two-layer inhibition design:**
-
-Inhibition is applied at **two points** in the pipeline intentionally:
-
-| Layer | Rules | Acts on | Purpose |
-|---|---|---|---|
-| **Early (pair level)** | R044–R047 | `PairCandidate` | Prevents expensive geometry computation for known-suppressed pairs |
-| **Late (alert level)** | R086–R087 | `Alert` | Catches suppression applied *after* an alert already exists |
-
-R086 exists because **inhibits are dynamic** — an operator can insert an `AlertInhibit` at any time, including *after* an alert has already been raised for that aircraft. If inhibition were only enforced at the `PairCandidate` stage (R045/R046), any alert already in working memory would remain active even after the inhibit was inserted. R086 closes this gap by retractng live `Alert` facts retroactively.
-
-**Concrete scenario:** Formation display aircraft are flying deliberately close. At T=0 no inhibit exists → a `SAFETY_ALERT` is raised (geometry is genuinely within STCA minima). At T=30s the operator inserts `AlertInhibit(kind="FLIGHT", key="formationLead")`. R086 immediately matches and retracts the active alert.
-
-**Why `a` OR `b`:** An `AlertInhibit` is keyed to a single icao24. Either aircraft in the pair may be the inhibited one. Since Drools cannot efficiently OR-match against two different bound variables in a single constraint, this uses an `or` block in the `when` clause:
-```drool
-( AlertInhibit( kind == "FLIGHT", key == $a, enabled == true )
-  or
-  AlertInhibit( kind == "FLIGHT", key == $b, enabled == true ) )
-```
+**Why it exists:** Individual flight inhibition at the alert level — the equivalent of R045/R046 (which filtered `PairCandidate` earlier in the pipeline) but applied here to already-raised `Alert` facts. Necessary because inhibits can be added dynamically while alerts are already active.
 
 ---
 

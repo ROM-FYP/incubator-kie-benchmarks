@@ -17,8 +17,9 @@ hs_err_pid*
 
 # Eclipse, Netbeans and IntelliJ files
 /.*
-!.gitignore
+
 /nbproject
 /*.ipr
 /*.iws
 /*.iml
+/src/main/resources/causal_trace_full.jsonl

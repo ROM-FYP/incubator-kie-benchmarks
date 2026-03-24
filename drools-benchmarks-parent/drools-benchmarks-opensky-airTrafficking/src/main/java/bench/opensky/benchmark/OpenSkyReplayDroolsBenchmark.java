@@ -38,6 +38,12 @@ public class OpenSkyReplayDroolsBenchmark {
     @Param({"data/opensky_flat_20260217_160412.jsonl"})
     private String dataset;
 
+    @Param({"false"})
+    private boolean profilingEnabled;
+
+    @Param({"false"})
+    private boolean causalTracingEnabled;
+
     // ---- loaded once at trial setup ----
     private List<OpenSkyStateVector> events;
 
@@ -66,11 +72,20 @@ public class OpenSkyReplayDroolsBenchmark {
     public void setupIteration() {
         engine = new OpenSkyReplayEngine();
         engine.init();
+        if (profilingEnabled) {
+            engine.enableProfiling();
+        }
+        if (causalTracingEnabled) {
+            engine.enableCausalTracing("causal_trace.jsonl");
+        }
         eventIndex = 0;
     }
 
     @TearDown(Level.Iteration)
     public void tearDownIteration() {
+        if (profilingEnabled && engine != null && engine.getProfilingLogger() != null) {
+            engine.getProfilingLogger().printReport();
+        }
         if (engine != null) engine.dispose();
     }
 
