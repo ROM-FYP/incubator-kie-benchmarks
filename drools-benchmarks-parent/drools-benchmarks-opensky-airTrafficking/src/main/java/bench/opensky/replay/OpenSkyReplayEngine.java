@@ -1,6 +1,8 @@
 package bench.opensky.replay;
 
 import bench.opensky.model.*;
+import bench.opensky.router.Router;
+import bench.opensky.router.SessionManager;
 import org.drools.compiler.kie.builder.impl.DrlProject;
 import org.kie.api.KieBase;
 import org.kie.api.KieServices;
@@ -17,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -122,6 +125,37 @@ public class OpenSkyReplayEngine {
 
         // Fire — capped to prevent runaway activations on dense timestamps
         return session.fireAllRules(5000);
+    }
+
+    /**
+     * Ingest a single state-vector event using the routed multi-session architecture.
+     * The Router determines which clusters the fact should be dispatched to,
+     * and only those cluster sessions receive the fact.
+     *
+     * @param sv         the state vector to ingest
+     * @param router     the decision tree router
+     * @param sessionMgr the multi-session manager
+     * @return total number of rule activations fired across all cluster sessions
+     */
+    public int ingestEventRouted(OpenSkyStateVector sv, Router router, SessionManager sessionMgr) {
+        long targetMs = sv.getSnapshotTime() * 1000L;
+        if (targetMs > lastEventTimeMs) {
+            sessionMgr.advanceAllClocks(targetMs);
+            lastEventTimeMs = targetMs;
+        }
+
+        Set<String> clusters = router.route(sv);
+        int total = 0;
+
+        for (String clusterId : clusters) {
+            KieSession clusterSession = sessionMgr.getSession(clusterId);
+            if (clusterSession != null) {
+                clusterSession.insert(sv);
+                total += clusterSession.fireAllRules(5000);
+            }
+        }
+
+        return total;
     }
 
     /** Dispose the KieSession, releasing all resources. */

@@ -3,6 +3,8 @@ package bench.opensky.benchmark;
 import bench.opensky.model.OpenSkyStateVector;
 import bench.opensky.replay.OpenSkyJsonlLoader;
 import bench.opensky.replay.OpenSkyReplayEngine;
+import bench.opensky.router.Router;
+import bench.opensky.router.SessionManager;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -44,12 +46,25 @@ public class OpenSkyReplayDroolsBenchmark {
     @Param({"false"})
     private boolean causalTracingEnabled;
 
+    @Param({"baseline"})
+    private String mode;
+
+    @Param({"src/main/resources/tree_rules.txt"})
+    private String treeRulesFile;
+
+    @Param({"src/main/resources/rule_graph_full.ftree"})
+    private String ftreeFile;
+
     // ---- loaded once at trial setup ----
     private List<OpenSkyStateVector> events;
 
     // ---- fresh per iteration (like AbstractCEPBenchmark) ----
     private OpenSkyReplayEngine engine;
     private int eventIndex;
+
+    // ---- routed mode components ----
+    private Router router;
+    private SessionManager sessionManager;
 
     // -------------------------------------------------------------------------
     // JMH lifecycle
@@ -69,24 +84,43 @@ public class OpenSkyReplayDroolsBenchmark {
      * unbounded accumulation of derived facts (PairRiskState, etc.) across iterations.
      */
     @Setup(Level.Iteration)
-    public void setupIteration() {
+    public void setupIteration() throws IOException {
         engine = new OpenSkyReplayEngine();
-        engine.init();
-        if (profilingEnabled) {
-            engine.enableProfiling();
+
+        if ("routed".equals(mode)) {
+            // Routed mode: initialize Router + SessionManager
+            router = new Router(treeRulesFile);
+            sessionManager = new SessionManager();
+            sessionManager.init("airTraffick_rules.drl", ftreeFile);
+            // No baseline engine.init() needed in routed mode
+        } else {
+            // Baseline mode: single session
+            engine.init();
+            if (profilingEnabled) {
+                engine.enableProfiling();
+            }
+            if (causalTracingEnabled) {
+                engine.enableCausalTracing("causal_trace.jsonl");
+            }
         }
-        if (causalTracingEnabled) {
-            engine.enableCausalTracing("causal_trace.jsonl");
-        }
+
         eventIndex = 0;
     }
 
     @TearDown(Level.Iteration)
     public void tearDownIteration() {
-        if (profilingEnabled && engine != null && engine.getProfilingLogger() != null) {
-            engine.getProfilingLogger().printReport();
+        if ("routed".equals(mode)) {
+            if (sessionManager != null) {
+                sessionManager.disposeAll();
+                sessionManager = null;
+            }
+            router = null;
+        } else {
+            if (profilingEnabled && engine != null && engine.getProfilingLogger() != null) {
+                engine.getProfilingLogger().printReport();
+            }
+            if (engine != null) engine.dispose();
         }
-        if (engine != null) engine.dispose();
     }
 
     /**
@@ -103,7 +137,14 @@ public class OpenSkyReplayDroolsBenchmark {
             if (eventIndex >= events.size()) {
                 eventIndex = 0;  // wrap — session stays alive, clock keeps advancing
             }
-            total += engine.ingestEvent(events.get(eventIndex++));
+
+            OpenSkyStateVector sv = events.get(eventIndex++);
+
+            if ("routed".equals(mode)) {
+                total += engine.ingestEventRouted(sv, router, sessionManager);
+            } else {
+                total += engine.ingestEvent(sv);
+            }
         }
         return total;
     }
