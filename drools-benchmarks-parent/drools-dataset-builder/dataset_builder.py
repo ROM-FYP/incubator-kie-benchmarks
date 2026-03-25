@@ -158,11 +158,6 @@ def build_dataset(facts, fact_to_clusters, schema, output_csv, filter_fact_type=
             attrs = fact_data['attributes']
             for a in all_attributes:
                 val = attrs.get(a, '')
-                # Optional step: Bucket numeric values
-                if isinstance(val, (int, float)):
-                    if val < 5000: val = 'low'
-                    elif val < 20000: val = 'medium'
-                    else: val = 'high'
                 row.append(val)
                 
             # Add multi-label targets
