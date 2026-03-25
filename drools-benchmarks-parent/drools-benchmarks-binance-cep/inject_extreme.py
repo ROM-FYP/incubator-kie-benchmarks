@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 
 # Paths
-SOURCE_DIR = Path("src/main/resources/data/run_20260216_0632_10sym")
-DEST_DIR = Path("src/main/resources/data/run_20260216_0632_10sym_extreme")
+SOURCE_DIR = Path("src/main/resources/data/run_20260311_1340_10sym")
+DEST_DIR = Path("src/main/resources/data/run_20260311_1340_10sym_extreme")
 
 # Ensure destination exists
 if DEST_DIR.exists():

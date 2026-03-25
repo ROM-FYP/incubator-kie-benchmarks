@@ -116,13 +116,13 @@ public class BinanceFullDatasetBenchmark {
         kieSession = rulesProvider.createSession();
         replayController = new EventReplayController(kieSession);
 
-        // Insert bootstrap facts for ALL symbols
-        insertBootstrapFacts();
-
         // Register trace logger on this session
         if (traceLogger != null) {
             kieSession.addEventListener(traceLogger);
         }
+
+        // Insert bootstrap facts for ALL symbols
+        insertBootstrapFacts();
 
         invocationStartTime = System.currentTimeMillis();
     }

@@ -93,6 +93,46 @@ then
   insert(new FeedHealth($sym, "OK", 0L, 0L, 0L, 0L, 0L, 0, 0));
 end
 
+rule "BOOTSTRAP_DepthState"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not DepthState( symbol == $sym )
+then
+  insert(new DepthState($sym, 0.0, 0.0, "LOW", System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_TradeStats"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not TradeStats( symbol == $sym )
+then
+  insert(new TradeStats($sym, 0.0, 0.0, 0.0, "LOW", System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_VolState"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not VolState( symbol == $sym )
+then
+  insert(new VolState($sym, 0.0, 0.0, 0.0, "LOW", System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_LiquidationStats"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not LiquidationStats( symbol == $sym )
+then
+  insert(new LiquidationStats($sym, 0, 0.0, "LOW", System.currentTimeMillis()));
+end
+
 // ==========================================================
 // CLEANUP: Retract MarketEvents after all other rules process them.
 // Salience -1000 ensures this fires last.
@@ -136,7 +176,7 @@ when
   $e : MarketEvent( symbol == $sym, $t : tsMs )
   eval( ( $t - System.currentTimeMillis() ) > $f || ( System.currentTimeMillis() - $t ) > $p )
 then
-  // timestamp skew detected
+  insert(new RiskSignal($sym, "A03_TimestampSkewBound", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "A04_SymbolAllowlist"
@@ -165,7 +205,7 @@ when
   $c : RiskConfig( $sym : symbol )
   $e : MarketEvent( symbol == $sym, ( eventType == "TRADE" || eventType == "DEPTH" ), p1 <= 0.0 )
 then
-  // non-positive price flagged
+  insert(new RiskSignal($sym, "A06_PriceQtyPrecisionBounds", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "A07_DecodeErrorsQuarantine"
@@ -214,7 +254,7 @@ when
   $c : RiskConfig( $sym : symbol )
   $h : FeedHealth( symbol == $sym, lastHbTsMs > 0 )
 then
-  // Placeholder
+  insert(new RiskSignal($sym, "B11_StreamSilenceButOpen", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "B12_TradeActiveBookSilent"
@@ -264,7 +304,7 @@ when
   $e : MarketEvent( symbol == $sym, $t : tsMs )
   eval( ( System.currentTimeMillis() - $t ) > ( $p / 2 ) )
 then
-  // late event flagged
+  insert(new RiskSignal($sym, "B16_LateEventRateHigh", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "B17_OutOfOrderBurst"
@@ -282,7 +322,7 @@ rule "B18_PersistentBookGaps"
 when
   $h : FeedHealth( $sym : symbol, gapCount > 0 )
 then
-  // persistent book gaps flagged
+  insert(new RiskSignal($sym, "B18_PersistentBookGaps", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 // ==========================================================
@@ -365,25 +405,28 @@ when
   not MarketEvent( symbol == $sym, eventType == "TRADE", tsMs > $t1, tsMs <= $t2 )
   eval( ( $oldBid + $oldAsk ) > 0 && Math.abs( bps( ( $bid2 + $ask2 ) / 2.0, ( $oldBid + $oldAsk ) / 2.0 ) ) > $maxJump )
 then
-  // mid jump without trades
+  insert(new RiskSignal($sym, "C21_TopJumpNoTrades", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "C22_TopSizesInvalid"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "C22_TopSizesInvalid", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "C23_BookIncompletePartialDepth"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "C23_BookIncompletePartialDepth", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "C24_ExcessiveDepthUpdateRate"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "C24_ExcessiveDepthUpdateRate", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "C25_BookAgeStale"
@@ -393,7 +436,7 @@ when
   $h : FeedHealth( symbol == $sym, $lb : lastBookTsMs )
   eval( $lb > 0 && ( System.currentTimeMillis() - $lb ) > $stale )
 then
-  // book age exceeded
+  insert(new RiskSignal($sym, "C25_BookAgeStale", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "C26_BookSequenceDiscontinuityUnrecovered"
@@ -435,7 +478,7 @@ when
   $t : MarketEvent( symbol == $sym, eventType == "TRADE", $px : p1, $ts : tsMs )
   eval( ( $bid + $ask ) > 0 && Math.abs( bps( $px, ( $bid + $ask ) / 2.0 ) ) > $band )
 then
-  // trade price outlier
+  insert(new RiskSignal($sym, "D27_TradePriceOutOfBandVsMid", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "D28_TradeSizeOutlier"
@@ -470,6 +513,7 @@ rule "D31_LargeTradeCluster"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "D31_LargeTradeCluster", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "D32_TradesWhileBookStale"
@@ -478,7 +522,7 @@ when
   $h : FeedHealth( $sym : symbol, status == "STALE_BOOK" || status == "BOOK_UNTRUSTED" )
   $t : MarketEvent( symbol == $sym, eventType == "TRADE", $ts : tsMs )
 then
-  // data conflict: trades while book stale
+  insert(new RiskSignal($sym, "D32_TradesWhileBookStale", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 // ==========================================================
@@ -527,7 +571,7 @@ rule "E35_DepthCollapse"
 when
   $d : DepthState( $sym : symbol, tier == "CRIT_LOW" )
 then
-  // depth collapse detected
+  insert(new RiskSignal($sym, "E35_DepthCollapse", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "E36_SpreadBlowout"
@@ -535,7 +579,7 @@ rule "E36_SpreadBlowout"
 when
   $s : SpreadState( $sym : symbol, tier == "CRIT" )
 then
-  // spread blowout detected
+  insert(new RiskSignal($sym, "E36_SpreadBlowout", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "E37_PersistentThinLiquidity"
@@ -543,7 +587,7 @@ rule "E37_PersistentThinLiquidity"
 when
   $d : DepthState( $sym : symbol, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  // thin liquidity observed
+  insert(new RiskSignal($sym, "E37_PersistentThinLiquidity", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "E38_ImbalanceComputeTier_New"
@@ -575,7 +619,7 @@ rule "E39_ImbalancePersistence"
 when
   $i : ImbalanceState( $sym : symbol, tier == "EXTREME" )
 then
-  // extreme imbalance flagged
+  insert(new RiskSignal($sym, "E39_ImbalancePersistence", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "E40_ImbalanceFlipFlop"
@@ -583,7 +627,7 @@ rule "E40_ImbalanceFlipFlop"
 when
   $i : ImbalanceState( $sym : symbol )
 then
-  // tracked via imbalance value
+  insert(new RiskSignal($sym, "E40_ImbalanceFlipFlop", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "E41_LiquidityStressCombine"
@@ -592,7 +636,7 @@ when
   $s : SpreadState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  // liquidity stress: spread high + depth low
+  insert(new RiskSignal($sym, "E41_LiquidityStressCombine", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "E42_MarketImpactRiskCombine"
@@ -602,7 +646,7 @@ when
   $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
   $ts : TradeStats( symbol == $sym, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
 then
-  // market impact risk: liquidity stress + high trade rate
+  insert(new RiskSignal($sym, "E42_MarketImpactRiskCombine", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 // ==========================================================
@@ -622,18 +666,21 @@ rule "F44_PriceJump"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "F44_PriceJump", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F45_Whipsaw"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "F45_Whipsaw", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F46_SustainedTrend"
 when
   eval( false )
 then
+  insert(new RiskSignal("GLOBAL", "F46_SustainedTrend", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F47_VolSpike"
@@ -641,7 +688,7 @@ rule "F47_VolSpike"
 when
   $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
 then
-  // vol spike detected
+  insert(new RiskSignal($sym, "F47_VolSpike", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F48_VolPersistenceHigh"
@@ -649,7 +696,7 @@ rule "F48_VolPersistenceHigh"
 when
   $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
 then
-  // high vol flagged
+  insert(new RiskSignal($sym, "F48_VolPersistenceHigh", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F49_TradeDrivenMove"
@@ -658,7 +705,7 @@ when
   $ts : TradeStats( $sym : symbol, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
   $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  // trade driven move detected
+  insert(new RiskSignal($sym, "F49_TradeDrivenMove", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F50_BookDrivenMove"
@@ -668,7 +715,7 @@ when
   $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
   $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  // book driven move detected
+  insert(new RiskSignal($sym, "F50_BookDrivenMove", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F51_RegimeShiftToSafe"
@@ -676,7 +723,7 @@ rule "F51_RegimeShiftToSafe"
 when
   $v : VolState( $sym : symbol, tier == "CRIT" )
 then
-  // regime shift
+  insert(new RiskSignal($sym, "F51_RegimeShiftToSafe", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "F52_RegimeNormalizationEligibility"
@@ -684,7 +731,7 @@ rule "F52_RegimeNormalizationEligibility"
 when
   $v : VolState( $sym : symbol, tier == "LOW" )
 then
-  // normalization observed
+  insert(new RiskSignal($sym, "F52_RegimeNormalizationEligibility", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 // ==========================================================
@@ -731,7 +778,7 @@ rule "G54_ComputeMarkMidDivergence"
 when
   $ms : MarkIndexState( $sym : symbol )
 then
-  // mark-mid divergence available in MarkIndexState
+  insert(new RiskSignal($sym, "G54_ComputeMarkMidDivergence", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "G55_DislocationPersistence"
@@ -750,7 +797,7 @@ when
   $d : MarkIndexState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $ds: DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  // dislocation + thin book
+  insert(new RiskSignal($sym, "G56_DislocationPlusThinBook", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "G57_DislocationPlusTradeBurst"
@@ -759,7 +806,7 @@ when
   $d : MarkIndexState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $ts: TradeStats( symbol == $sym, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
 then
-  // dislocation + trade burst
+  insert(new RiskSignal($sym, "G57_DislocationPlusTradeBurst", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "G58_IndexStaleButMarkMoving"
@@ -768,7 +815,7 @@ when
   $h : FeedHealth( $sym : symbol, status == "STALE_INDEX" )
   $m : MarketEvent( symbol == $sym, eventType == "MARK" )
 then
-  // index stale while mark updates
+  insert(new RiskSignal($sym, "G58_IndexStaleButMarkMoving", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "G59_MarkStaleButMarketActive"
@@ -777,7 +824,7 @@ when
   $h : FeedHealth( $sym : symbol, status == "STALE_MARK" )
   $e : MarketEvent( symbol == $sym, eventType == "DEPTH" || eventType == "TRADE" )
 then
-  // mark stale while market active
+  insert(new RiskSignal($sym, "G59_MarkStaleButMarketActive", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "G60_SuddenDivergenceReversalFlag"
@@ -785,7 +832,7 @@ rule "G60_SuddenDivergenceReversalFlag"
 when
   $d : MarkIndexState( $sym : symbol, tier == "LOW" )
 then
-  // normalization from dislocation
+  insert(new RiskSignal($sym, "G60_SuddenDivergenceReversalFlag", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 // ==========================================================
@@ -809,7 +856,7 @@ when
   $ls : LiquidationStats( symbol == $sym, $cnt : liqCount10s )
   eval( $cnt >= $jump )
 then
-  // liquidation burst detected
+  insert(new RiskSignal($sym, "H62_LiqBurstJump", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "H63_LiqPlusVolSpike"
@@ -818,7 +865,7 @@ when
   $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  // liquidations + vol spike
+  insert(new RiskSignal($sym, "H63_LiqPlusVolSpike", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "H64_LiqPlusDepthCollapse"
@@ -827,7 +874,7 @@ when
   $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  // cascade risk: liquidations + thin depth
+  insert(new RiskSignal($sym, "H64_LiqPlusDepthCollapse", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "H65_LiqPlusDislocation"
@@ -836,7 +883,7 @@ when
   $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
   $d : MarkIndexState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  // severe cascade risk
+  insert(new RiskSignal($sym, "H65_LiqPlusDislocation", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "H66_CascadePersistenceEscalate"
@@ -844,7 +891,7 @@ rule "H66_CascadePersistenceEscalate"
 when
   $l : LiquidationStats( $sym : symbol, tier == "CRIT" )
 then
-  // cascade persistence
+  insert(new RiskSignal($sym, "H66_CascadePersistenceEscalate", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 rule "H67_CascadeCooldownEligibility"
@@ -852,7 +899,7 @@ rule "H67_CascadeCooldownEligibility"
 when
   $l : LiquidationStats( $sym : symbol, tier == "LOW" )
 then
-  // cooldown eligible
+  insert(new RiskSignal($sym, "H67_CascadeCooldownEligibility", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
 // ==========================================================
