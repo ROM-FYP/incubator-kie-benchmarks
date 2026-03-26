@@ -32,6 +32,24 @@ public class SessionManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(SessionManager.class);
 
+    private static final Set<String> MANDATORY_CORE_RULES = Set.of(
+            "R000_LoadDefaultParams",
+            "R041_AssignGridCell",
+            "R042_PairWithinCell",
+            "R056_BuildConflictCandidateBasic",
+            "R068_ClearOldConflictCandidates",
+            "R068b_ComputeCpaMetrics",
+            "R073_InitPairRiskState",
+            "R074a_UpdateStreaks_ALERT",
+            "R074b_UpdateStreaks_WARN",
+            "R074c_UpdateStreaks_INFO",
+            "R075_RaiseAlertsOnlyAfterPersistence",
+            "R081_RaiseTrafficAdvisoryOnWARN",
+            "R082_RaiseSafetyAlertOnALERT",
+            "R092_DoNotSpamNuisanceAlerts",
+            "R094_ClearOldAdvisories"
+    );
+
     /**
      * Regex that matches a complete rule block:
      * {@code rule "RuleName" ... end}
@@ -86,10 +104,20 @@ public class SessionManager {
 
             // Assemble cluster-specific DRL
             StringBuilder clusterDrl = new StringBuilder(header);
+            clusterDrl.append("\n\n// ---- Core Mandatory Rules ----\n\n");
+            
+            for (String mandatoryRule : MANDATORY_CORE_RULES) {
+                String block = ruleBlocks.get(mandatoryRule);
+                if (block != null) {
+                    clusterDrl.append(block).append("\n\n");
+                }
+            }
+
             clusterDrl.append("\n\n// ---- Cluster: ").append(clusterId).append(" ----\n\n");
 
             int included = 0;
             for (String ruleName : ruleNames) {
+                if (MANDATORY_CORE_RULES.contains(ruleName)) continue; // Avoid duplicate
                 String block = ruleBlocks.get(ruleName);
                 if (block != null) {
                     clusterDrl.append(block).append("\n\n");

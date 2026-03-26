@@ -20,31 +20,28 @@ Comparison of the single-session baseline vs the decision-tree-routed multi-sess
 
 ## Results Summary
 
-| Mode | Avg (s/op) | Error (99.9% CI) | Min | Max | Stdev |
-|---|---|---|---|---|---|
-| **Baseline** | 0.272 | ± 0.247 | 0.205 | 0.371 | 0.064 |
-| **Routed** | 0.222 | ± 0.089 | 0.198 | 0.260 | 0.023 |
+| Metric | Baseline | Routed | Difference |
+|---|---|---|---|
+| **Total Alerts** | 197 | 369 | +172 |
+| **Performance (s/op)** | 0.195 ± 0.131 | 0.470 ± 0.345 | ~2.4x slower |
 
 ---
 
 ## Analysis
 
-### Latency
-The routed mode achieved **0.222 s/op** average compared to the baseline's **0.272 s/op**, representing an approximate **18.4% reduction** in average processing time per 200-event window.
+### Core Fact Injection
+Initially, the routed architecture produced 0 alerts because intermediate derived facts (like `ConflictCandidate`) were trapped inside isolated cluster `KieSession`s and could not trigger downstream rules in other clusters. To fix this, a backbone of 15 core rules (Grid, Pair, CPA, Conflict, State, Alert) was injected into **every** cluster's DRL. 
 
-### Stability
-The routed mode exhibited significantly lower variance:
-- **Baseline stdev**: 0.064 s
-- **Routed stdev**: 0.023 s (2.8× tighter)
+### Over-Generation of Alerts (197 vs 369)
+The decision tree Router (`tree_rules.txt`) performs **multi-label routing**, meaning a single flight vector can be dispatched to 2 or 3 clusters simultaneously. Because each cluster now contains its own independent inference backbone, multiple isolated sessions will independently track the same aircraft, compute the same conflict, and raise their own localized `Alert`. This results in the same physical airspace conflict generating duplicate alerts across the parallel sessions.
 
-The 99.9% confidence interval for routed mode (±0.089) is substantially narrower than baseline (±0.247), indicating more predictable execution timing.
+### Latency Degradation
+The routed mode is now performing roughly **2.4x slower** than the monolithic baseline (0.470 s/op vs 0.195 s/op). 
+- **In Baseline:** The system evaluates the math to build a `ConflictCandidate` exactly once.
+- **In Routed:** If an event is routed to 3 clusters, the system dynamically calculates the `ConflictCandidate` geometry and `CpaMetrics` 3 separate times across 3 isolated REST networks. This redundant computation across the multi-label sessions heavily degrades the benchmark throughput.
 
-### Interpretation
-The routed architecture dispatches each incoming `OpenSkyStateVector` only to the cluster sessions predicted by the decision tree. This means:
-
-1. **Fewer redundant pattern matches**: Each cluster session contains only 2–23 rules (vs 103 in baseline), resulting in a smaller RETE network per session.
-2. **Reduced cross-rule interference**: Rules in unrelated clusters never see facts they wouldn't match, eliminating wasted partial-match overhead.
-3. **More consistent timing**: Since the router pre-filters which sessions receive facts, the per-iteration workload variance is lower.
+### Takeaways for Drools Clustering
+While static clustering via Infomap generates logically cohesive groupings, using isolated `KieSession` instances for stateful, forward-chaining rules is problematic for multi-label facts. A more performant integration for the decision tree would be executing within a single `KieSession` and using the Router to dynamically push/pop `agenda-groups` so facts remain shared.
 
 ### Cluster Session Breakdown
 

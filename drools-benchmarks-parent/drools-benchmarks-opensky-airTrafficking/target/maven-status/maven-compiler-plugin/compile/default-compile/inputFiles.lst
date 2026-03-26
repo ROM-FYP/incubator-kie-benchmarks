@@ -4,6 +4,7 @@ D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\AlertAck.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\benchmark\OpenSkyReplayDroolsBenchmark.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\router\ClusterRuleMapping.java
+D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\runner\AlertCountRunner.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\util\RuleMathUtil.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\TrackQuality.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-opensky-airTrafficking\src\main\java\bench\opensky\model\AlertInhibit.java

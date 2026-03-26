@@ -43,3 +43,4 @@ META-INF\BenchmarkList
 bench\opensky\model\Alert.class
 bench\opensky\model\Status.class
 bench\opensky\router\FeatureExtractor.class
+bench\opensky\runner\AlertCountRunner.class

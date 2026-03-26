@@ -158,6 +158,14 @@ public class OpenSkyReplayEngine {
         return total;
     }
 
+    /**
+     * Get the final count of Alerts currently in the active working memory (Baseline).
+     */
+    public long getAlertCount() {
+        if (session == null) return 0;
+        return session.getObjects(new org.kie.api.runtime.ClassObjectFilter(Alert.class)).size();
+    }
+
     /** Dispose the KieSession, releasing all resources. */
     public void dispose() {
         if (session != null) {
