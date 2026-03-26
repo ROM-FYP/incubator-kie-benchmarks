@@ -33,3 +33,12 @@ Thumbs.db
 *.tmp
 *.bak
 *~
+
+# test run csv
+binance-full*.csv
+binance-risk*.csv
+
+# Causal trace outputs
+*.jsonl
+binance_rule_graph.csv
+binance_rule_graph.net
