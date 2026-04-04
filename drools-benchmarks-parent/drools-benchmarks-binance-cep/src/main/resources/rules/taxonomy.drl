@@ -24,6 +24,71 @@ declare MarketEvent
 end
 
 // ==========================================================
+// New Types for Forward Chaining (J section)
+// ==========================================================
+declare SignificantTrade
+  @role( event )
+  @expires( 1s )
+  symbol : String
+  price : double
+  qty : double
+  tsMs : long
+end
+
+declare TradeSweepImpact
+  symbol : String
+  impactBps : double
+  tsMs : long
+end
+
+declare MicrostructureStress
+  symbol : String
+  level : String
+  tsMs : long
+end
+
+declare DepthUpdateTick
+  @role( event )
+  @expires( 1s )
+  symbol : String
+  bid : double
+  ask : double
+  tsMs : long
+end
+
+declare SpreadVelocityState
+  symbol : String
+  velocityBps : double
+  tsMs : long
+end
+
+declare MicroVolatilityRisk
+  symbol : String
+  state : String
+  tsMs : long
+end
+
+declare MarkPriceTick
+  @role( event )
+  @expires( 1s )
+  symbol : String
+  markPrice : double
+  tsMs : long
+end
+
+declare MarkDivergencePulsar
+  symbol : String
+  divergenceBps : double
+  tsMs : long
+end
+
+declare DislocationEscalation
+  symbol : String
+  state : String
+  tsMs : long
+end
+
+// ==========================================================
 // Helper functions
 // ==========================================================
 
@@ -133,6 +198,66 @@ then
   insert(new LiquidationStats($sym, 0, 0.0, "LOW", System.currentTimeMillis()));
 end
 
+rule "BOOTSTRAP_TradeSweepImpact"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not TradeSweepImpact( symbol == $sym )
+then
+  insert(new TradeSweepImpact($sym, 0.0, System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_MicrostructureStress"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not MicrostructureStress( symbol == $sym )
+then
+  insert(new MicrostructureStress($sym, "NORMAL", System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_SpreadVelocityState"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not SpreadVelocityState( symbol == $sym )
+then
+  insert(new SpreadVelocityState($sym, 0.0, System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_MicroVolatilityRisk"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not MicroVolatilityRisk( symbol == $sym )
+then
+  insert(new MicroVolatilityRisk($sym, "NORMAL", System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_MarkDivergencePulsar"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not MarkDivergencePulsar( symbol == $sym )
+then
+  insert(new MarkDivergencePulsar($sym, 0.0, System.currentTimeMillis()));
+end
+
+rule "BOOTSTRAP_DislocationEscalation"
+  salience 998
+  no-loop
+when
+  $c : RiskConfig( $sym : symbol )
+  not DislocationEscalation( symbol == $sym )
+then
+  insert(new DislocationEscalation($sym, "WATCHING", System.currentTimeMillis()));
+end
+
 // ==========================================================
 // CLEANUP: Retract MarketEvents after all other rules process them.
 // Salience -1000 ensures this fires last.
@@ -145,6 +270,33 @@ when
   $e : MarketEvent()
 then
   retract($e);
+end
+
+rule "CLEANUP_RetractSignificantTrade"
+  salience -1000
+  no-loop
+when
+  $st : SignificantTrade()
+then
+  retract($st);
+end
+
+rule "CLEANUP_RetractDepthUpdateTick"
+  salience -1000
+  no-loop
+when
+  $d : DepthUpdateTick()
+then
+  retract($d);
+end
+
+rule "CLEANUP_RetractMarkPriceTick"
+  salience -1000
+  no-loop
+when
+  $m : MarkPriceTick()
+then
+  retract($m);
 end
 
 // ==========================================================
@@ -959,4 +1111,137 @@ when
   eval( ( System.currentTimeMillis() - $lc ) > $cd )
 then
   modify($m) { setMode("NORMAL"), setLastChangeMs(System.currentTimeMillis()), setReason("healthy") }
+end
+
+// ==========================================================
+// J) Forward Chaining Stress Detection (Rules 71-74)
+// Demonstrates depth-4 rule chaining from alpha MarketEvent filters
+// ==========================================================
+
+rule "J71_Alpha_SignificantTrade"
+  no-loop
+when
+  $e : MarketEvent( eventType == "TRADE", p2 >= 0.01, $sym : symbol, $px : p1, $qty : p2, $ts : tsMs )
+then
+  insert(new SignificantTrade($sym, $px, $qty, $ts));
+end
+
+rule "J72_Beta_ComputeSweepImpact"
+  no-loop
+when
+  $st : SignificantTrade( $sym : symbol, $px : price, $ts : tsMs )
+  $bba : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask )
+  $tsi : TradeSweepImpact( symbol == $sym )
+then
+  double mid = ( $bid + $ask ) / 2.0;
+  double impact = ( mid > 0 ) ? Math.abs( bps( $px, mid ) ) : 0.0;
+  modify($tsi) { setImpactBps(impact), setTsMs($ts) }
+end
+
+rule "J73_Beta_AssessMicrostructureStress"
+  no-loop
+when
+  $tsi : TradeSweepImpact( $sym : symbol, impactBps > 0.0, $ts : tsMs )
+  $ss : SpreadState( symbol == $sym )
+  $ms : MicrostructureStress( symbol == $sym )
+then
+  modify($ms) { setLevel("ELEVATED"), setTsMs($ts) }
+end
+
+rule "J74_Beta_EmitStressSignal"
+  no-loop
+when
+  $ms : MicrostructureStress( $sym : symbol, level == "ELEVATED", $ts : tsMs )
+then
+  insert(new RiskSignal($sym, "J74_MicrostructureStress", "HIGH", $ts, "Forward chaining 4 levels deep"));
+  modify($ms) { setLevel("NORMAL") }
+end
+
+// ==========================================================
+// K) Micro-Volatility Chaining (Rules 75-78)
+// Demonstrates depth-4 rule chaining from alpha DEPTH filters
+// ==========================================================
+
+rule "K75_Alpha_DepthUpdate"
+  no-loop
+when
+  $e : MarketEvent( eventType == "DEPTH", p1 > 0, p2 > 0, $sym : symbol, $bid : p1, $ask : p2, $ts : tsMs )
+then
+  insert(new DepthUpdateTick($sym, $bid, $ask, $ts));
+end
+
+rule "K76_Beta_SpreadVelocity"
+  no-loop
+when
+  $dt : DepthUpdateTick( $sym : symbol, $bid : bid, $ask : ask, $ts : tsMs )
+  $bba : BestBidAsk( symbol == $sym, $oldBid : bid, $oldAsk : ask )
+  $svs : SpreadVelocityState( symbol == $sym )
+then
+  double oldMid = ( $oldBid + $oldAsk ) / 2.0;
+  double newMid = ( $bid + $ask ) / 2.0;
+  double vel = ( oldMid > 0 ) ? Math.abs( bps( newMid, oldMid ) ) : 0.0;
+  modify($svs) { setVelocityBps(vel), setTsMs($ts) }
+end
+
+rule "K77_Beta_AssessMicroVolRisk"
+  no-loop
+when
+  $svs : SpreadVelocityState( $sym : symbol, velocityBps >= 0.0, $ts : tsMs )
+  $ds : DepthState( symbol == $sym )
+  $mvr : MicroVolatilityRisk( symbol == $sym )
+then
+  modify($mvr) { setState("ACTIVE"), setTsMs($ts) }
+end
+
+rule "K78_Beta_EmitMicroVolSignal"
+  no-loop
+when
+  $mvr : MicroVolatilityRisk( $sym : symbol, state == "ACTIVE", $ts : tsMs )
+then
+  insert(new RiskSignal($sym, "K78_MicroVolatilityBurst", "HIGH", $ts, "Forward chaining 4 levels deep (DEPTH)"));
+  modify($mvr) { setState("NORMAL") }
+end
+
+// ==========================================================
+// L) Mark Dislocation Chaining (Rules 79-82)
+// Demonstrates depth-4 rule chaining from alpha MARK filters
+// ==========================================================
+
+rule "L79_Alpha_MarkPriceUpdate"
+  no-loop
+when
+  $e : MarketEvent( eventType == "MARK", p1 > 0, $sym : symbol, $mark : p1, $ts : tsMs )
+then
+  insert(new MarkPriceTick($sym, $mark, $ts));
+end
+
+rule "L80_Beta_MarkDivergence"
+  no-loop
+when
+  $mt : MarkPriceTick( $sym : symbol, $mp : markPrice, $ts : tsMs )
+  $bba : BestBidAsk( symbol == $sym, $bid : bid, $ask : ask )
+  $mdp : MarkDivergencePulsar( symbol == $sym )
+then
+  double mid = ( $bid + $ask ) / 2.0;
+  double div = ( mid > 0 ) ? Math.abs( bps( $mp, mid ) ) : 0.0;
+  modify($mdp) { setDivergenceBps(div), setTsMs($ts) }
+end
+
+rule "L81_Beta_AssessDislocation"
+  no-loop
+when
+  $mdp : MarkDivergencePulsar( $sym : symbol, divergenceBps >= 0.0, $ts : tsMs )
+  $vs : VolState( symbol == $sym )
+  $de : DislocationEscalation( symbol == $sym )
+then
+  modify($de) { setState("TRIGGERED"), setTsMs($ts) }
+end
+
+rule "L82_Beta_EmitDislocationSignal"
+  no-loop
+when
+  $de : DislocationEscalation( $sym : symbol, state == "TRIGGERED", $ts : tsMs )
+then
+  insert(new RiskSignal($sym, "L82_MarkDislocationDanger", "HIGH", $ts, "Forward chaining 4 levels deep (MARK)"));
+  modify($de) { setState("WATCHING") }
 end

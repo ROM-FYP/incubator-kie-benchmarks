@@ -1,0 +1,70 @@
+*Vertices 31
+1 "B12_TradeActiveBookSilent"
+2 "B13_BookActiveTradeSilent"
+3 "B14_StaleMark"
+4 "BOOTSTRAP_DepthState"
+5 "BOOTSTRAP_LiquidationStats"
+6 "BOOTSTRAP_TradeStats"
+7 "BOOTSTRAP_VolState"
+8 "C21_TopJumpNoTrades"
+9 "C25_BookAgeStale"
+10 "D30_TradeRateTiering"
+11 "D32_TradesWhileBookStale"
+12 "DERIVE_BestBidAsk_New"
+13 "DERIVE_BestBidAsk_Update"
+14 "E33_SpreadComputeAndTier_New"
+15 "E33_SpreadComputeAndTier_Update"
+16 "E34_DepthTiering"
+17 "E35_DepthCollapse"
+18 "E36_SpreadBlowout"
+19 "E37_PersistentThinLiquidity"
+20 "E41_LiquidityStressCombine"
+21 "F43_VolTiering"
+22 "F52_RegimeNormalizationEligibility"
+23 "G59_MarkStaleButMarketActive"
+24 "H61_LiqTiering"
+25 "H67_CascadeCooldownEligibility"
+26 "I68_EnterThrottled_OnDegraded"
+27 "I69_EnterSafe_OnLiquidityStress"
+28 "RECOVERY_ExitThrottledToNormal"
+29 "UPD_LastSeen_Depth"
+30 "UPD_LastSeen_Mark"
+31 "UPD_LastSeen_Trade"
+*Arcs
+1 11 1427312
+1 26 10
+1 29 10
+1 31 1427302
+2 29 149865
+2 30 17840
+3 23 17840
+3 29 17840
+4 16 10
+4 19 10
+5 24 10
+5 25 10
+6 10 10
+7 21 10
+7 22 10
+12 13 10
+12 14 10
+13 8 86029
+13 15 164575
+14 15 10
+14 18 9
+14 20 10
+14 27 9
+15 18 142570
+15 20 159777
+15 27 1
+16 17 10
+16 20 159787
+16 27 10
+26 27 10
+26 28 11
+29 1 167715
+29 2 167715
+29 9 167715
+29 28 11
+30 3 17840
+31 1 1427312

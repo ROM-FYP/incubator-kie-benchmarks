@@ -1,0 +1,109 @@
+*Vertices 47
+1 "B12_TradeActiveBookSilent"
+2 "B13_BookActiveTradeSilent"
+3 "B14_StaleMark"
+4 "BOOTSTRAP_DepthState"
+5 "BOOTSTRAP_DislocationEscalation"
+6 "BOOTSTRAP_LiquidationStats"
+7 "BOOTSTRAP_MarkDivergencePulsar"
+8 "BOOTSTRAP_MicroVolatilityRisk"
+9 "BOOTSTRAP_SpreadVelocityState"
+10 "BOOTSTRAP_TradeStats"
+11 "BOOTSTRAP_VolState"
+12 "C21_TopJumpNoTrades"
+13 "C25_BookAgeStale"
+14 "CLEANUP_RetractDepthUpdateTick"
+15 "CLEANUP_RetractMarkPriceTick"
+16 "CLEANUP_RetractSignificantTrade"
+17 "D30_TradeRateTiering"
+18 "D32_TradesWhileBookStale"
+19 "DERIVE_BestBidAsk_New"
+20 "DERIVE_BestBidAsk_Update"
+21 "E33_SpreadComputeAndTier_New"
+22 "E33_SpreadComputeAndTier_Update"
+23 "E34_DepthTiering"
+24 "E35_DepthCollapse"
+25 "E36_SpreadBlowout"
+26 "E37_PersistentThinLiquidity"
+27 "E41_LiquidityStressCombine"
+28 "F43_VolTiering"
+29 "F52_RegimeNormalizationEligibility"
+30 "G59_MarkStaleButMarketActive"
+31 "H61_LiqTiering"
+32 "H67_CascadeCooldownEligibility"
+33 "I68_EnterThrottled_OnDegraded"
+34 "I69_EnterSafe_OnLiquidityStress"
+35 "J71_Alpha_SignificantTrade"
+36 "K75_Alpha_DepthUpdate"
+37 "K76_Beta_SpreadVelocity"
+38 "K77_Beta_AssessMicroVolRisk"
+39 "K78_Beta_EmitMicroVolSignal"
+40 "L79_Alpha_MarkPriceUpdate"
+41 "L80_Beta_MarkDivergence"
+42 "L81_Beta_AssessDislocation"
+43 "L82_Beta_EmitDislocationSignal"
+44 "RECOVERY_ExitThrottledToNormal"
+45 "UPD_LastSeen_Depth"
+46 "UPD_LastSeen_Mark"
+47 "UPD_LastSeen_Trade"
+*Arcs
+1 18 1427312
+1 33 10
+1 45 10
+1 47 1427302
+2 45 149865
+2 46 17840
+3 30 17840
+3 45 17840
+4 23 10
+4 26 10
+4 38 10
+5 42 10
+6 31 10
+6 32 10
+7 41 10
+7 42 10
+8 38 10
+9 37 10
+9 38 10
+10 17 10
+11 28 10
+11 29 10
+11 42 10
+19 20 10
+19 21 10
+20 12 86029
+20 22 164575
+20 37 164575
+20 41 17840
+21 22 10
+21 25 9
+21 27 10
+21 34 9
+22 25 142570
+22 27 159777
+22 34 1
+23 24 10
+23 27 159787
+23 34 10
+23 38 164575
+28 42 17840
+33 34 10
+33 44 11
+35 16 1033282
+36 14 164575
+36 37 164575
+37 38 164575
+38 39 164585
+39 38 164575
+40 15 17840
+40 41 17840
+41 42 17840
+42 43 17850
+43 42 17840
+45 1 167715
+45 2 167715
+45 13 167715
+45 44 11
+46 3 17840
+47 1 1427312
