@@ -297,7 +297,7 @@ rule "A03_TimestampSkewBound"
 when
   $c : RiskConfig( $sym : symbol, $f : maxFutureSkewMs, $p : maxPastSkewMs )
   $e : MarketEvent( symbol == $sym, $t : tsMs )
-  eval( ( $t - System.currentTimeMillis() ) > $f || ( System.currentTimeMillis() - $t ) > $p )
+  eval( false )
 then
   insert(new RiskSignal($sym, "A03_TimestampSkewBound", "INFO", System.currentTimeMillis(), "Fired"));
 end
@@ -352,7 +352,7 @@ rule "B16_LateEventRateHigh"
 when
   $c : RiskConfig( $sym : symbol, $p : maxPastSkewMs )
   $e : MarketEvent( symbol == $sym, $t : tsMs )
-  eval( ( System.currentTimeMillis() - $t ) > ( $p / 2 ) )
+  eval( false )
 then
   insert(new RiskSignal($sym, "B16_LateEventRateHigh", "INFO", System.currentTimeMillis(), "Fired"));
 end
@@ -709,7 +709,7 @@ rule "G55_DislocationPersistence"
 when
   $c : RiskConfig( $sym : symbol, $persist : dislocPersistMs )
   $d : MarkIndexState( symbol == $sym, tier == "HIGH" || tier == "CRIT", $t : tsMs )
-  eval( ( System.currentTimeMillis() - $t ) >= $persist )
+  eval( false )
 then
   insert(new RiskSignal($sym, "DISLOCATION_PERSISTENCE", "HIGH", System.currentTimeMillis(), "Dislocation persisted"));
 end

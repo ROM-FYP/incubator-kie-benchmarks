@@ -171,7 +171,7 @@ public class ClusterPartitioner {
             6, "Trade Rate");
 
     /** Maximum recursion depth for bridge rule duplication. */
-    private static final int BRIDGE_DEPTH_CAP = 3;
+    private static final int BRIDGE_DEPTH_CAP = 99;
 
     /**
      * Fact types to SKIP during bridge rule duplication.

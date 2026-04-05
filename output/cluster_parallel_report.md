@@ -1,6 +1,6 @@
 # Cluster-Level Parallel Execution Report
 
-*Generated: Sun Apr 05 14:23:10 IST 2026*
+*Generated: Sun Apr 05 15:05:52 IST 2026*
 
 ## 1. Methodology
 
@@ -18,11 +18,11 @@
 | 3 | Trade Alpha | 2 | +0 | 2 | [TRADE] |
 | 5 | Liquidation | 3 | +0 | 3 | [] |
 | 6 | Trade Rate | 2 | +0 | 2 | [] |
-| F | Fallback | 48 | 0 | 54 | ALL (fault-tolerant) |
+| F | Fallback | 48 | 0 | 62 | ALL (fault-tolerant) |
 
 - Infomap coverage: 47/110 rules (43%)
 - Bridge rules duplicated: 0 (0% overhead on clusters)
-- Fallback coverage: 54/110 rules (49%)
+- Fallback coverage: 62/110 rules (56%)
 
 ## 3. Routing Table
 
@@ -36,23 +36,23 @@
 
 | Metric | Single Session | Cluster (8T) |
 |--------|---------------|               |
-| Events/sec | 56691.58 | 87419.88 |
-| Duration (ms) | 28455 | 18453 |
-| Speedup | 1.00x | 1.54x |
+| Events/sec | 60805.09 | 57436.41 |
+| Duration (ms) | 26530 | 28086 |
+| Speedup | 1.00x | 0.94x |
 
 ## 5. Correctness Validation
 
-- Baseline rules fired: 8539756
-- Cluster + Fallback fired: 7604136 (≥ baseline due to bridge duplication)
+- Baseline rules fired: 5313438
+- Cluster + Fallback fired: 6444382 (≥ baseline due to bridge duplication)
 - Correctness: **PASS ✅**
 
 ## 6. Fallback Analysis (key research metric)
 
 | Metric | Value |
 |--------|-------|
-| Fallback rules fired | 5172722 |
-| Total rules fired | 7604136 |
-| Fallback % of total | 68.0% |
+| Fallback rules fired | 4012968 |
+| Total rules fired | 6444382 |
+| Fallback % of total | 62.3% |
 | Cluster-only fired | 2431414 |
 
 > If fallback fires <5% of total activations, Infomap clustering
@@ -68,11 +68,11 @@
 | Cluster 3 | 1427312 | 2066564 | — |
 | Cluster 5 | 0 | 0 | — |
 | Cluster 6 | 0 | 0 | — |
-| Fallback | 1613159 | 5172722 | — |
+| Fallback | 1613159 | 4012968 | — |
 
 ## 8. Conclusions
 
-- Speedup: **1.54x**
-- Infomap quality: **NEEDS REFINEMENT** — fallback fired 68.0%, significant rule interactions missed by clustering
+- Speedup: **0.94x**
+- Infomap quality: **NEEDS REFINEMENT** — fallback fired 62.3%, significant rule interactions missed by clustering
 - Architecture: barrier-free BlockingQueue workers (no per-event sync)
 - Thread pool: 8 threads for 6 sessions

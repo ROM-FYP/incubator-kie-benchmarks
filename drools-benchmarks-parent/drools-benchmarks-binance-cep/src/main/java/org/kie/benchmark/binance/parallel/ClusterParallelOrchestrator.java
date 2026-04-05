@@ -93,6 +93,12 @@ public class ClusterParallelOrchestrator {
     // Per-session metrics (populated after replayEvents)
     private final Map<Integer, Integer> perSessionFired = new LinkedHashMap<>();
     private final Map<Integer, Integer> perSessionEventsReceived = new LinkedHashMap<>();
+    
+    private final Map<String, Integer> emittedSignals = new ConcurrentHashMap<>();
+
+    public Map<String, Integer> getEmittedSignals() {
+        return emittedSignals;
+    }
 
     /**
      * Creates the cluster-parallel orchestrator.
@@ -121,6 +127,7 @@ public class ClusterParallelOrchestrator {
         // Build cluster sessions
         for (PartitionPlan.SelfContainedCluster c : plan.getClusters()) {
             KieSession session = buildSessionFromDrl(c.getDrlContent(), c.getClusterId());
+            attachSignalListener(session);
             insertBootstrapFacts(session, symbols);
             session.fireAllRules();
             clusterSessions.put(c.getClusterId(), session);
@@ -132,6 +139,7 @@ public class ClusterParallelOrchestrator {
         // Build fallback session
         PartitionPlan.SelfContainedCluster fb = plan.getFallbackCluster();
         fallbackSession = buildSessionFromDrl(fb.getDrlContent(), FALLBACK_ID);
+        attachSignalListener(fallbackSession);
         insertBootstrapFacts(fallbackSession, symbols);
         fallbackSession.fireAllRules();
         eventQueues.put(FALLBACK_ID, new LinkedBlockingQueue<>());
@@ -292,11 +300,25 @@ public class ClusterParallelOrchestrator {
         KieContainer kc = ks.newKieContainer(rid);
         KieSessionConfiguration cfg = ks.newKieSessionConfiguration();
         cfg.setOption(ClockTypeOption.PSEUDO);
-        return kc.newKieSession("cluster" + clusterId + "Session", cfg);
+        KieSession session = kc.newKieSession("cluster" + clusterId + "Session", cfg);
+        return session;
+    }
+
+    private void attachSignalListener(KieSession session) {
+        session.addEventListener(new org.kie.api.event.rule.DefaultRuleRuntimeEventListener() {
+            @Override
+            public void objectInserted(org.kie.api.event.rule.ObjectInsertedEvent event) {
+                if (event.getObject() instanceof RiskSignal) {
+                    RiskSignal s = (RiskSignal) event.getObject();
+                    String key = s.getSymbol() + "-" + s.getKind() + "-" + s.getSeverity();
+                    emittedSignals.merge(key, 1, Integer::sum);
+                }
+            }
+        });
     }
 
     /**
-     * Insert bootstrap facts for all symbols into a session.
+     * Inserts static bootstrap facts for all symbols into the session.
      * Matches the bootstrap pattern from
      * {@link org.kie.benchmark.binance.BinanceFullDatasetBenchmark}.
      */

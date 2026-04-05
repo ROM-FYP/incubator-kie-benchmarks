@@ -212,6 +212,18 @@ public class BinanceClusterBenchmark {
             BinanceRulesProvider rulesProvider = new BinanceRulesProvider();
             KieSession baselineSession = rulesProvider.createSession();
             EventReplayController controller = new EventReplayController(baselineSession);
+            
+            Map<String, Integer> baselineSignals = new HashMap<>();
+            baselineSession.addEventListener(new org.kie.api.event.rule.DefaultRuleRuntimeEventListener() {
+                @Override
+                public void objectInserted(org.kie.api.event.rule.ObjectInsertedEvent event) {
+                    if (event.getObject() instanceof RiskSignal) {
+                        RiskSignal s = (RiskSignal) event.getObject();
+                        String key = s.getSymbol() + "-" + s.getKind() + "-" + s.getSeverity();
+                        baselineSignals.put(key, baselineSignals.getOrDefault(key, 0) + 1);
+                    }
+                }
+            });
 
             for (String sym : symbols) {
                 baselineSession.insert(new RiskConfig(sym));
@@ -279,6 +291,35 @@ public class BinanceClusterBenchmark {
 
             double speedup = (double) baselineDuration / clusterDuration;
             System.out.println(String.format("%-25s %15s %14.2fx", "Speedup", "1.00x", speedup));
+
+            System.out.println("\n── Experimental Correctness ────────────────");
+            Map<String, Integer> clusterSignals = orchestrator.getEmittedSignals();
+            
+            int baselineTotalSignals = baselineSignals.values().stream().mapToInt(Integer::intValue).sum();
+            int clusterTotalSignals = clusterSignals.values().stream().mapToInt(Integer::intValue).sum();
+            
+            System.out.println("Baseline Emitted Signals   : " + baselineTotalSignals);
+            System.out.println("Cluster Emitted Signals    : " + clusterTotalSignals);
+            
+            Set<String> allKeys = new HashSet<>();
+            allKeys.addAll(baselineSignals.keySet());
+            allKeys.addAll(clusterSignals.keySet());
+            
+            int perfectIdentityMatches = 0;
+            int singleMisses = 0;
+            long clusterRedundant = 0;
+            
+            for (String key : allKeys) {
+                int baseCt = baselineSignals.getOrDefault(key, 0);
+                int clustCt = clusterSignals.getOrDefault(key, 0);
+                if (baseCt > 0 && clustCt > 0) perfectIdentityMatches++;
+                if (baseCt > 0 && clustCt == 0) singleMisses++;
+                if (clustCt > baseCt) clusterRedundant += (clustCt - baseCt);
+            }
+            
+            System.out.println("Perfect Signal Matches     : " + perfectIdentityMatches + " / " + baselineSignals.size());
+            System.out.println("Signals Missed by Engine   : " + singleMisses);
+            System.out.println("Extra Redundant Signals    : " + clusterRedundant);
 
             // Correctness: each cluster only sees its partition of rules.
             // Total cluster+fallback WILL be < baseline — that's expected.
