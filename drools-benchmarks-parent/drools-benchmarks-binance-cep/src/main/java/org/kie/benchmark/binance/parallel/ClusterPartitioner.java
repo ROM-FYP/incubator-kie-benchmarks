@@ -250,16 +250,20 @@ public class ClusterPartitioner {
             List<String> duplicatedRules = new ArrayList<>();
 
             Queue<String> missingFacts = new LinkedList<>();
-            missingFacts.addAll(findMissingInputFacts(allClusterRuleNames, ruleMetaMap));
+            Set<String> missingInitial = findMissingInputFacts(allClusterRuleNames, ruleMetaMap);
+            missingFacts.addAll(missingInitial);
+            System.out.println("[BridgeDebug] Cluster " + clusterId + " initially missing: " + missingInitial);
 
             int depth = 0;
             while (!missingFacts.isEmpty() && depth < BRIDGE_DEPTH_CAP) {
                 String missingFact = missingFacts.poll();
                 // Skip bridge duplication for high-cycle-risk fact types
                 if (BRIDGE_SKIP_FACT_TYPES.contains(missingFact)) {
+                    System.out.println("[BridgeDebug]   -> SKIPPING high-risk fact: " + missingFact);
                     continue;
                 }
                 List<String> producers = findProducersOf(missingFact, ruleMetaMap);
+                System.out.println("[BridgeDebug]   -> Fact " + missingFact + " has producers: " + producers);
                 for (String producer : producers) {
                     if (!allClusterRuleNames.contains(producer)) {
                         // Skip if this producer outputs any high-cycle-risk fact
@@ -325,11 +329,44 @@ public class ClusterPartitioner {
             }
         }
 
+        Set<String> allFallbackRuleNames = new LinkedHashSet<>(fallbackRules);
+        List<String> duplicatedFallbackRules = new ArrayList<>();
+
+        Queue<String> missingFacts = new LinkedList<>();
+        missingFacts.addAll(findMissingInputFacts(allFallbackRuleNames, ruleMetaMap));
+
+        int depth = 0;
+        while (!missingFacts.isEmpty() && depth < BRIDGE_DEPTH_CAP) {
+            String missingFact = missingFacts.poll();
+            if (BRIDGE_SKIP_FACT_TYPES.contains(missingFact)) {
+                continue; // Prevent infinite re-assessment of FeedHealth loops
+            }
+            List<String> producers = findProducersOf(missingFact, ruleMetaMap);
+            for (String producer : producers) {
+                if (!allFallbackRuleNames.contains(producer)) {
+                    RuleMeta pm = ruleMetaMap.get(producer);
+                    if (pm != null && pm.getOutputs().stream().anyMatch(BRIDGE_SKIP_FACT_TYPES::contains)) {
+                        continue;
+                    }
+                    allFallbackRuleNames.add(producer);
+                    duplicatedFallbackRules.add(producer);
+                    if (pm != null) {
+                        for (String input : pm.getInputs()) {
+                            if (!isProducedWithinCluster(input, allFallbackRuleNames, ruleMetaMap)) {
+                                missingFacts.add(input);
+                            }
+                        }
+                    }
+                }
+            }
+            depth++;
+        }
+
         PartitionPlan.SelfContainedCluster fallback = new PartitionPlan.SelfContainedCluster(
-                -1, "Fallback", fallbackRules, Collections.emptyList(),
+                -1, "Fallback", fallbackRules, duplicatedFallbackRules,
                 LhsConstraintParser.ALL_EVENT_TYPES,
                 Collections.emptySet(), Collections.emptySet());
-        fallback.setDrlContent(DrlSplitter.buildDrlForRules(drlContent, fallbackRules));
+        fallback.setDrlContent(DrlSplitter.buildDrlForRules(drlContent, new ArrayList<>(allFallbackRuleNames)));
 
         System.out.println("[ClusterPartitioner]   " + fallback);
 

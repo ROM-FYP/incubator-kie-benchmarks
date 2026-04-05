@@ -1,6 +1,6 @@
 # Cluster-Level Parallel Execution Report
 
-*Generated: Sun Apr 05 13:54:57 IST 2026*
+*Generated: Sun Apr 05 14:23:10 IST 2026*
 
 ## 1. Methodology
 
@@ -18,11 +18,11 @@
 | 3 | Trade Alpha | 2 | +0 | 2 | [TRADE] |
 | 5 | Liquidation | 3 | +0 | 3 | [] |
 | 6 | Trade Rate | 2 | +0 | 2 | [] |
-| F | Fallback | 48 | 0 | 48 | ALL (fault-tolerant) |
+| F | Fallback | 48 | 0 | 54 | ALL (fault-tolerant) |
 
 - Infomap coverage: 47/110 rules (43%)
 - Bridge rules duplicated: 0 (0% overhead on clusters)
-- Fallback coverage: 48/110 rules (44%)
+- Fallback coverage: 54/110 rules (49%)
 
 ## 3. Routing Table
 
@@ -36,23 +36,23 @@
 
 | Metric | Single Session | Cluster (8T) |
 |--------|---------------|               |
-| Events/sec | 64215.56 | 102893.16 |
-| Duration (ms) | 25121 | 15678 |
-| Speedup | 1.00x | 1.60x |
+| Events/sec | 56691.58 | 87419.88 |
+| Duration (ms) | 28455 | 18453 |
+| Speedup | 1.00x | 1.54x |
 
 ## 5. Correctness Validation
 
 - Baseline rules fired: 8539756
-- Cluster + Fallback fired: 7274966 (≥ baseline due to bridge duplication)
+- Cluster + Fallback fired: 7604136 (≥ baseline due to bridge duplication)
 - Correctness: **PASS ✅**
 
 ## 6. Fallback Analysis (key research metric)
 
 | Metric | Value |
 |--------|-------|
-| Fallback rules fired | 4843552 |
-| Total rules fired | 7274966 |
-| Fallback % of total | 66.6% |
+| Fallback rules fired | 5172722 |
+| Total rules fired | 7604136 |
+| Fallback % of total | 68.0% |
 | Cluster-only fired | 2431414 |
 
 > If fallback fires <5% of total activations, Infomap clustering
@@ -68,11 +68,11 @@
 | Cluster 3 | 1427312 | 2066564 | — |
 | Cluster 5 | 0 | 0 | — |
 | Cluster 6 | 0 | 0 | — |
-| Fallback | 1613159 | 4843552 | — |
+| Fallback | 1613159 | 5172722 | — |
 
 ## 8. Conclusions
 
-- Speedup: **1.60x**
-- Infomap quality: **NEEDS REFINEMENT** — fallback fired 66.6%, significant rule interactions missed by clustering
+- Speedup: **1.54x**
+- Infomap quality: **NEEDS REFINEMENT** — fallback fired 68.0%, significant rule interactions missed by clustering
 - Architecture: barrier-free BlockingQueue workers (no per-event sync)
 - Thread pool: 8 threads for 6 sessions

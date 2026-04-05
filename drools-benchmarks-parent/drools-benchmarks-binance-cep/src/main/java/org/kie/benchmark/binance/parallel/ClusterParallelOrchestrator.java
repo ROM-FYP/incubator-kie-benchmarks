@@ -175,30 +175,19 @@ public class ClusterParallelOrchestrator {
             int cid = entry.getKey();
             KieSession session = entry.getValue();
             BlockingQueue<MarketEvent> queue = eventQueues.get(cid);
-            futures.put(cid, threadPool.submit(() -> drainAndFire(session, queue)));
+            futures.put(cid, threadPool.submit(() -> drainAndFire(cid, session, queue)));
         }
 
         // Main thread: route events to queues
         for (MarketEvent event : events) {
-            List<Integer> targets = routingTable.getOrDefault(
-                    event.getEventType(), Collections.emptyList());
-            for (int cid : targets) {
-                BlockingQueue<MarketEvent> q = eventQueues.get(cid);
-                if (q != null) {
-                    try {
-                        q.put(event);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Interrupted while enqueuing event", e);
-                    }
+            // Broadcast to absolutely every queue for synchronization (Watermarks)
+            for (BlockingQueue<MarketEvent> q : eventQueues.values()) {
+                try {
+                    q.put(event);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted while enqueuing event", e);
                 }
-            }
-            // Fallback always receives every event
-            try {
-                eventQueues.get(FALLBACK_ID).put(event);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Interrupted while enqueuing to fallback", e);
             }
         }
 
@@ -234,7 +223,7 @@ public class ClusterParallelOrchestrator {
      *
      * @return array of [totalFired, eventsReceived]
      */
-    private int[] drainAndFire(KieSession session, BlockingQueue<MarketEvent> queue)
+    private int[] drainAndFire(int clusterId, KieSession session, BlockingQueue<MarketEvent> queue)
             throws InterruptedException {
         SessionPseudoClock clock = session.getSessionClock();
         int fired = 0;
@@ -245,14 +234,22 @@ public class ClusterParallelOrchestrator {
             if (event == POISON_PILL)
                 break;
 
-            received++;
             long currentTime = clock.getCurrentTime();
             if (event.getTsMs() > currentTime) {
                 clock.advanceTime(event.getTsMs() - currentTime,
                         java.util.concurrent.TimeUnit.MILLISECONDS);
             }
-            session.insert(event);
-            fired += session.fireAllRules(MAX_FIRINGS_PER_EVENT);
+
+            // Determine if this cluster is actually a target for evaluating this event
+            String eType = event.getEventType() != null ? event.getEventType() : "UNKNOWN";
+            List<Integer> targets = routingTable.getOrDefault(eType, Collections.emptyList());
+            boolean isTarget = (clusterId == FALLBACK_ID) || targets.contains(clusterId);
+
+            if (isTarget) {
+                received++;
+                session.insert(event);
+                fired += session.fireAllRules();
+            }
         }
 
         return new int[] { fired, received };
