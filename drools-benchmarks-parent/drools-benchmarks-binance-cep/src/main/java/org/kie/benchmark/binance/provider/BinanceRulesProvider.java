@@ -70,6 +70,15 @@ public class BinanceRulesProvider {
             throw new RuntimeException("Failed to load rules: " + this.rulesPath, e);
         }
 
+        // Configure STREAM mode so @expires annotations work
+        String kmoduleXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<kmodule xmlns=\"http://www.drools.org/xsd/kmodule\">\n"
+                + "  <kbase name=\"binanceBase\" eventProcessingMode=\"stream\">\n"
+                + "    <ksession name=\"binanceSession\"/>\n"
+                + "  </kbase>\n"
+                + "</kmodule>";
+        kfs.write("src/main/resources/META-INF/kmodule.xml", kmoduleXml);
+
         // Build KieBase
         KieBuilder kieBuilder = kieServices.newKieBuilder(kfs);
         kieBuilder.buildAll();
@@ -93,7 +102,7 @@ public class BinanceRulesProvider {
         org.kie.api.runtime.KieSessionConfiguration config = org.kie.api.KieServices.Factory.get()
                 .newKieSessionConfiguration();
         config.setOption(ClockTypeOption.PSEUDO);
-        return kieContainer.newKieSession(config);
+        return kieContainer.newKieSession("binanceSession", config);
     }
 
     /**
@@ -103,7 +112,7 @@ public class BinanceRulesProvider {
         org.kie.api.runtime.KieSessionConfiguration config = org.kie.api.KieServices.Factory.get()
                 .newKieSessionConfiguration();
         config.setOption(clockType);
-        return kieContainer.newKieSession(config);
+        return kieContainer.newKieSession("binanceSession", config);
     }
 
     /**

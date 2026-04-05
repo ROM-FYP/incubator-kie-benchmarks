@@ -99,14 +99,40 @@ public class DrlSplitter {
      *
      * <p>The preamble is sanitized: {@code @expires} and {@code @role(event)}
      * annotations are stripped because the Drools CEP expiration machinery
-     * has initialization issues when sessions run in ForkJoinPool threads.
-     * Event lifecycle is managed manually (retract after fire).</p>
-     *
      * @param fullDrl   the complete DRL content
      * @param ruleNames the names of rules to include
-     * @return a complete DRL string with sanitized preamble + selected rules
+     * @return a complete DRL string with preamble + selected rules
      */
     public static String buildDrlForRules(String fullDrl, List<String> ruleNames) {
+        String preamble = extractPreamble(fullDrl);
+        // Keep @expires/@role for cluster sessions (Executors.newFixedThreadPool is safe).
+        // Only strip for ForkJoinPool-based sessions via buildDrlForRulesLegacy().
+
+        Set<String> ruleNameSet = new LinkedHashSet<>(ruleNames);
+        Map<String, String> rules = extractRulesByName(fullDrl, ruleNameSet);
+
+        StringBuilder drl = new StringBuilder();
+        drl.append(preamble).append("\n\n");
+
+        for (String ruleName : ruleNames) {
+            String ruleText = rules.get(ruleName);
+            if (ruleText != null) {
+                drl.append(ruleText).append("\n");
+            } else {
+                System.err.println("[DrlSplitter] WARNING: Rule not found in DRL: " + ruleName);
+            }
+        }
+
+        return drl.toString();
+    }
+
+    /**
+     * Legacy variant for ForkJoinPool-based parallel sessions.
+     * Strips {@code @expires} and {@code @role(event)} to avoid NPE in
+     * DefaultAgenda.registerExpiration when running in ForkJoinPool threads.
+     * Use {@link #buildDrlForRules} for Executors.newFixedThreadPool sessions.
+     */
+    public static String buildDrlForRulesLegacy(String fullDrl, List<String> ruleNames) {
         String preamble = extractPreamble(fullDrl);
         preamble = sanitizePreamble(preamble);
 
