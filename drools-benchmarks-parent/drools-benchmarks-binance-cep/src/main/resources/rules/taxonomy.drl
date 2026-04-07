@@ -267,10 +267,7 @@ rule "CLEANUP_RetractProcessedEvent"
   salience -1000
   no-loop
 when
-  // LIQ and TRADE events are NOT retracted here — they must persist
-  // in working memory for sliding-window accumulate rules
-  // (UPD_LiqCount10s, UPD_TradeRate1s). @expires(60s) handles cleanup.
-  $e : MarketEvent( eventType != "LIQ", eventType != "TRADE" )
+  $e : MarketEvent()
 then
   retract($e);
 end
@@ -637,6 +634,9 @@ then
 end
 
 // ---- Sliding-window trade rate (feeds D30_TradeRateTiering) ----
+// COMMENTED OUT: causes performance issues with accumulate over window:time
+// TODO: re-enable with timer-based throttling
+/*
 rule "UPD_TradeRate1s"
   no-loop
 when
@@ -646,16 +646,20 @@ when
     count( $e )
   )
 then
-  modify($ts) { setTradeRate1s($cnt.doubleValue()), setTsMs(drools.getClockCurrentTime()) }
+  modify($ts) { setTradeRate1s($cnt.doubleValue()), setTsMs(drools.getKieRuntime().getSessionClock().getCurrentTime()) }
 end
+*/
 
 rule "D30_TradeRateTiering"
   no-loop
 when
   $c : RiskConfig( $sym : symbol, $trMed : trMed, $trHigh : trHigh, $trCrit : trCrit )
-  $stats : TradeStats( symbol == $sym, $r : tradeRate1s )
+  $stats : TradeStats( symbol == $sym, $r : tradeRate1s, $oldTier : tradeRateTier )
 then
-  modify($stats) { setTradeRateTier(tradeRateTier($r, $trMed, $trHigh, $trCrit)) }
+  String newTier = tradeRateTier($r, $trMed, $trHigh, $trCrit);
+  if (!newTier.equals($oldTier)) {
+      modify($stats) { setTradeRateTier(newTier) }
+  }
 end
 
 
@@ -939,6 +943,9 @@ end
 // ==========================================================
 
 // ---- Sliding-window liquidation count (feeds H61_LiqTiering) ----
+// COMMENTED OUT: causes performance issues with accumulate over window:time
+// TODO: re-enable with timer-based throttling
+/*
 rule "UPD_LiqCount10s"
   no-loop
 when
@@ -952,17 +959,20 @@ when
     sum( $e2.getP2() )
   )
 then
-  modify($ls) { setLiqCount10s($cnt.intValue()), setLiqNot10s($not.doubleValue()), setTsMs(drools.getClockCurrentTime()) }
+  modify($ls) { setLiqCount10s($cnt.intValue()), setLiqNot10s($not.doubleValue()), setTsMs(drools.getKieRuntime().getSessionClock().getCurrentTime()) }
 end
+*/
 
 rule "H61_LiqTiering"
   no-loop
 when
   $c : RiskConfig( $sym : symbol, $m : liqMed, $h : liqHigh, $cr : liqCrit )
-  $ls: LiquidationStats( symbol == $sym, $cnt : liqCount10s )
+  $ls: LiquidationStats( symbol == $sym, $cnt : liqCount10s, $oldTier : tier )
 then
-  String tier = ( $cnt >= $cr ) ? "CRIT" : ( ( $cnt >= $h ) ? "HIGH" : ( ( $cnt >= $m ) ? "MED" : "LOW" ) );
-  modify($ls) { setTier(tier) }
+  String newTier = ( $cnt >= $cr ) ? "CRIT" : ( ( $cnt >= $h ) ? "HIGH" : ( ( $cnt >= $m ) ? "MED" : "LOW" ) );
+  if (!newTier.equals($oldTier)) {
+      modify($ls) { setTier(newTier) }
+  }
 end
 
 rule "H62_LiqBurstJump"
