@@ -563,26 +563,7 @@ then
   insert(new RiskSignal($sym, "C21_TopJumpNoTrades", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
-rule "C22_TopSizesInvalid"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "C22_TopSizesInvalid", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
-rule "C23_BookIncompletePartialDepth"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "C23_BookIncompletePartialDepth", "INFO", System.currentTimeMillis(), "Fired"));
-end
-
-rule "C24_ExcessiveDepthUpdateRate"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "C24_ExcessiveDepthUpdateRate", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 rule "C25_BookAgeStale"
   no-loop
@@ -677,12 +658,6 @@ then
   modify($stats) { setTradeRateTier(tradeRateTier($r, $trMed, $trHigh, $trCrit)) }
 end
 
-rule "D31_LargeTradeCluster"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "D31_LargeTradeCluster", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 rule "D32_TradesWhileBookStale"
   no-loop
@@ -807,15 +782,6 @@ then
   insert(new RiskSignal($sym, "E41_LiquidityStressCombine", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
-rule "E42_MarketImpactRiskCombine"
-  no-loop
-when
-  $s : SpreadState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
-  $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
-  $ts : TradeStats( symbol == $sym, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
-then
-  insert(new RiskSignal($sym, "E42_MarketImpactRiskCombine", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 // ==========================================================
 // F) Volatility & movement regimes(Rules 43-52)
@@ -830,26 +796,7 @@ then
   modify($v) { setTier(volTier($vv, $vMed, $vHigh, $vCrit)) }
 end
 
-rule "F44_PriceJump"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "F44_PriceJump", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
-rule "F45_Whipsaw"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "F45_Whipsaw", "INFO", System.currentTimeMillis(), "Fired"));
-end
-
-rule "F46_SustainedTrend"
-when
-  eval( false )
-then
-  insert(new RiskSignal("GLOBAL", "F46_SustainedTrend", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 rule "F47_VolSpike"
   no-loop
@@ -867,14 +814,6 @@ then
   insert(new RiskSignal($sym, "F48_VolPersistenceHigh", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
-rule "F49_TradeDrivenMove"
-  no-loop
-when
-  $ts : TradeStats( $sym : symbol, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
-  $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
-then
-  insert(new RiskSignal($sym, "F49_TradeDrivenMove", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 rule "F50_BookDrivenMove"
   no-loop
@@ -968,14 +907,6 @@ then
   insert(new RiskSignal($sym, "G56_DislocationPlusThinBook", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
-rule "G57_DislocationPlusTradeBurst"
-  no-loop
-when
-  $d : MarkIndexState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
-  $ts: TradeStats( symbol == $sym, tradeRateTier == "HIGH" || tradeRateTier == "CRIT" )
-then
-  insert(new RiskSignal($sym, "G57_DislocationPlusTradeBurst", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 rule "G58_IndexStaleButMarkMoving"
   no-loop
@@ -1044,32 +975,6 @@ then
   insert(new RiskSignal($sym, "H62_LiqBurstJump", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
-rule "H63_LiqPlusVolSpike"
-  no-loop
-when
-  $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
-  $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
-then
-  insert(new RiskSignal($sym, "H63_LiqPlusVolSpike", "INFO", System.currentTimeMillis(), "Fired"));
-end
-
-rule "H64_LiqPlusDepthCollapse"
-  no-loop
-when
-  $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
-  $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
-then
-  insert(new RiskSignal($sym, "H64_LiqPlusDepthCollapse", "INFO", System.currentTimeMillis(), "Fired"));
-end
-
-rule "H65_LiqPlusDislocation"
-  no-loop
-when
-  $l : LiquidationStats( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
-  $d : MarkIndexState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
-then
-  insert(new RiskSignal($sym, "H65_LiqPlusDislocation", "INFO", System.currentTimeMillis(), "Fired"));
-end
 
 rule "H66_CascadePersistenceEscalate"
   no-loop

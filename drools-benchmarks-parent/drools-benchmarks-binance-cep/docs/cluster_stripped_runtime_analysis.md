@@ -1,176 +1,198 @@
-# Cluster Runtime Analysis — Verified Infomap Partition (I69 Removed)
+# Cluster Runtime Analysis — Full Distribution (4 Clusters)
 
-> **Infomap re-run:** `./Infomap binance_rule_graph.net . --clu --ftree` (2026-04-06)  
-> **Change:** Removed synthetic rule `I69_EnterSafe_OnLiquidityStress` from dependency graph  
-> **Result:** 5 top modules (down from 6), codelength 2.049 bits, 44.8% savings  
-> **ftree:** [binance_rule_graph_no_i69.ftree](file:///home/maheshdila/mahesh/research/incubator-kie-benchmarks/drools-benchmarks-parent/drools-benchmarks-binance-cep/src/main/resources/clusters/binance_rule_graph_no_i69.ftree)
+> **Base:** Verified Infomap partition (I69 removed, 2026-04-06)
+> **Updates:** Merged C3 (Trade Alpha) into C2. Added `UPD_LiqCount10s`, `UPD_TradeRate1s`. Distributed all fallback rules. Deleted 7 dead + 6 cross-cluster rules.
 
 ---
 
 ## Summary
 
-| Cluster | Name | Rules | Self-Contained? |
-|:-------:|------|:-----:|:---------------:|
-| **1** | Feed Health & Mode Transitions | **11** | ✅ Yes |
-| **2** | Depth / Spread / Micro-Volatility | **28** | ✅ Yes |
-| **3** | Trade Alpha | **2** | ✅ Yes |
-| **4** | Liquidation Monitoring | **3** | ✅ Yes |
-| **5** | Trade Rate | **2** | ✅ Yes |
-| | **Total** | **46** | **Zero cross-cluster deps** |
+| Cluster | Name | Cluster-Specific | Generic (shared) | Total |
+|:-------:|------|:----------------:|:-----------------:|:-----:|
+| **1** | Feed Health & Mode Transitions | **26** | 10 | **36** |
+| **2** | Market Microstructure (Depth/Spread/Vol/Trade Alpha) | **52** | 10 | **62** |
+| **3** | Liquidation Monitoring | **6** | 10 | **16** |
+| **4** | Trade Rate | **3** | 10 | **13** |
+| | **Total unique rules** | **87** | 10 | **97** |
 
 > [!IMPORTANT]
-> **All 5 clusters are fully independent.** Each cluster's consumed facts are either externally injected (MarketEvent, RiskConfig) or produced internally. No cluster needs another cluster's output.
+> **All 4 clusters are fully independent — zero cross-cluster dependencies.** Generic validation rules are duplicated per session.
 
 ---
 
-## What Changed: Old Cluster 4 Dissolved
+## Generic Rules (Duplicated in ALL Clusters)
 
-I69 was the sole bridge node connecting two disconnected subgraphs inside old Cluster 4. Without it, Infomap naturally absorbed each subgraph into its parent cluster:
+10 stateless validation/cleanup rules — no cluster-specific state.
 
-```
-OLD (6 clusters)                        NEW (5 clusters)
-─────────────────                       ─────────────────
-Cluster 4:                              
-  BBA_New ─────────────────────────→  Cluster 2 (path 2:4)
-  E33_Spread_New ──────────────────→  Cluster 2 (path 2:4)
-  I68_EnterThrottled ──────────────→  Cluster 1 (path 1:2:4)
-  I69_EnterSafe ───────────────────→  REMOVED (synthetic)
-  RECOVERY_ExitThrottled ──────────→  Cluster 1 (path 1:2:3)
-```
-
----
-
-## Cluster 1 — Feed Health & Mode Transitions (11 rules)
-
-Contains all `FeedHealth` god object rules plus the `ModeState` transition rules that were absorbed from old Cluster 4.
-
-| # | Path | Rule | Inputs | Outputs |
-|---|------|------|--------|---------|
-| 1 | 1:1:1 | `B12_TradeActiveBookSilent` | FeedHealth, RiskConfig | FeedHealth |
-| 2 | 1:1:2 | `UPD_LastSeen_Trade` | MarketEvent, FeedHealth | FeedHealth |
-| 3 | 1:1:3 | `D32_TradesWhileBookStale` | MarketEvent, FeedHealth | RiskSignal |
-| 4 | 1:2:1 | `UPD_LastSeen_Depth` | MarketEvent, FeedHealth | FeedHealth |
-| 5 | 1:2:2 | `RECOVERY_ExitThrottledToNormal` | ModeState, FeedHealth, RiskConfig | ModeState |
-| 6 | 1:2:3 | `B13_BookActiveTradeSilent` | FeedHealth, RiskConfig | FeedHealth |
-| 7 | 1:2:4 | `I68_EnterThrottled_OnDegraded` | ModeState, FeedHealth | ModeState |
-| 8 | 1:2:5 | `C25_BookAgeStale` | FeedHealth, RiskConfig | RiskSignal |
-| 9 | 1:3:1 | `B14_StaleMark` | FeedHealth, RiskConfig | FeedHealth |
-| 10 | 1:3:2 | `UPD_LastSeen_Mark` | MarketEvent, FeedHealth | FeedHealth |
-| 11 | 1:3:3 | `G59_MarkStaleButMarketActive` | MarketEvent, FeedHealth | RiskSignal |
-
-**Fact I/O:** IN: FeedHealth, ModeState, MarketEvent, RiskConfig → OUT: FeedHealth, ModeState, RiskSignal
-
-> All consumed facts are either self-produced (FeedHealth ↔ modify, ModeState ↔ modify) or external (MarketEvent, RiskConfig). ✅ Self-contained.
+| # | Rule | Action |
+|---|------|--------|
+| 1 | `A01_MissingRequiredFields` | Retract invalid events |
+| 2 | `A02_InvalidNumerics` | Retract NaN/Inf |
+| 3 | `A03_TimestampSkewBound` | Emit RiskSignal |
+| 4 | `A04_SymbolAllowlist` | Retract unknown symbols |
+| 5 | `A06_PriceQtyPrecisionBounds` | Emit RiskSignal |
+| 6 | `A07_DecodeErrorsQuarantine` | Retract decode errors |
+| 7 | `A08_UnexpectedMessageType` | Retract unknown types |
+| 8 | `B10_ReconnectStorm` | Retract reconnect events |
+| 9 | `B16_LateEventRateHigh` | Emit RiskSignal |
+| 10 | `CLEANUP_RetractProcessedEvent` | Retract non-LIQ/TRADE events |
 
 ---
 
-## Cluster 2 — Depth / Spread / Micro-Volatility (28 rules)
+## Cluster 1 — Feed Health & Mode Transitions (26 rules)
 
-The largest cluster. Contains the full depth/spread pipeline, micro-volatility forward chain (K75→K78), mark divergence chain (L79→L82), and the two absorbed bootstrap inserts from old Cluster 4.
+| # | Rule | Inputs | Outputs | New? |
+|---|------|--------|---------|:----:|
+| 1 | `B12_TradeActiveBookSilent` | FeedHealth, RiskConfig | FeedHealth | |
+| 2 | `UPD_LastSeen_Trade` | MarketEvent, FeedHealth | FeedHealth | |
+| 3 | `D32_TradesWhileBookStale` | MarketEvent, FeedHealth | RiskSignal | |
+| 4 | `UPD_LastSeen_Depth` | MarketEvent, FeedHealth | FeedHealth | |
+| 5 | `RECOVERY_ExitThrottledToNormal` | ModeState, FeedHealth, RiskConfig | ModeState | |
+| 6 | `B13_BookActiveTradeSilent` | FeedHealth, RiskConfig | FeedHealth | |
+| 7 | `I68_EnterThrottled_OnDegraded` | ModeState, FeedHealth | ModeState | |
+| 8 | `C25_BookAgeStale` | FeedHealth, RiskConfig | RiskSignal | |
+| 9 | `B14_StaleMark` | FeedHealth, RiskConfig | FeedHealth | |
+| 10 | `UPD_LastSeen_Mark` | MarketEvent, FeedHealth | FeedHealth | |
+| 11 | `G59_MarkStaleButMarketActive` | MarketEvent, FeedHealth | RiskSignal | |
+| 12 | `BOOTSTRAP_ModeState` | RiskConfig | ModeState | ✅ |
+| 13 | `BOOTSTRAP_FeedHealth` | RiskConfig | FeedHealth | ✅ |
+| 14 | `A05_MonotonicPerStreamDetect` | FeedHealth, MarketEvent | FeedHealth | ✅ |
+| 15 | `B09_HeartbeatMissing` | RiskConfig, FeedHealth | FeedHealth | ✅ |
+| 16 | `B11_StreamSilenceButOpen` | RiskConfig, FeedHealth | RiskSignal | ✅ |
+| 17 | `B15_StaleIndex` | RiskConfig, FeedHealth | FeedHealth | ✅ |
+| 18 | `B17_OutOfOrderBurst` | RiskConfig, FeedHealth | FeedHealth | ✅ |
+| 19 | `B18_PersistentBookGaps` | FeedHealth | RiskSignal | ✅ |
+| 20 | `C26_BookSeqDiscontinuityUnrecovered` | FeedHealth | FeedHealth | ✅ |
+| 21 | `D29_TradeTimestampRegression` | FeedHealth, MarketEvent | FeedHealth | ✅ |
+| 22 | `UPD_LastSeen_Heartbeat` | MarketEvent, FeedHealth | FeedHealth | ✅ |
+| 23 | `UPD_LastSeen_Index` | MarketEvent, FeedHealth | FeedHealth | ✅ |
+| 24 | `G58_IndexStaleButMarkMoving` | FeedHealth, MarketEvent | RiskSignal | ✅ |
+| 25 | `I70_EnterHalted_KillSwitchLatch` | ModeState, FeedHealth | ModeState | ✅ |
+| 26 | `RECOVERY_ExitSafeToThrottled` | RiskConfig, ModeState | ModeState | ✅ |
 
-| # | Path | Rule | Inputs | Outputs |
-|---|------|------|--------|---------|
-| 1 | 2:1:1 | `K77_Beta_AssessMicroVolRisk` | SpreadVelocityState, DepthState, MicroVolatilityRisk | MicroVolatilityRisk |
-| 2 | 2:1:2 | `E33_SpreadComputeAndTier_Update` | BestBidAsk, SpreadState, RiskConfig | SpreadState |
-| 3 | 2:1:3 | `K78_Beta_EmitMicroVolSignal` | MicroVolatilityRisk | RiskSignal, MicroVolatilityRisk |
-| 4 | 2:1:4 | `E34_DepthTiering` | DepthState, RiskConfig | DepthState |
-| 5 | 2:1:5 | `E41_LiquidityStressCombine` | SpreadState, DepthState | RiskSignal |
-| 6 | 2:1:6 | `E36_SpreadBlowout` | SpreadState | RiskSignal |
-| 7 | 2:1:7 | `BOOTSTRAP_MicroVolatilityRisk` | MicroVolatilityRisk, RiskConfig | MicroVolatilityRisk |
-| 8 | 2:1:8 | `E35_DepthCollapse` | DepthState | RiskSignal |
-| 9 | 2:2:1 | `K76_Beta_SpreadVelocity` | DepthUpdateTick, BestBidAsk, SpreadVelocityState | SpreadVelocityState |
-| 10 | 2:2:2 | `DERIVE_BestBidAsk_Update` | MarketEvent, BestBidAsk | BestBidAsk |
-| 11 | 2:2:3 | `K75_Alpha_DepthUpdate` | MarketEvent | DepthUpdateTick |
-| 12 | 2:2:4 | `CLEANUP_RetractDepthUpdateTick` | DepthUpdateTick | DepthUpdateTick |
-| 13 | 2:2:5 | `C21_TopJumpNoTrades` | MarketEvent, BestBidAsk, RiskConfig | RiskSignal |
-| 14 | 2:2:6 | `BOOTSTRAP_SpreadVelocityState` | SpreadVelocityState, RiskConfig | SpreadVelocityState |
-| 15 | 2:3:1:1 | `L81_Beta_AssessDislocation` | MarkDivergencePulsar, VolState, DislocationEscalation | DislocationEscalation |
-| 16 | 2:3:1:2 | `L82_Beta_EmitDislocationSignal` | DislocationEscalation | RiskSignal, DislocationEscalation |
-| 17 | 2:3:1:3 | `F43_VolTiering` | VolState, RiskConfig | VolState |
-| 18 | 2:3:1:4 | `BOOTSTRAP_DislocationEscalation` | DislocationEscalation, RiskConfig | DislocationEscalation |
-| 19 | 2:3:2:1 | `L80_Beta_MarkDivergence` | MarkPriceTick, BestBidAsk, MarkDivergencePulsar | MarkDivergencePulsar |
-| 20 | 2:3:2:2 | `L79_Alpha_MarkPriceUpdate` | MarketEvent | MarkPriceTick |
-| 21 | 2:3:2:3 | `CLEANUP_RetractMarkPriceTick` | MarkPriceTick | MarkPriceTick |
-| 22 | 2:3:2:4 | `BOOTSTRAP_MarkDivergencePulsar` | MarkDivergencePulsar, RiskConfig | MarkDivergencePulsar |
-| 23 | 2:3:3:1 | `BOOTSTRAP_VolState` | VolState, RiskConfig | VolState |
-| 24 | 2:3:3:2 | `F52_RegimeNormalizationEligibility` | VolState | RiskSignal |
-| 25 | 2:4:1 | `E33_SpreadComputeAndTier_New` | BestBidAsk, SpreadState, RiskConfig | SpreadState |
-| 26 | 2:4:2 | `DERIVE_BestBidAsk_New` | MarketEvent, BestBidAsk | BestBidAsk |
-| 27 | 2:5:1 | `BOOTSTRAP_DepthState` | DepthState, RiskConfig | DepthState |
-| 28 | 2:5:2 | `E37_PersistentThinLiquidity` | DepthState | RiskSignal |
-
-**Fact I/O:** IN: MarketEvent, RiskConfig + 10 internal state facts → OUT: 11 state facts + RiskSignal
-
-> Every non-external fact consumed is also produced internally via `modify()` or `insert()`. ✅ Self-contained.
+**Fact I/O:** IN: FeedHealth, ModeState, MarketEvent, RiskConfig → OUT: FeedHealth, ModeState, RiskSignal. ✅ Self-contained.
 
 ---
 
-## Cluster 3 — Trade Alpha (2 rules)
+## Cluster 2 — Market Microstructure (52 rules)
 
-| # | Path | Rule | Inputs | Outputs |
-|---|------|------|--------|---------|
-| 1 | 3:1 | `CLEANUP_RetractSignificantTrade` | SignificantTrade | SignificantTrade |
-| 2 | 3:2 | `J71_Alpha_SignificantTrade` | MarketEvent | SignificantTrade |
+Merged original C2 (Depth/Spread/MicroVol, 28 rules) + C3 (Trade Alpha, 2 rules) + 22 absorbed fallback rules. Merging C3 eliminates the `SignificantTrade` cross-cluster dependency.
 
-**Fact I/O:** IN: MarketEvent → OUT: SignificantTrade. ✅ Self-contained.
+| # | Rule | Inputs | Outputs | Source |
+|---|------|--------|---------|:------:|
+| 1 | `K77_Beta_AssessMicroVolRisk` | SpreadVelocityState, DepthState, MicroVolatilityRisk | MicroVolatilityRisk | C2 |
+| 2 | `E33_SpreadComputeAndTier_Update` | BestBidAsk, SpreadState, RiskConfig | SpreadState | C2 |
+| 3 | `K78_Beta_EmitMicroVolSignal` | MicroVolatilityRisk | RiskSignal, MicroVolatilityRisk | C2 |
+| 4 | `E34_DepthTiering` | DepthState, RiskConfig | DepthState | C2 |
+| 5 | `E41_LiquidityStressCombine` | SpreadState, DepthState | RiskSignal | C2 |
+| 6 | `E36_SpreadBlowout` | SpreadState | RiskSignal | C2 |
+| 7 | `BOOTSTRAP_MicroVolatilityRisk` | RiskConfig | MicroVolatilityRisk | C2 |
+| 8 | `E35_DepthCollapse` | DepthState | RiskSignal | C2 |
+| 9 | `K76_Beta_SpreadVelocity` | DepthUpdateTick, BestBidAsk, SpreadVelocityState | SpreadVelocityState | C2 |
+| 10 | `DERIVE_BestBidAsk_Update` | MarketEvent, BestBidAsk | BestBidAsk | C2 |
+| 11 | `K75_Alpha_DepthUpdate` | MarketEvent | DepthUpdateTick | C2 |
+| 12 | `CLEANUP_RetractDepthUpdateTick` | DepthUpdateTick | DepthUpdateTick | C2 |
+| 13 | `C21_TopJumpNoTrades` | MarketEvent, BestBidAsk, RiskConfig | RiskSignal | C2 |
+| 14 | `BOOTSTRAP_SpreadVelocityState` | RiskConfig | SpreadVelocityState | C2 |
+| 15 | `L81_Beta_AssessDislocation` | MarkDivergencePulsar, VolState, DislocationEscalation | DislocationEscalation | C2 |
+| 16 | `L82_Beta_EmitDislocationSignal` | DislocationEscalation | RiskSignal, DislocationEscalation | C2 |
+| 17 | `F43_VolTiering` | VolState, RiskConfig | VolState | C2 |
+| 18 | `BOOTSTRAP_DislocationEscalation` | RiskConfig | DislocationEscalation | C2 |
+| 19 | `L80_Beta_MarkDivergence` | MarkPriceTick, BestBidAsk, MarkDivergencePulsar | MarkDivergencePulsar | C2 |
+| 20 | `L79_Alpha_MarkPriceUpdate` | MarketEvent | MarkPriceTick | C2 |
+| 21 | `CLEANUP_RetractMarkPriceTick` | MarkPriceTick | MarkPriceTick | C2 |
+| 22 | `BOOTSTRAP_MarkDivergencePulsar` | RiskConfig | MarkDivergencePulsar | C2 |
+| 23 | `BOOTSTRAP_VolState` | RiskConfig | VolState | C2 |
+| 24 | `F52_RegimeNormalizationEligibility` | VolState | RiskSignal | C2 |
+| 25 | `E33_SpreadComputeAndTier_New` | BestBidAsk, SpreadState, RiskConfig | SpreadState | C2 |
+| 26 | `DERIVE_BestBidAsk_New` | MarketEvent | BestBidAsk | C2 |
+| 27 | `BOOTSTRAP_DepthState` | RiskConfig | DepthState | C2 |
+| 28 | `E37_PersistentThinLiquidity` | DepthState | RiskSignal | C2 |
+| 29 | `J71_Alpha_SignificantTrade` | MarketEvent | SignificantTrade | C3 |
+| 30 | `CLEANUP_RetractSignificantTrade` | SignificantTrade | SignificantTrade | C3 |
+| 31 | `C19_CrossedBook` | MarketEvent | RiskSignal | new |
+| 32 | `C20_NegOrZeroSpreadPersistent` | BestBidAsk | RiskSignal | new |
+| 33 | `D27_TradePriceOutOfBandVsMid` | RiskConfig, BestBidAsk, MarketEvent | RiskSignal | new |
+| 34 | `D28_TradeSizeOutlier` | MarketEvent | RiskSignal | new |
+| 35 | `E38_ImbalanceComputeTier_New` | DepthState | ImbalanceState | new |
+| 36 | `E38_ImbalanceComputeTier_Update` | DepthState, ImbalanceState | ImbalanceState | new |
+| 37 | `E39_ImbalancePersistence` | ImbalanceState | RiskSignal | new |
+| 38 | `E40_ImbalanceFlipFlop` | ImbalanceState | RiskSignal | new |
+| 39 | `F47_VolSpike` | VolState | RiskSignal | new |
+| 40 | `F48_VolPersistenceHigh` | VolState | RiskSignal | new |
+| 41 | `F50_BookDrivenMove` | SpreadState, DepthState, VolState | RiskSignal | new |
+| 42 | `F51_RegimeShiftToSafe` | VolState | RiskSignal | new |
+| 43 | `G53_MarkIndexDivergence_New` | RiskConfig, BestBidAsk, MarketEvent | MarkIndexState | new |
+| 44 | `G53_MarkIndexDivergence_Update` | RiskConfig, BestBidAsk, MarketEvent, MarkIndexState | MarkIndexState | new |
+| 45 | `G54_ComputeMarkMidDivergence` | MarkIndexState | RiskSignal | new |
+| 46 | `G55_DislocationPersistence` | RiskConfig, MarkIndexState | RiskSignal | new |
+| 47 | `G56_DislocationPlusThinBook` | MarkIndexState, DepthState | RiskSignal | new |
+| 48 | `G60_SuddenDivReversalFlag` | MarkIndexState | RiskSignal | new |
+| 49 | `BOOTSTRAP_TradeSweepImpact` | RiskConfig | TradeSweepImpact | new |
+| 50 | `BOOTSTRAP_MicrostructureStress` | RiskConfig | MicrostructureStress | new |
+| 51 | `J72_Beta_ComputeSweepImpact` | SignificantTrade, BestBidAsk, TradeSweepImpact | TradeSweepImpact | new |
+| 52 | `J73_Beta_AssessMicroStress` | TradeSweepImpact, SpreadState, MicrostructureStress | MicrostructureStress | new |
+| 53 | `J74_Beta_EmitStressSignal` | MicrostructureStress | RiskSignal, MicrostructureStress | new |
+
+**Fact I/O:** IN: MarketEvent, RiskConfig + 14 internal state facts → OUT: 15 state facts + RiskSignal. ✅ Self-contained.
 
 ---
 
-## Cluster 4 — Liquidation Monitoring (3 rules)
+## Cluster 3 — Liquidation Monitoring (6 rules)
 
-| # | Path | Rule | Inputs | Outputs |
-|---|------|------|--------|---------|
-| 1 | 4:1 | `BOOTSTRAP_LiquidationStats` | LiquidationStats, RiskConfig | LiquidationStats |
-| 2 | 4:2 | `H61_LiqTiering` | LiquidationStats, RiskConfig | LiquidationStats |
-| 3 | 4:3 | `H67_CascadeCooldownEligibility` | LiquidationStats | RiskSignal |
+| # | Rule | Inputs | Outputs | New? |
+|---|------|--------|---------|:----:|
+| 1 | `BOOTSTRAP_LiquidationStats` | RiskConfig | LiquidationStats | |
+| 2 | `UPD_LiqCount10s` | LiquidationStats, MarketEvent(LIQ) | LiquidationStats | ✅ |
+| 3 | `H61_LiqTiering` | LiquidationStats, RiskConfig | LiquidationStats | |
+| 4 | `H62_LiqBurstJump` | RiskConfig, LiquidationStats | RiskSignal | ✅ |
+| 5 | `H66_CascadePersistenceEscalate` | LiquidationStats | RiskSignal | ✅ |
+| 6 | `H67_CascadeCooldownEligibility` | LiquidationStats | RiskSignal | |
 
-**Fact I/O:** IN: LiquidationStats, RiskConfig → OUT: LiquidationStats, RiskSignal. ✅ Self-contained.
+**Fact I/O:** IN: MarketEvent(LIQ), RiskConfig → OUT: LiquidationStats, RiskSignal. ✅ Self-contained.
 
 ---
 
-## Cluster 5 — Trade Rate (2 rules)
+## Cluster 4 — Trade Rate (3 rules)
 
-| # | Path | Rule | Inputs | Outputs |
-|---|------|------|--------|---------|
-| 1 | 5:1 | `BOOTSTRAP_TradeStats` | TradeStats, RiskConfig | TradeStats |
-| 2 | 5:2 | `D30_TradeRateTiering` | TradeStats, RiskConfig | TradeStats |
+| # | Rule | Inputs | Outputs | New? |
+|---|------|--------|---------|:----:|
+| 1 | `BOOTSTRAP_TradeStats` | RiskConfig | TradeStats | |
+| 2 | `UPD_TradeRate1s` | TradeStats, MarketEvent(TRADE) | TradeStats | ✅ |
+| 3 | `D30_TradeRateTiering` | TradeStats, RiskConfig | TradeStats | |
 
-**Fact I/O:** IN: TradeStats, RiskConfig → OUT: TradeStats. ✅ Self-contained.
+**Fact I/O:** IN: MarketEvent(TRADE), RiskConfig → OUT: TradeStats. ✅ Self-contained.
 
 ---
 
 ## Cross-Cluster Independence Matrix
 
-| | C1 (11) | C2 (28) | C3 (2) | C4 (3) | C5 (2) |
-|---|:---:|:---:|:---:|:---:|:---:|
-| **C1** | — | ✅ | ✅ | ✅ | ✅ |
-| **C2** | ✅ | — | ✅ | ✅ | ✅ |
-| **C3** | ✅ | ✅ | — | ✅ | ✅ |
-| **C4** | ✅ | ✅ | ✅ | — | ✅ |
-| **C5** | ✅ | ✅ | ✅ | ✅ | — |
+| | C1 (36) | C2 (62) | C3 (16) | C4 (13) |
+|---|:---:|:---:|:---:|:---:|
+| **C1** | — | ✅ | ✅ | ✅ |
+| **C2** | ✅ | — | ✅ | ✅ |
+| **C3** | ✅ | ✅ | — | ✅ |
+| **C4** | ✅ | ✅ | ✅ | — |
 
-> [!IMPORTANT]
-> **Zero cross-cluster dependencies confirmed.** The only shared facts across sessions are the externally-injected `MarketEvent` (from orchestrator) and `RiskConfig` (bootstrapped per symbol at session creation).
+> **Zero cross-cluster dependencies confirmed.**
 
 ---
 
-## Unclustered Rules (Fallback Candidates)
+## Event Routing Table
 
-The ftree covers **46 of the 109 rules** (after removing I69) in `taxonomy.drl`. The remaining **63 rules** are not in any Infomap cluster:
+| Event Type | C1 | C2 | C3 | C4 |
+|------------|:--:|:--:|:--:|:--:|
+| **DEPTH** | ✅ | ✅ | | |
+| **TRADE** | ✅ | ✅ | | ✅ |
+| **MARK** | ✅ | ✅ | | |
+| **INDEX** | ✅ | ✅ | | |
+| **HEARTBEAT** | ✅ | | | |
+| **LIQ** | | | ✅ | |
 
-- **Section A:** Ingestion/validation (A01–A08)
-- **Section B:** B10, B11, B15–B18 (non-FeedHealth-modify feed rules)
-- **Section C:** C19–C24, C26 (order book validation)
-- **Section D:** D27–D29, D31 (trade tape sanity)
-- **Section E:** E38–E40, E42 (imbalance, market impact)
-- **Section F:** F44–F51 (volatility signals)
-- **Section G:** G53–G57, G60 (mark-index divergence)
-- **Section H:** H62–H66 (liquidation signals)
-- **Section I:** I70 (kill-switch latch)
-- **Section J:** J72–J74 (trade sweep impact chain)
-- **Bootstraps:** TradeSweepImpact, MicrostructureStress, ModeState, FeedHealth
-- **Cleanup:** CLEANUP_RetractProcessedEvent
-- **Recovery:** RECOVERY_ExitSafeToThrottled
+---
 
-> [!NOTE]
-> These rules were not captured by Infomap because they had low or zero edge weight in the runtime dependency graph — either they never fired during the trace, or they were generic stateless filters that don't participate in dense fact-flow clusters.
+## Deleted Rules
+
+**Cross-cluster (6):** `E42_MarketImpactRiskCombine`, `F49_TradeDrivenMove`, `G57_DislocationPlusTradeBurst`, `H63_LiqPlusVolSpike`, `H64_LiqPlusDepthCollapse`, `H65_LiqPlusDislocation`
+
+**Dead (7):** `C22_TopSizesInvalid`, `C23_BookIncompletePartialDepth`, `C24_ExcessiveDepthUpdateRate`, `D31_LargeTradeCluster`, `F44_PriceJump`, `F45_Whipsaw`, `F46_SustainedTrend`
