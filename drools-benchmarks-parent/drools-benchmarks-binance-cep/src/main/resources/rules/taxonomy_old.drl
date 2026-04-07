@@ -24,68 +24,68 @@ declare MarketEvent
 end
 
 // ==========================================================
-// New Types for Forward Chaining(J section)
+// New Types for Forward Chaining (J section)
 // ==========================================================
 declare SignificantTrade
-@role( event )
-@expires( 1s )
-symbol : String
-price : double
-qty : double
-tsMs : long
+  @role( event )
+  @expires( 1s )
+  symbol : String
+  price : double
+  qty : double
+  tsMs : long
 end
 
 declare TradeSweepImpact
-symbol : String
-impactBps : double
-tsMs : long
+  symbol : String
+  impactBps : double
+  tsMs : long
 end
 
 declare MicrostructureStress
-symbol : String
-level : String
-tsMs : long
+  symbol : String
+  level : String
+  tsMs : long
 end
 
 declare DepthUpdateTick
-@role( event )
-@expires( 1s )
-symbol : String
-bid : double
-ask : double
-tsMs : long
+  @role( event )
+  @expires( 1s )
+  symbol : String
+  bid : double
+  ask : double
+  tsMs : long
 end
 
 declare SpreadVelocityState
-symbol : String
-velocityBps : double
-tsMs : long
+  symbol : String
+  velocityBps : double
+  tsMs : long
 end
 
 declare MicroVolatilityRisk
-symbol : String
-state : String
-tsMs : long
+  symbol : String
+  state : String
+  tsMs : long
 end
 
 declare MarkPriceTick
-@role( event )
-@expires( 1s )
-symbol : String
-markPrice : double
-tsMs : long
+  @role( event )
+  @expires( 1s )
+  symbol : String
+  markPrice : double
+  tsMs : long
 end
 
 declare MarkDivergencePulsar
-symbol : String
-divergenceBps : double
-tsMs : long
+  symbol : String
+  divergenceBps : double
+  tsMs : long
 end
 
 declare DislocationEscalation
-symbol : String
-state : String
-tsMs : long
+  symbol : String
+  state : String
+  tsMs : long
 end
 
 // ==========================================================
@@ -1068,6 +1068,15 @@ then
   modify($m) { setMode("THROTTLED"), setLastChangeMs(System.currentTimeMillis()), setReason("feed degraded") }
 end
 
+rule "I69_EnterSafe_OnLiquidityStress"
+  no-loop
+when
+  $m : ModeState( $sym : symbol, mode == "NORMAL" || mode == "THROTTLED" )
+  $s : SpreadState( symbol == $sym, tier == "CRIT" )
+  $d : DepthState( symbol == $sym, tier == "CRIT_LOW" )
+then
+  modify($m) { setMode("SAFE"), setLastChangeMs(System.currentTimeMillis()), setReason("critical liquidity stress") }
+end
 
 rule "I70_EnterHalted_KillSwitchLatch"
   salience 10
@@ -1105,7 +1114,7 @@ then
 end
 
 // ==========================================================
-// J) Forward Chaining Stress Detection(Rules 71-74)
+// J) Forward Chaining Stress Detection (Rules 71-74)
 // Demonstrates depth-4 rule chaining from alpha MarketEvent filters
 // ==========================================================
 
@@ -1149,7 +1158,7 @@ then
 end
 
 // ==========================================================
-// K) Micro-Volatility Chaining(Rules 75-78)
+// K) Micro-Volatility Chaining (Rules 75-78)
 // Demonstrates depth-4 rule chaining from alpha DEPTH filters
 // ==========================================================
 
@@ -1189,12 +1198,12 @@ rule "K78_Beta_EmitMicroVolSignal"
 when
   $mvr : MicroVolatilityRisk( $sym : symbol, state == "ACTIVE", $ts : tsMs )
 then
-  insert(new RiskSignal($sym, "K78_MicroVolatilityBurst", "HIGH", $ts, "Forward chaining 4 levels deep(DEPTH)"));
+  insert(new RiskSignal($sym, "K78_MicroVolatilityBurst", "HIGH", $ts, "Forward chaining 4 levels deep (DEPTH)"));
   modify($mvr) { setState("NORMAL") }
 end
 
 // ==========================================================
-// L) Mark Dislocation Chaining(Rules 79-82)
+// L) Mark Dislocation Chaining (Rules 79-82)
 // Demonstrates depth-4 rule chaining from alpha MARK filters
 // ==========================================================
 
@@ -1233,6 +1242,6 @@ rule "L82_Beta_EmitDislocationSignal"
 when
   $de : DislocationEscalation( $sym : symbol, state == "TRIGGERED", $ts : tsMs )
 then
-  insert(new RiskSignal($sym, "L82_MarkDislocationDanger", "HIGH", $ts, "Forward chaining 4 levels deep(MARK)"));
+  insert(new RiskSignal($sym, "L82_MarkDislocationDanger", "HIGH", $ts, "Forward chaining 4 levels deep (MARK)"));
   modify($de) { setState("WATCHING") }
 end
