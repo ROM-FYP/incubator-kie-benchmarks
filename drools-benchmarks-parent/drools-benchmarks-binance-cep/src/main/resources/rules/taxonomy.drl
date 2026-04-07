@@ -267,7 +267,10 @@ rule "CLEANUP_RetractProcessedEvent"
   salience -1000
   no-loop
 when
-  $e : MarketEvent()
+  // LIQ and TRADE events are NOT retracted here — they must persist
+  // in working memory for sliding-window accumulate rules
+  // (UPD_LiqCount10s, UPD_TradeRate1s). @expires(60s) handles cleanup.
+  $e : MarketEvent( eventType != "LIQ", eventType != "TRADE" )
 then
   retract($e);
 end
@@ -652,6 +655,19 @@ then
   modify($h) { setOoCount($h.getOoCount() + 1) }
 end
 
+// ---- Sliding-window trade rate (feeds D30_TradeRateTiering) ----
+rule "UPD_TradeRate1s"
+  no-loop
+when
+  $ts : TradeStats( $sym : symbol )
+  $cnt : Number() from accumulate(
+    $e : MarketEvent( symbol == $sym, eventType == "TRADE" ) over window:time( 1s ),
+    count( $e )
+  )
+then
+  modify($ts) { setTradeRate1s($cnt.doubleValue()), setTsMs(drools.getClockCurrentTime()) }
+end
+
 rule "D30_TradeRateTiering"
   no-loop
 when
@@ -990,6 +1006,23 @@ end
 // ==========================================================
 // H) Liquidation & cascade stress(Rules 61-67)
 // ==========================================================
+
+// ---- Sliding-window liquidation count (feeds H61_LiqTiering) ----
+rule "UPD_LiqCount10s"
+  no-loop
+when
+  $ls : LiquidationStats( $sym : symbol )
+  $cnt : Number() from accumulate(
+    $e : MarketEvent( symbol == $sym, eventType == "LIQ" ) over window:time( 10s ),
+    count( $e )
+  )
+  $not : Number() from accumulate(
+    $e2 : MarketEvent( symbol == $sym, eventType == "LIQ" ) over window:time( 10s ),
+    sum( $e2.getP2() )
+  )
+then
+  modify($ls) { setLiqCount10s($cnt.intValue()), setLiqNot10s($not.doubleValue()), setTsMs(drools.getClockCurrentTime()) }
+end
 
 rule "H61_LiqTiering"
   no-loop
