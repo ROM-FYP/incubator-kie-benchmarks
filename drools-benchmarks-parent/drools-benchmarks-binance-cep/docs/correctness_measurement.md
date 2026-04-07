@@ -60,7 +60,7 @@ The parallel engine fires **more rules** than the baseline. This is expected and
 
 1. **Generic rule duplication** — 10 validation/cleanup rules are present in all 4 cluster sessions. If 3 clusters are active, each fires the same generic rules independently → 3× those firings.
 
-2. **Deleted rules** — 13 rules were removed (7 dead `eval(false)` + 6 cross-cluster). The baseline DRL still contains them. However, the dead rules never fire, and the cross-cluster rules require facts from multiple clusters simultaneously (which never occurs in the single-session baseline with our current dataset either). So in practice, signal misses from deleted rules is **0**.
+2. **Deleted rules** — 13 rules were removed from `taxonomy.drl` (7 dead `eval(false)` + 6 cross-cluster). Both the baseline and the parallel engine load the same `taxonomy.drl`, so **neither contains the deleted rules**. This means deleted rules cannot cause signal differences between the two runs.
 
 3. **Commented-out sliding-window rules** — `UPD_TradeRate1s` and `UPD_LiqCount10s` are disabled in both baseline and parallel, so they don't create a difference.
 
@@ -81,34 +81,41 @@ The parallel engine fires **more rules** than the baseline. This is expected and
 
 ```bash
 cd drools-benchmarks-parent/drools-benchmarks-binance-cep
+
+# Quick test (50k events)
 mvn compile exec:java \
   -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV2 \
   -Dexec.args=50000 \
   -Dexec.classpathScope=test
-```
 
-Adjust the argument to control event count (default: 50,000). Use `0` or omit for the full dataset.
+# Full dataset
+set MAVEN_OPTS=-Xmx4g
+mvn compile exec:java \
+  -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV2 \
+  -Dexec.args=0 \
+  -Dexec.classpathScope=test
+```
 
 ---
 
-## Sample Output (50k events, 3 symbols)
+## Sample Output (Full Dataset: 1.6M events, 10 symbols)
 
 ```
 ── Comparison ──────────────────────────────
                                    Single      Cluster V2
-Rules fired                       399,957         900,049
-Duration                           13,352 ms       11,083 ms
-Events/sec                        3744.76         4511.41
-Speedup                             1.00x           1.20x
+Rules fired                    13,528,242      28,283,453
+Duration                           82,366 ms      115,832 ms
+Events/sec                       19585.25        13926.71
+Speedup                             1.00x           0.71x
 
 ── Experimental Correctness ────────────────
-Baseline Emitted Signals   : 150064
-Cluster Emitted Signals    : 350156
-Overlapping Signal Types   : 30
-Signals Only in Baseline   : 0 (Expected due to deleted rules)
-Extra Redundant Signals    : 200092
+Baseline Emitted Signals   : 5396290
+Cluster Emitted Signals    : 11400886
+Overlapping Signal Types   : 138
+Signals Only in Baseline   : 2 (Expected due to deleted rules)
+Extra Redundant Signals    : 6087485
 
 Correctness checks:
-- No infinity loops: true (max 350046)
+- No infinity loops: true (max 9994226)
 Status: ✅ PASS
 ```
