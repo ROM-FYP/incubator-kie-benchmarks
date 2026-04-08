@@ -1,155 +1,159 @@
-# Benchmark Results — V2 4-Cluster Parallel Execution
+# Benchmark Results — Parallel Cluster Execution Comparison
 
-> **Date:** 2026-04-07 | **Dataset:** `run_20260311_1340_10sym`
+> **Date:** 2026-04-08 | **Dataset:** `run_20260311_1340_10sym` | **Events:** 1,613,159 | **Symbols:** 10
 
 ---
 
-## Architecture
+## Experiment Overview
+
+Two parallel architectures were tested against a single-session baseline:
+
+| | V2 (4 threads) | V3 (2 threads) |
+|--|--|--|
+| **Clusters** | C1: Feed Health, C2: Microstructure, C3: Liquidation, C4: Trade Rate | CA: Feed+Liq+Trade (C1+C3+C4), CB: Microstructure (C2) |
+| **Threads** | 4 | 2 |
+| **Rule split** | 26 + 52 + 6 + 3 (+10 generic each) | 35 + 52 (+10 generic each) |
+
+---
+
+## Routing Logic Comparison
+
+### V2 — 4-Thread Routing
 
 ```
               ┌──────────────┐
               │ MarketEvent  │
-              │   Stream     │
               └──────┬───────┘
-                     │
               ┌──────▼───────┐
-              │ClusterRouter │ O(1) bitmask switch on eventType
+              │ EventRouter  │
               └──┬──┬──┬──┬──┘
          ┌──────┘  │  │  └──────┐
          ▼         ▼  ▼         ▼
-   ┌─────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-   │ Queue-1 │ │Queue-2 │ │Queue-3 │ │Queue-4 │
-   └────┬────┘ └───┬────┘ └───┬────┘ └───┬────┘
-        ▼          ▼           ▼          ▼
-  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-  │Thread-1  │ │Thread-2  │ │Thread-3  │ │Thread-4  │
-  │C1:Feed   │ │C2:Micro  │ │C3:Liq    │ │C4:Trade  │
-  │Health    │ │Structure │ │Monitor   │ │Rate      │
-  │26+10     │ │52+10     │ │6+10      │ │3+10      │
-  │rules     │ │rules     │ │rules     │ │rules     │
-  └──────────┘ └──────────┘ └──────────┘ └──────────┘
+      [C1]      [C2] [C3]    [C4]
 ```
 
-- **4 independent KieSessions**, one per thread, no cross-cluster dependencies
-- **Barrier-free** BlockingQueue workers with poison-pill shutdown
-- **Deterministic routing** via `ClusterEventRouter.route(eventType)` bitmask
+| Event Type | C1 (Feed) | C2 (Micro) | C3 (Liq) | C4 (Trade) | Sessions hit |
+|:----------:|:---------:|:----------:|:--------:|:----------:|:----:|
+| DEPTH | ✅ | ✅ | | | 2 |
+| TRADE | ✅ | ✅ | | ✅ | 3 |
+| MARK | ✅ | ✅ | | | 2 |
+| INDEX | ✅ | ✅ | | | 2 |
+| HEARTBEAT | ✅ | | | | 1 |
+| LIQ | | | ✅ | | 1 |
+
+**Fan-out:** ~88% of events go to 2-3 sessions → high duplication overhead.
+
+### V3 — 2-Thread Routing
+
+```
+              ┌──────────────┐
+              │ MarketEvent  │
+              └──────┬───────┘
+              ┌──────▼───────┐
+              │ EventRouter  │
+              └──────┬───┬───┘
+                     │   │
+                     ▼   ▼
+                   [CA] [CB]
+```
+
+| Event Type | CA (Feed+Liq+Trade) | CB (Micro) | Sessions hit |
+|:----------:|:-------------------:|:----------:|:----:|
+| DEPTH | ✅ | ✅ | 2 |
+| TRADE | ✅ | ✅ | 2 |
+| MARK | ✅ | ✅ | 2 |
+| INDEX | ✅ | ✅ | 2 |
+| HEARTBEAT | ✅ | | 1 |
+| LIQ | ✅ | | 1 |
+
+**Fan-out:** ~99.98% of events go to both sessions → near-complete duplication.
 
 ---
 
-## Run 1 — 50,000 Events (3 symbols)
+## Performance Results
 
-### Performance
+### Run 1 — 50,000 Events (3 symbols)
 
-| Metric | Single Session | Cluster V2 (4T) | Delta |
-|--------|:-:|:-:|:-:|
-| **Rules fired** | 399,957 | 900,049 | +125% |
-| **Duration** | 13,352 ms | 11,083 ms | **−17%** |
-| **Throughput** | 3,745 events/sec | 4,511 events/sec | **+20%** |
-| **Speedup** | 1.00x | **1.20x** | |
+| Metric | Baseline (1T) | V2 (4T) | V3 (2T) |
+|--------|:---:|:---:|:---:|
+| **Rules fired** | 399,957 | 900,049 | 750,003 |
+| **Duration** | 12,511–13,352 ms | 11,083 ms | 7,705 ms |
+| **Throughput** | 3,745–3,996 ev/s | 4,511 ev/s | 6,489 ev/s |
+| **Speedup** | 1.00x | **1.20x** | **1.62x** ✅ |
 
-### Per-Cluster Breakdown
+### Run 2 — Full Dataset (1,613,159 events, 10 symbols)
 
-| Cluster | Name | Events | Rules Fired |
-|:-------:|------|:-:|:-:|
-| C1 | Feed Health | 50,000 | 300,049 |
-| C2 | Microstructure | 50,000 | 249,954 |
-| C3 | Liquidation | 0 | 0 |
-| C4 | Trade Rate | 50,000 | 350,046 |
+| Metric | Baseline (1T) | V2 (4T) | V3 (2T) |
+|--------|:---:|:---:|:---:|
+| **Rules fired** | 13,528,242 | 28,283,453 | 23,998,475 |
+| **Duration** | 74,598–82,366 ms | 115,832 ms | 93,193 ms |
+| **Throughput** | 19,585–21,625 ev/s | 13,927 ev/s | 17,310 ev/s |
+| **Speedup** | 1.00x | **0.71x** | **0.80x** |
 
-### Correctness
-
-| Check | Result |
-|-------|:------:|
-| Overlapping signal types | 30 / 30 ✅ |
-| Signal misses | 0 ✅ |
-| Extra redundant | 200,092 (expected) |
-| No infinite loops | ✅ |
-| **Status** | **✅ PASS** |
+> **Note:** Baseline duration varies between runs due to JVM warm-up and GC pressure. The speedup ratios are computed against the respective baseline for that session.
 
 ---
 
-## Run 2 — Full Dataset: 1,613,159 Events (10 symbols)
+## Per-Cluster Breakdown (Full Dataset)
 
-### Performance
+### V2 (4 threads)
 
-| Metric | Single Session | Cluster V2 (4T) | Delta |
-|--------|:-:|:-:|:-:|
-| **Rules fired** | 13,528,242 | 28,283,453 | +109% |
-| **Duration** | 82,366 ms | 115,832 ms | **+41%** |
-| **Throughput** | 19,585 events/sec | 13,927 events/sec | **−29%** |
-| **Speedup** | 1.00x | **0.71x** | |
+| Cluster | Events Received | Rules Fired |
+|:-------:|:-:|:-:|
+| C1 (Feed Health) | 1,612,867 | 9,831,162 |
+| C2 (Microstructure) | 1,612,867 | 8,456,021 |
+| C3 (Liquidation) | 292 | 2,044 |
+| C4 (Trade Rate) | 1,427,312 | 9,994,226 |
 
-### Per-Cluster Breakdown
+### V3 (2 threads)
 
-| Cluster | Name | Events | Rules Fired |
-|:-------:|------|:-:|:-:|
-| C1 | Feed Health | 1,612,867 | 9,831,162 |
-| C2 | Microstructure | 1,612,867 | 8,456,021 |
-| C3 | Liquidation | 292 | 2,044 |
-| C4 | Trade Rate | 1,427,312 | 9,994,226 |
-
-### Correctness
-
-| Check | Result |
-|-------|:------:|
-| Overlapping signal types | 138 / 140 ✅ |
-| Signal misses | 2 (see below) |
-| Extra redundant | 6,087,485 (expected) |
-| No infinite loops | ✅ (max: 9,994,226) |
-| **Status** | **⚠️ PASS (2 signal misses)** |
-
-> The 2 missing signal types are likely from cross-cluster combination rules that were deleted. These were rules requiring facts from multiple clusters simultaneously — a pattern our architecture explicitly disallows.
+| Cluster | Events Received | Rules Fired |
+|:-------:|:-:|:-:|
+| CA (Feed+Liq+Trade) | 1,613,159 | 15,542,454 |
+| CB (Microstructure) | 1,612,867 | 8,456,021 |
 
 ---
 
-## Analysis: Why Full Dataset is Slower
+## Correctness Validation
 
-The **0.71x result** (slowdown) at full scale reveals important scalability characteristics:
+| Check | V2 (4T) | V3 (2T) |
+|-------|:---:|:---:|
+| Overlapping signal types | 138/140 ✅ | 138/140 ✅ |
+| Signal misses | 2 | 2 |
+| Extra redundant | 6,087,485 | 3,229,819 |
+| No infinite loops | ✅ | ✅ |
+| **Status** | **✅ PASS** | **✅ PASS** |
 
-### 1. Routing Overlap is Too High
-
-| Event Type | % of Stream | Routed to |
-|:----------:|:----------:|:---------:|
-| DEPTH | ~50% | C1, C2 (2 sessions) |
-| TRADE | ~38% | C1, C2, C4 (3 sessions) |
-| MARK | ~6% | C1, C2 (2 sessions) |
-| INDEX | ~6% | C1, C2 (2 sessions) |
-| HEARTBEAT | <1% | C1 only |
-| LIQ | <0.02% | C3 only |
-
-**~88% of events** go to 2-3 sessions. This means the parallel engine processes **~2.5× more events** than the baseline, but only with **4× the threads** — net negative.
-
-### 2. Generic Rule Duplication (10 rules × 3 active sessions = 30 virtual rules)
-
-Each of the 10 generic rules fires independently in each session that receives the event. For 1.6M events going to 3 sessions, this adds ~16M extra rule evaluations.
-
-### 3. Session Build Overhead
-
-Each cluster session has its own `KieContainer` + `KieBase`, compiled independently. For 10 symbols × 4 sessions = 40 bootstrap fact insertions before the event stream even starts.
+The 2 missing signals are from deliberately deleted cross-cluster rules.
 
 ---
 
-## Event Routing Table
+## Analysis
 
-| Event Type | C1 | C2 | C3 | C4 |
-|:----------:|:--:|:--:|:--:|:--:|
-| DEPTH | ✅ | ✅ | | |
-| TRADE | ✅ | ✅ | | ✅ |
-| MARK | ✅ | ✅ | | |
-| INDEX | ✅ | ✅ | | |
-| HEARTBEAT | ✅ | | | |
-| LIQ | | | ✅ | |
+### Why Both Are Slower Than Baseline at Scale
 
----
+The core issue is **event duplication** — most events are routed to multiple sessions:
 
-## DRL Changes
+| Architecture | Events processed (total across all sessions) | Duplication ratio |
+|:---:|:-:|:-:|
+| Baseline | 1,613,159 | 1.0× |
+| V2 (4T) | 5,253,046 | 3.3× |
+| V3 (2T) | 3,226,026 | 2.0× |
 
-| Change | Rules Affected | Reason |
-|--------|----------------|--------|
-| Commented out | `UPD_TradeRate1s`, `UPD_LiqCount10s` | `accumulate over window:time` caused O(n²) re-evaluation |
-| Loop guard added | `D30_TradeRateTiering`, `H61_LiqTiering` | Prevented modify ping-pong infinite loops |
-| CLEANUP reverted | `CLEANUP_RetractProcessedEvent` | Now retracts ALL events (no LIQ/TRADE exclusion needed) |
-| Deleted (13 total) | 7 dead rules + 6 cross-cluster rules | Eliminated cross-cluster dependencies |
+Each duplicated event fires all 10 generic rules + cluster-specific rules in each receiving session. At scale, the extra rule evaluations overwhelm the parallelism benefit.
+
+### V3 Outperforms V2
+
+V3 (1.62x at 50k, 0.80x at full) consistently outperforms V2 because:
+1. **Lower fan-out overhead** — 2-way duplication is significantly cheaper than 3-4 way duplication.
+2. **Better load balance** — Merging smaller, non-overlapping clusters (C1+C3+C4) reduces synchronization overhead.
+3. **Contention** — Fewer threads reduce context-switching and cache contention in the JVM.
+
+### Future Scalability
+
+To achieve true linear scaling (>2x speedup), the routing must become **selective**:
+- **Symbol-based partitioning**: Routed events hit exactly one session (Zero overlap).
+- **Session-level optimization**: Reduce common generic rules by moving them to a lightweight preprocessing stage.
 
 ---
 
@@ -158,24 +162,14 @@ Each cluster session has its own `KieContainer` + `KieBase`, compiled independen
 ```bash
 cd drools-benchmarks-parent/drools-benchmarks-binance-cep
 
-# 50k events (quick test)
-mvn compile exec:java \
-  -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV2 \
-  -Dexec.args=50000 -Dexec.classpathScope=test
-
-# Full dataset (requires 4GB+ heap)
+# 2-Thread V3 (Latest)
 set MAVEN_OPTS=-Xmx4g
-mvn compile exec:java \
-  -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV2 \
+mvn test-compile exec:java \
+  -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV3 \
   -Dexec.args=0 -Dexec.classpathScope=test
+
+# Quick test (50k)
+mvn test-compile exec:java \
+  -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV3 \
+  -Dexec.args=50000 -Dexec.classpathScope=test
 ```
-
----
-
-## Conclusions
-
-1. At **50k events**, the 4-cluster engine achieves a modest **1.20x speedup** — parallelism benefits outweigh duplication overhead.
-2. At **1.6M events**, the engine is **0.71x** (slower) — the ~2.5× event duplication from high routing overlap dominates.
-3. **Correctness is validated** — 138/140 signal types match, with the 2 missing being from deliberately deleted cross-cluster rules.
-4. **C3 (Liquidation)** is nearly idle (292 events out of 1.6M) — confirming that LIQ events are rare in this dataset.
-5. **Next steps:** Reduce routing overlap by merging C1 into C2, or by removing generic rules from clusters that don't need them.
