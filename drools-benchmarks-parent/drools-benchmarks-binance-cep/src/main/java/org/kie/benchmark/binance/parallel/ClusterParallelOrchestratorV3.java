@@ -171,11 +171,11 @@ public class ClusterParallelOrchestratorV3 {
     }
 
     private void attachSignalListener(KieSession session) {
-        session.addEventListener(new org.kie.api.event.rule.DefaultRuleRuntimeEventListener() {
+        session.registerChannel("alerts", new org.kie.api.runtime.Channel() {
             @Override
-            public void objectInserted(org.kie.api.event.rule.ObjectInsertedEvent event) {
-                if (event.getObject() instanceof RiskSignal) {
-                    RiskSignal s = (RiskSignal) event.getObject();
+            public void send(Object object) {
+                if (object instanceof RiskSignal) {
+                    RiskSignal s = (RiskSignal) object;
                     String key = s.getSymbol() + "-" + s.getKind() + "-" + s.getSeverity();
                     emittedSignals.merge(key, 1, Integer::sum);
                 }

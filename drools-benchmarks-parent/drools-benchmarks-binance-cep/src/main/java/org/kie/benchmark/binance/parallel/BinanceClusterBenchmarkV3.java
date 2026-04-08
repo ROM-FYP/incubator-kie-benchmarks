@@ -56,11 +56,11 @@ public class BinanceClusterBenchmarkV3 {
             EventReplayController controller = new EventReplayController(baselineSession);
 
             Map<String, Integer> baselineSignals = new HashMap<>();
-            baselineSession.addEventListener(new org.kie.api.event.rule.DefaultRuleRuntimeEventListener() {
+            baselineSession.registerChannel("alerts", new org.kie.api.runtime.Channel() {
                 @Override
-                public void objectInserted(org.kie.api.event.rule.ObjectInsertedEvent event) {
-                    if (event.getObject() instanceof RiskSignal) {
-                        RiskSignal s = (RiskSignal) event.getObject();
+                public void send(Object object) {
+                    if (object instanceof RiskSignal) {
+                        RiskSignal s = (RiskSignal) object;
                         String key = s.getSymbol() + "-" + s.getKind() + "-" + s.getSeverity();
                         baselineSignals.put(key, baselineSignals.getOrDefault(key, 0) + 1);
                     }

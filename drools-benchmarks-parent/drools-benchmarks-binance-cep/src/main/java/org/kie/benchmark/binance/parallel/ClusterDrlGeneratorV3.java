@@ -12,18 +12,22 @@ import java.util.Map;
  */
 public class ClusterDrlGeneratorV3 {
 
-    // 10 Generic validation/cleanup rules present in ALL clusters
-    private static final List<String> GENERIC_RULES = List.of(
+    // Generic validation/cleanup rules present in ALL clusters
+    private static final List<String> SHARED_CLEANUP_RULES = List.of(
             "A01_MissingRequiredFields",
             "A02_InvalidNumerics",
-            "A03_TimestampSkewBound",
             "A04_SymbolAllowlist",
-            "A06_PriceQtyPrecisionBounds",
             "A07_DecodeErrorsQuarantine",
             "A08_UnexpectedMessageType",
             "B10_ReconnectStorm",
-            "B16_LateEventRateHigh",
             "CLEANUP_RetractProcessedEvent"
+    );
+
+    // Generic rules that only emit signals, cleanly isolated to CB
+    private static final List<String> CB_ONLY_SIGNAL_RULES = List.of(
+            "A03_TimestampSkewBound",
+            "A06_PriceQtyPrecisionBounds",
+            "B16_LateEventRateHigh"
     );
 
     // CA: Feed Health (C1) + Liquidation (C3) + Trade Rate (C4)  = 35 rules
@@ -132,15 +136,18 @@ public class ClusterDrlGeneratorV3 {
     public static Map<Integer, String> generateClusterDrls(String fullDrl) {
         Map<Integer, String> clusterDrls = new HashMap<>();
 
-        clusterDrls.put(1, DrlSplitter.buildDrlForRules(fullDrl, combine(CA_RULES, GENERIC_RULES)));
-        clusterDrls.put(2, DrlSplitter.buildDrlForRules(fullDrl, combine(CB_RULES, GENERIC_RULES)));
+        clusterDrls.put(1, DrlSplitter.buildDrlForRules(fullDrl, combine(CA_RULES, SHARED_CLEANUP_RULES)));
+        clusterDrls.put(2, DrlSplitter.buildDrlForRules(fullDrl, combine(CB_RULES, SHARED_CLEANUP_RULES, CB_ONLY_SIGNAL_RULES)));
 
         return clusterDrls;
     }
 
-    private static List<String> combine(List<String> clusterRules, List<String> genericRules) {
-        java.util.List<String> combined = new java.util.ArrayList<>(clusterRules);
-        combined.addAll(genericRules);
+    @SafeVarargs
+    private static List<String> combine(List<String>... ruleLists) {
+        java.util.List<String> combined = new java.util.ArrayList<>();
+        for (List<String> rules : ruleLists) {
+            combined.addAll(rules);
+        }
         return combined;
     }
 }
