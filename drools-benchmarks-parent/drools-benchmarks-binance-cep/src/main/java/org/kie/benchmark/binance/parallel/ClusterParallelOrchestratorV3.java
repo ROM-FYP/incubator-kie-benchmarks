@@ -80,15 +80,11 @@ public class ClusterParallelOrchestratorV3 {
             futures.put(cid, threadPool.submit(() -> drainAndFire(session, queue)));
         }
 
-        // Route events
+        // Route events (broadcast without routing logic)
         for (MarketEvent event : events) {
-            String type = event.getEventType();
-            int targets = ClusterEventRouterV3.route(type);
-            if (targets == 0) continue;
-
             try {
-                if (ClusterEventRouterV3.targetsCA(targets)) eventQueues.get(1).put(event);
-                if (ClusterEventRouterV3.targetsCB(targets)) eventQueues.get(2).put(event);
+                eventQueues.get(1).put(event);
+                eventQueues.get(2).put(event);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException("Interrupted while enqueuing event", e);

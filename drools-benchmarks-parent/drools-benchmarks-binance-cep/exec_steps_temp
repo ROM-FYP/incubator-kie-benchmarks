@@ -1,0 +1,4 @@
+export MAVEN_OPTS="-Xmx4g"
+mvn test-compile exec:java \
+  -Dexec.mainClass=org.kie.benchmark.binance.parallel.BinanceClusterBenchmarkV3 \
+  -Dexec.args=0 -Dexec.classpathScope=test
