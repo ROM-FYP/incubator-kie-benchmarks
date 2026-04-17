@@ -1,0 +1,301 @@
+package org.drools.benchmark.wiki;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import java.util.List;
+import java.util.ArrayList;
+
+// ============================================================================
+// FACT DECLARATIONS WITH STREAM SUPPORT
+// ============================================================================
+
+declare WikiEvent
+    @role(event)
+    @expires(10s)
+end
+
+declare UserContext
+    // Not an event, stable fact
+    user : String @key
+    reputation : int
+    editCount : int
+    accountAge : int
+    warnings : int
+end
+
+declare VerifiedEdit
+    @role(event)
+    @expires(10s)
+    user : String
+    title : String
+    sizeDelta : int
+    timestamp : long
+end
+
+declare ContentAnalysis
+    @role(event)
+    @expires(10s)
+    title : String
+    content : String
+    sentiment : double
+    complexity : int
+    flags : java.util.List
+end
+
+declare BotAction
+    @role(event)
+    @expires(10s)
+    user : String
+    type : String
+    velocity : int
+end
+
+declare BotVelocity
+    @role(event)
+    @expires(10s)
+    user : String
+    actionsPerMinute : double
+    burstDetected : boolean
+end
+
+declare GlobalPattern
+    @role(event)
+    @expires(10s)
+    pattern : String
+    sourceWiki : String
+    targetWiki : String
+    correlation : double
+end
+
+declare Alert
+    @role(event)
+    @expires(60s) // Keep alerts slightly longer for aggregation
+    alertType : String
+    severity : int
+    user : String
+    title : String
+    details : String
+    timestamp : long
+end
+
+declare DeepCryptoFlag
+    @role(event)
+    @expires(10s)
+    title : String
+    user : String
+    sizeDelta : int
+    riskScore : double
+end
+
+declare CryptoScamAlert
+    @role(event)
+    @expires(10s)
+    title : String
+    user : String
+    evidence : String
+    severity : int
+end
+
+// ============================================================================
+// CLUSTER 1: THE "EDIT PIPELINE" (HOT CORE)
+// ============================================================================
+
+// Entry Point: Create UserContext for all editors
+// Use alpha node sharing by putting simple constraints first
+rule "C1_R01_Enrich_User_Context"
+when
+    $e : WikiEvent( sizeDelta != 0, $user : user )
+    not UserContext( user == $user )
+then
+    int reputation = Math.abs($user.hashCode() % 100);
+    int editCount = Math.abs($user.hashCode() % 5000);
+    int accountAge = Math.abs($user.hashCode() % 3650);
+    int warnings = Math.abs($user.hashCode() % 10);
+    
+    insert(new UserContext($user, reputation, editCount, accountAge, warnings));
+end
+
+// Shared Enrichment: Create VerifiedEdit
+// Relaxed threshold as per user request (reputation >= 0)
+rule "C1_R02_Create_Verified_Edit"
+when
+    $e : WikiEvent( sizeDelta != 0, $user : user, $title : title, $diff : sizeDelta )
+    $uc : UserContext( user == $user, reputation >= 0 )
+then
+    insert(new VerifiedEdit($user, $title, $diff, System.currentTimeMillis()));
+end
+
+rule "C1_R03_Log_Verified_Edit"
+when
+    $ve : VerifiedEdit( $user : user )
+then
+    // No-op for benchmark throughput
+end
+
+// HOT PATH: Analyze edit size - Alpha network optimized
+rule "C1_R05_Analyze_Edit_Size_Small"
+when
+    $ve : VerifiedEdit( sizeDelta < 100 )
+then
+end
+
+rule "C1_R06_Analyze_Edit_Size_Medium"
+when
+    $ve : VerifiedEdit( sizeDelta >= 100, sizeDelta < 500 )
+then
+end
+
+rule "C1_R07_Analyze_Edit_Size_Large"
+when
+    $ve : VerifiedEdit( sizeDelta >= 500, sizeDelta < 1000 )
+then
+end
+
+// Reputation tiers - optimized with alpha sharing on VerifiedEdit (though checking UserContext)
+rule "C1_R08_Reputation_Bronze"
+when
+    $ve : VerifiedEdit( $user : user )
+    $uc : UserContext( user == $user, reputation >= 50, reputation < 70 )
+then
+end
+
+rule "C1_R09_Reputation_Silver"
+when
+    $ve : VerifiedEdit( $user : user )
+    $uc : UserContext( user == $user, reputation >= 70, reputation < 90 )
+then
+end
+
+rule "C1_R10_Reputation_Gold"
+when
+    $ve : VerifiedEdit( $user : user )
+    $uc : UserContext( user == $user, reputation >= 90 )
+then
+end
+
+// ============================================================================
+// CLUSTER 2: THE "DEEP INSPECTION" (COLD PARASITE)
+// ============================================================================
+
+rule "C2_R01_Deep_Crypto_Scan"
+when
+    // Put cheap string checks first? No, type checks are usually cheaper. Use temporal constraint.
+    $ve : VerifiedEdit( sizeDelta > 1000, 
+                        title.toLowerCase().contains("crypto") || 
+                        title.toLowerCase().contains("bitcoin") ||
+                        title.toLowerCase().contains("blockchain"),
+                        $user : user, $title : title, $diff : sizeDelta )
+    $uc : UserContext( user == $user, reputation >= 0 )
+then
+    double riskScore = ($diff * 1.0) / ($uc.getReputation() + 1.0);
+    insertLogical(new DeepCryptoFlag($title, $user, $diff, riskScore));
+end
+
+rule "C2_R02_Crypto_Pattern_Analysis"
+when
+    $dcf : DeepCryptoFlag( riskScore > 10.0, $user : user, $title : title )
+    $uc : UserContext( user == $user, warnings > 2 )
+then
+    insertLogical(new CryptoScamAlert($title, $user, "High risk crypto edit by warned user", 3));
+end
+
+rule "C2_R03_Detect_Scam_Keywords"
+when
+    $dcf : DeepCryptoFlag( $title : title,
+                           title.toLowerCase().contains("free") ||
+                           title.toLowerCase().contains("guaranteed") ||
+                           title.toLowerCase().contains("profit") )
+then
+    insertLogical(new CryptoScamAlert($title, $dcf.getUser(), "Scam keywords detected", 4));
+end
+
+rule "C2_R04_Alert_Crypto_Scam"
+when
+    $csa : CryptoScamAlert( severity >= 3, $title : title, $user : user, $evidence : evidence )
+then
+    insert(new Alert("CRYPTO_SCAM", $csa.getSeverity(), $user, $title, $evidence, System.currentTimeMillis()));
+end
+
+// ============================================================================
+// CLUSTER 3: THE "BOT SWARM" (WINDOWED ACCUMULATES)
+// ============================================================================
+
+rule "C3_R01_Detect_Bot_Action"
+when
+    $e : WikiEvent( bot == true, $user : user )
+then
+    insert(new BotAction($user, "bot_edit", 1));
+end
+
+rule "C3_R02_Calculate_Bot_Velocity"
+when
+    $ba1 : BotAction( $user : user )
+    // Optimized: Sliding window accumulation to prevent partial match explosion
+    $count : Number( intValue > 10 ) from accumulate(
+        $b : BotAction( user == $user ) over window:time(10s),
+        count($b)
+    )
+then
+    double velocity = $count.doubleValue();
+    insert(new BotVelocity($user, velocity, velocity > 50));
+end
+
+rule "C3_R03_Detect_Bot_Burst"
+when
+    $bv : BotVelocity( burstDetected == true, $user : user )
+then
+    insert(new Alert("BOT_BURST", 2, $user, "Bot Activity", "High velocity detected", System.currentTimeMillis()));
+end
+
+// ============================================================================
+// CLUSTER 4: TEMPORAL JOINS (OPTIMIZED)
+// ============================================================================
+
+rule "C4_R03_Cross_Wiki_Pattern_Match_Temporal"
+when
+    $e1 : WikiEvent( sizeDelta > 0, $title1 : title )
+    // Temporal constraint: e2 must happen [0, 10s] after e1
+    // Replaced eval with strict field constraint where possible, but substring requires eval
+    // The temporal constraint is the key for performance here
+    $e2 : WikiEvent( this != $e1, this after[0, 10s] $e1, 
+                     sizeDelta > 0, $title2 : title, title != $title1 )
+    eval( $title1.substring(0, Math.min(5, $title1.length())).equals(
+          $title2.substring(0, Math.min(5, $title2.length()))) )
+then
+    insert(new GlobalPattern("CROSS_WIKI_NEW", "enwiki", "dewiki", 0.8));
+end
+
+rule "C4_R05_Multi_Wiki_Edit_Pattern_Temporal"
+when
+    $e1 : WikiEvent( sizeDelta != 0, $user : user, $title1 : title )
+    $e2 : WikiEvent( this != $e1, this after[0, 10s] $e1,
+                     sizeDelta > 100, user == $user, title != $title1 )
+then
+    insert(new GlobalPattern("MULTI_WIKI_EDIT", $title1, $e2.getTitle(), 0.6));
+end
+
+// ============================================================================
+// ALERT AGGREGATION (WINDOWED)
+// ============================================================================
+
+rule "Alert_R01_High_Severity_Aggregation"
+when
+    $count : Number( intValue >= 3 ) from accumulate(
+        $a : Alert( severity >= 4 ) over window:time(30s),
+        count($a)
+    )
+then
+    // High severity aggregation detected
+end
+
+rule "Alert_R02_User_Alert_Count"
+when
+    $user : String()
+    // Check if we have at least one alert to anchor the user
+    exists( Alert( user == $user ) ) 
+    $count : Number( intValue >= 5 ) from accumulate(
+        $a : Alert( user == $user ) over window:time(30s),
+        count($a)
+    )
+then
+    insert(new Alert("ALERT_STORM", 5, $user, "Multiple Alerts", "User triggered many alerts", System.currentTimeMillis()));
+end

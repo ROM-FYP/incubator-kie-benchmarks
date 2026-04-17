@@ -1,0 +1,39 @@
+package rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+
+// ============================================================================
+// BOT ACTIVITY MONITORING PIPELINE
+// ============================================================================
+
+// Bot activity signals stay here for local categorization.
+
+rule "Bot_Detect" salience 400
+when
+    $e : WikiEvent( bot == true, $u : user, $ts : timestamp )
+then
+    insert(new BotActivity($u, "edit", $ts));
+end
+
+// Initialize UserActivity for joins if missing
+rule "InitializeUserActivity" salience 1000
+when
+    $e : WikiEvent( $u : user )
+    not UserActivity( user == $u )
+then
+    insert(new UserActivity($u, 0, "INITIALIZING"));
+end
+
+rule "Bot_Categorize" salience 398
+when
+    $a : BotActivity( $u : user, $ts : timestamp )
+    $rate : Number() from accumulate(
+        $ba : BotActivity( user == $u, action == "edit", timestamp > ($ts - 60000) ),
+        count($ba)
+    )
+    not BotProfile( user == $u, timestamp == $ts )
+then
+    // Propagate activityRate to BotProfile
+    insert(new BotProfile($u, "UNVERIFIED", $rate.intValue(), $ts));
+end

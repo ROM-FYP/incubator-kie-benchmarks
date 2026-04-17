@@ -68,6 +68,7 @@
     <module>drools-benchmarks-module</module>
     <module>drools-benchmarks-reliability</module>
     <module>drools-benchmarks-cep-wikimedia</module>
+    <module>drools-benchmarks-cep-wikimedia</module>
   </modules>
   <dependencyManagement>
     <dependencies>

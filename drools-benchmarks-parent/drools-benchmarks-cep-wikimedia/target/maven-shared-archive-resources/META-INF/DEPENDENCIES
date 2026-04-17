@@ -1,0 +1,419 @@
+// ------------------------------------------------------------------
+// Transitive dependencies of this project determined from the
+// maven pom organized by organization.
+// ------------------------------------------------------------------
+
+Drools CEP Wikimedia Benchmark
+
+
+From: 'an unknown organization'
+
+  - Big Math (https://github.com/eobermuhlner/big-math) ch.obermuhlner:big-math:jar:2.0.1
+    License: MIT License  (https://raw.githubusercontent.com/eobermuhlner/big-math/master/LICENSE.txt)
+
+  - javaparser-core (https://github.com/javaparser/javaparser-core) com.github.javaparser:javaparser-core:jar:3.26.4
+    License: GNU Lesser General Public License  (http://www.gnu.org/licenses/lgpl-3.0.html)
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - curvesapi (https://github.com/virtuald/curvesapi) com.github.virtuald:curvesapi:jar:1.08
+    License: BSD License  (http://opensource.org/licenses/BSD-3-Clause)
+
+  - MXParser (http://x-stream.github.io/mxparser) io.github.x-stream:mxparser:jar:1.2.2
+    License: Indiana University Extreme! Lab Software License  (https://raw.githubusercontent.com/x-stream/mxparser/master/LICENSE.txt)
+
+  - Byte Buddy (without dependencies) (https://bytebuddy.net/byte-buddy) net.bytebuddy:byte-buddy:jar:1.18.3
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - JOpt Simple (http://jopt-simple.github.io/jopt-simple) net.sf.jopt-simple:jopt-simple:jar:5.0.4
+    License: The MIT License  (http://www.opensource.org/licenses/mit-license.php)
+
+  - AssertJ Core (https://assertj.github.io/doc/#assertj-core) org.assertj:assertj-core:jar:3.27.7
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - JPMML model (http://www.jpmml.org/pmml-model) org.jpmml:pmml-model:jar:1.6.4
+    License: BSD 3-Clause License  (http://opensource.org/licenses/BSD-3-Clause)
+
+  - JMH Generators: Annotation Processors (http://openjdk.java.net/projects/code-tools/jmh/jmh-generator-annprocess/) org.openjdk.jmh:jmh-generator-annprocess:jar:1.37
+    License: GNU General Public License (GPL), version 2, with the Classpath exception  (http://openjdk.java.net/legal/gplv2+ce.html)
+
+  - XML Resolver (https://github.com/xmlresolver/xmlresolver) org.xmlresolver:xmlresolver:jar:5.3.3
+    License: Apache License version 2.0  (https://www.apache.org/licenses/LICENSE-2.0)
+
+  - XML Resolver (https://github.com/xmlresolver/xmlresolver) org.xmlresolver:xmlresolver:jar:5.3.3
+    License: Apache License version 2.0  (https://www.apache.org/licenses/LICENSE-2.0)
+
+  - XML Pull Parsing API (http://www.xmlpull.org) xmlpull:xmlpull:jar:1.1.3.1
+    License: Public Domain  (http://www.xmlpull.org/v1/download/unpacked/LICENSE.txt)
+
+
+From: 'ANTLR' (http://www.antlr.org)
+
+  - ANTLR 3 Runtime (http://www.antlr.org) org.antlr:antlr-runtime:jar:3.5.2
+    License: BSD licence  (http://antlr.org/license.html)
+
+
+From: 'ANTLR' (https://www.antlr.org/)
+
+  - ANTLR 4 Runtime (https://www.antlr.org/antlr4-runtime/) org.antlr:antlr4-runtime:jar:4.13.2
+    License: BSD-3-Clause  (https://www.antlr.org/license.html)
+
+
+From: 'Apache Software Foundation' (https://www.apache.org/)
+
+  - Apache POI - Common (https://poi.apache.org/) org.apache.poi:poi:jar:5.4.1
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache POI - API based on OPC and OOXML schemas (https://poi.apache.org/) org.apache.poi:poi-ooxml:jar:5.4.1
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache POI (https://poi.apache.org/) org.apache.poi:poi-ooxml-lite:jar:5.4.1
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'Eclipse Foundation' (https://www.eclipse.org)
+
+  - istack common utility code runtime (https://projects.eclipse.org/projects/ee4j/istack-commons/istack-commons-runtime) com.sun.istack:istack-commons-runtime:jar:4.1.2
+    License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+  - Jakarta Activation API (https://github.com/jakartaee/jaf-api) jakarta.activation:jakarta.activation-api:jar:2.1.4
+    License: EDL 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+  - Jakarta XML Binding API (https://github.com/eclipse-ee4j/jaxb-api/jakarta.xml.bind-api) jakarta.xml.bind:jakarta.xml.bind-api:jar:3.0.1
+    License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+  - Angus Activation Registries (https://github.com/eclipse-ee4j/angus-activation/angus-activation) org.eclipse.angus:angus-activation:jar:2.0.3
+    License: EDL 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+  - Eclipse Compiler for Java(TM) (https://github.com/eclipse-jdt/eclipse.jdt.core/) org.eclipse.jdt:ecj:jar:3.44.0
+    License: EPL-2.0  (https://www.eclipse.org/legal/epl-2.0/)
+
+  - JAXB Core (https://eclipse-ee4j.github.io/jaxb-ri/) org.glassfish.jaxb:jaxb-core:jar:4.0.6
+    License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+  - JAXB Runtime (https://eclipse-ee4j.github.io/jaxb-ri/) org.glassfish.jaxb:jaxb-runtime:jar:4.0.6
+    License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+  - TXW2 Runtime (https://eclipse-ee4j.github.io/jaxb-ri/) org.glassfish.jaxb:txw2:jar:4.0.6
+    License: Eclipse Distribution License - v 1.0  (http://www.eclipse.org/org/documents/edl-v10.php)
+
+
+From: 'FasterXML' (http://fasterxml.com/)
+
+  - Jackson-annotations (http://github.com/FasterXML/jackson) com.fasterxml.jackson.core:jackson-annotations:bundle:2.13.3
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Jackson-core (https://github.com/FasterXML/jackson-core) com.fasterxml.jackson.core:jackson-core:jar:2.15.2
+    License: The Apache Software License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - jackson-databind (https://github.com/FasterXML/jackson) com.fasterxml.jackson.core:jackson-databind:jar:2.15.2
+    License: The Apache Software License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'JBoss by Red Hat' (http://www.jboss.org/)
+
+  - mvel (http://mvel.codehaus.org/) org.mvel:mvel2:jar:2.5.2.Final
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'Oracle' (http://openjdk.java.net/)
+
+  - JMH Core (http://openjdk.java.net/projects/code-tools/jmh/jmh-core/) org.openjdk.jmh:jmh-core:jar:1.37
+    License: GNU General Public License (GPL), version 2, with the Classpath exception  (http://openjdk.java.net/legal/gplv2+ce.html)
+
+
+From: 'QOS.ch' (http://www.qos.ch)
+
+  - Logback Classic Module (http://logback.qos.ch/logback-classic) ch.qos.logback:logback-classic:jar:1.5.18
+    License: Eclipse Public License - v 1.0  (http://www.eclipse.org/legal/epl-v10.html)
+    License: GNU Lesser General Public License  (http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
+
+  - Logback Core Module (http://logback.qos.ch/logback-core) ch.qos.logback:logback-core:jar:1.5.18
+    License: Eclipse Public License - v 1.0  (http://www.eclipse.org/legal/epl-v10.html)
+    License: GNU Lesser General Public License  (http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
+
+  - SLF4J API Module (http://www.slf4j.org) org.slf4j:slf4j-api:jar:2.0.6
+    License: MIT License  (http://www.opensource.org/licenses/mit-license.php)
+
+
+From: 'Saxonica' (https://www.saxonica.com/)
+
+  - Saxon-HE (http://www.saxonica.com/) net.sf.saxon:Saxon-HE:jar:12.7
+    License: Mozilla Public License Version 2.0  (http://www.mozilla.org/MPL/2.0/)
+
+
+From: 'The Apache Software Foundation' (http://www.apache.org/)
+
+  - Apache Commons Math (http://commons.apache.org/proper/commons-math/) org.apache.commons:commons-math3:jar:3.6.1
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'The Apache Software Foundation' (https://apache.org/)
+
+  - Drools :: Alpha Network Compiler (http://www.drools.org/drools-build-parent/drools-alphanetwork-compiler) org.drools:drools-alphanetwork-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: base (http://www.drools.org/drools-build-parent/drools-base) org.drools:drools-base:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Canonical Model (http://www.drools.org/drools-build-parent/drools-model/drools-canonical-model) org.drools:drools-canonical-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Codegen :: Common (http://www.drools.org/drools-build-parent/drools-model/drools-codegen-common) org.drools:drools-codegen-common:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Commands (http://www.drools.org/drools-build-parent/drools-commands) org.drools:drools-commands:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Compiler (http://www.drools.org/drools-build-parent/drools-compiler) org.drools:drools-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Core (http://www.drools.org/drools-build-parent/drools-core) org.drools:drools-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Decision Tables (http://www.drools.org/drools-build-parent/drools-decisiontables) org.drools:drools-decisiontables:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: DRL AST (http://www.drools.org/drools-build-parent/drools-drl/drools-drl-ast) org.drools:drools-drl-ast:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: DRL :: Extensions (http://www.drools.org/drools-build-parent/drools-drl/drools-drl-extensions) org.drools:drools-drl-extensions:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: DRL :: Parser (http://www.drools.org/drools-build-parent/drools-drl/drools-drl-parser) org.drools:drools-drl-parser:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: ECJ (http://www.drools.org/drools-build-parent/drools-ecj) org.drools:drools-ecj:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: IO (http://www.drools.org/drools-build-parent/drools-io) org.drools:drools-io:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: KieSession (http://www.drools.org/drools-build-parent/drools-kiesession) org.drools:drools-kiesession:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Model :: Codegen (http://www.drools.org/drools-build-parent/drools-model/drools-model-codegen) org.drools:drools-model-codegen:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Model :: Compiler (http://www.drools.org/drools-build-parent/drools-model/drools-model-compiler) org.drools:drools-model-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Canonical Model :: Prototype (http://www.drools.org/drools-build-parent/drools-model/drools-model-prototype) org.drools:drools-model-prototype:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: MVEL (http://www.drools.org/drools-build-parent/drools-mvel) org.drools:drools-mvel:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: MVEL Compiler (http://www.drools.org/drools-build-parent/drools-model/drools-mvel-compiler) org.drools:drools-mvel-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: MVEL Parser (http://www.drools.org/drools-build-parent/drools-model/drools-mvel-parser) org.drools:drools-mvel-parser:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Templates (http://www.drools.org/drools-build-parent/drools-templates) org.drools:drools-templates:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Truth Maintenance System (http://www.drools.org/drools-build-parent/drools-tms) org.drools:drools-tms:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Util (http://www.drools.org/drools-build-parent/drools-util) org.drools:drools-util:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Wiring :: API (http://www.drools.org/drools-build-parent/drools-wiring/drools-wiring-api) org.drools:drools-wiring-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Wiring :: Dynamic (http://www.drools.org/drools-build-parent/drools-wiring/drools-wiring-dynamic) org.drools:drools-wiring-dynamic:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: Wiring :: Static (http://www.drools.org/drools-build-parent/drools-wiring/drools-wiring-static) org.drools:drools-wiring-static:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Drools :: XML Support (http://www.drools.org/drools-build-parent/drools-xml-support) org.drools:drools-xml-support:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Common :: Api (http://www.drools.org/drools-build-parent/efesto/efesto-core/efesto-common-api) org.kie:efesto-common-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Common :: Core (http://www.drools.org/drools-build-parent/efesto/efesto-core/efesto-common-core) org.kie:efesto-common-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Common :: Utils (http://www.drools.org/drools-build-parent/efesto/efesto-common-utils) org.kie:efesto-common-utils:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Compilation :: Manager :: Api (http://www.drools.org/drools-build-parent/efesto/efesto-core/efesto-compilation-manager/efesto-compilation-manager-api) org.kie:efesto-compilation-manager-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Compilation :: Manager :: Core (http://www.drools.org/drools-build-parent/efesto/efesto-core/efesto-compilation-manager/efesto-compilation-manager-core) org.kie:efesto-compilation-manager-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Runtime :: Manager :: Api (http://www.drools.org/drools-build-parent/efesto/efesto-core/efesto-runtime-manager/efesto-runtime-manager-api) org.kie:efesto-runtime-manager-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Efesto :: Runtime :: Manager :: Core (http://www.drools.org/drools-build-parent/efesto/efesto-core/efesto-runtime-manager/efesto-runtime-manager-core) org.kie:efesto-runtime-manager-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Public API (http://www.drools.org/drools-build-parent/kie-api) org.kie:kie-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: API (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-api) org.kie:kie-dmn-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Backend (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-backend) org.kie:kie-dmn-backend:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Core (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-core) org.kie:kie-dmn-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Efesto API (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-efesto-api) org.kie:kie-dmn-efesto-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Efesto Compilation (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-efesto-compilation) org.kie:kie-dmn-efesto-compilation:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Efesto Runtime (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-efesto-runtime) org.kie:kie-dmn-efesto-runtime:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: FEEL (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-feel) org.kie:kie-dmn-feel:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Model (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-model) org.kie:kie-dmn-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: Validation (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-validation) org.kie:kie-dmn-validation:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Decision Model Notation :: XSD-Bundle (http://www.drools.org/drools-build-parent/kie-dmn/kie-dmn-xsd-resources) org.kie:kie-dmn-xsd-resources:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Internal (http://www.drools.org/drools-build-parent/kie-internal) org.kie:kie-internal:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Memory Compiler (http://www.drools.org/drools-build-parent/kie-memory-compiler) org.kie:kie-memory-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: API (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-api) org.kie:kie-pmml-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Commons (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-commons) org.kie:kie-pmml-commons:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Compiler :: API (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-compiler/kie-pmml-compiler-api) org.kie:kie-pmml-compiler-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Compiler :: Commons (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-compiler/kie-pmml-compiler-commons) org.kie:kie-pmml-compiler-commons:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Compiler :: Core (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-compiler/kie-pmml-compiler-core) org.kie:kie-pmml-compiler-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Dependencies (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-dependencies) org.kie:kie-pmml-dependencies:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Evaluator :: API (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-evaluator/kie-pmml-evaluator-api) org.kie:kie-pmml-evaluator-api:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Evaluator :: Core (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-evaluator/kie-pmml-evaluator-core) org.kie:kie-pmml-evaluator-core:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Evaluator :: Utils (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-evaluator/kie-pmml-evaluator-utils) org.kie:kie-pmml-evaluator-utils:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Clustering :: Compiler (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-clustering/kie-pmml-models-clustering-compiler) org.kie:kie-pmml-models-clustering-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Clustering :: Evaluator (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-clustering/kie-pmml-models-clustering-evaluator) org.kie:kie-pmml-models-clustering-evaluator:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Clustering :: Model (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-clustering/kie-pmml-models-clustering-model) org.kie:kie-pmml-models-clustering-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Drools :: Common (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-drools/kie-pmml-models-drools-common) org.kie:kie-pmml-models-drools-common:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Mining :: Compiler (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-mining/kie-pmml-models-mining-compiler) org.kie:kie-pmml-models-mining-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Mining :: Evaluator (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-mining/kie-pmml-models-mining-evaluator) org.kie:kie-pmml-models-mining-evaluator:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Mining :: Model (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-mining/kie-pmml-models-mining-model) org.kie:kie-pmml-models-mining-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Regression :: Compiler (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-regression/kie-pmml-models-regression-compiler) org.kie:kie-pmml-models-regression-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Regression :: Evaluator (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-regression/kie-pmml-models-regression-evaluator) org.kie:kie-pmml-models-regression-evaluator:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Regression :: Model (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-regression/kie-pmml-models-regression-model) org.kie:kie-pmml-models-regression-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Scorecard :: Compiler (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-scorecard/kie-pmml-models-scorecard-compiler) org.kie:kie-pmml-models-scorecard-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Scorecard :: Evaluator (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-scorecard/kie-pmml-models-scorecard-evaluator) org.kie:kie-pmml-models-scorecard-evaluator:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Scorecard :: Model (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-scorecard/kie-pmml-models-scorecard-model) org.kie:kie-pmml-models-scorecard-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Tree :: Compiler (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-tree/kie-pmml-models-tree-compiler) org.kie:kie-pmml-models-tree-compiler:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Tree :: Evaluator (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-tree/kie-pmml-models-tree-evaluator) org.kie:kie-pmml-models-tree-evaluator:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: PMML :: Models :: Tree :: Model (http://www.drools.org/drools-build-parent/kie-pmml-trusty/kie-pmml-models/kie-pmml-models-tree/kie-pmml-models-tree-model) org.kie:kie-pmml-models-tree-model:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Util :: Maven Support (http://www.drools.org/drools-build-parent/kie-util/kie-util-maven-support) org.kie:kie-util-maven-support:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - KIE :: Util :: XML supposrt (http://www.drools.org/drools-build-parent/kie-util/kie-util-xml) org.kie:kie-util-xml:jar:999-SNAPSHOT
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'The Apache Software Foundation' (https://www.apache.org/)
+
+  - Apache Commons Codec (https://commons.apache.org/proper/commons-codec/) commons-codec:commons-codec:jar:1.18.0
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache Commons IO (https://commons.apache.org/proper/commons-io/) commons-io:commons-io:jar:2.18.0
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache Commons Collections (https://commons.apache.org/proper/commons-collections/) org.apache.commons:commons-collections4:jar:4.4
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache Commons Compress (https://commons.apache.org/proper/commons-compress/) org.apache.commons:commons-compress:jar:1.27.1
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache Commons Lang (https://commons.apache.org/proper/commons-lang/) org.apache.commons:commons-lang3:jar:3.16.0
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache Commons Text (https://commons.apache.org/proper/commons-text) org.apache.commons:commons-text:jar:1.11.0
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+  - Apache Log4j API (https://logging.apache.org/log4j/2.x/log4j/log4j-api/) org.apache.logging.log4j:log4j-api:jar:2.24.3
+    License: Apache-2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'XmlBeans' (https://xmlbeans.apache.org/)
+
+  - XmlBeans (https://xmlbeans.apache.org/) org.apache.xmlbeans:xmlbeans:jar:5.3.0
+    License: The Apache Software License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+From: 'XStream' (http://x-stream.github.io)
+
+  - XStream Core (http://x-stream.github.io/xstream) com.thoughtworks.xstream:xstream:jar:1.4.21
+    License: BSD-3-Clause  (http://x-stream.github.io/license.html)
+
+
+From: 'Zaxxer.com' (https://github.com/brettwooldridge/SparseBitSet)
+
+  - SparseBitSet (https://github.com/brettwooldridge/SparseBitSet) com.zaxxer:SparseBitSet:jar:1.3
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+
+
+

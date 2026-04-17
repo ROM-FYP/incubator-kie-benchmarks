@@ -1,0 +1,17 @@
+package rules;
+
+import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
+import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
+
+// ============================================================================
+// CONTENT GROWTH PIPELINE
+// ============================================================================
+
+// Content addition signals stay here for local processing.
+
+rule "Content_Detect" salience 300
+when
+    $e : WikiEvent( sizeDelta > 200, bot == false, $t : title, $u : user, $size : sizeDelta, $ts : timestamp )
+then
+    insert(new ContentAddition($t, $u, $size, $ts));
+end
