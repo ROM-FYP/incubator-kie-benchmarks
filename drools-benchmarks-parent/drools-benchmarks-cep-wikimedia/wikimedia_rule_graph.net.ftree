@@ -1,0 +1,151 @@
+# v2.6.1
+# ./Infomap wikimedia_rule_graph.net . --ftree --clu -N 5
+# started at 2026-04-17 23:21:41
+# completed in 0.2644 s
+# partitioned into 4 levels with 4 top modules
+# codelength 2.63044 bits
+# relative codelength savings 35.1608%
+# flow model undirected
+# path flow name node_id
+1:1:1 0.130929 "Minor_Accept" 29
+1:1:2 0.130929 "Minor_Track" 33
+1:1:3 0.0654647 "Minor_Complete" 31
+1:2:1 0.130929 "Minor_Classify" 30
+1:2:2 0.130929 "Minor_Validate_Standard" 34
+1:2:3 0.0654647 "Minor_Detect" 32
+2:1:1 0.0353799 "Bot_Categorize_Registered" 1
+2:1:2 0.0327507 "Bot_HealthCheck_Registered_RateLimitExceeded" 6
+2:1:3 0.0206215 "Bot_Detect" 4
+2:1:4 0.00278495 "Bot_HealthCheck_Registered_Healthy" 5
+2:2:1 0.0379175 "Bot_Metrics" 9
+2:2:2 0.0345921 "Bot_Report" 10
+2:2:3 0.017296 "Bot_Complete" 3
+2:3:1 0.00856557 "Bot_Categorize_Unverified" 2
+2:3:2 0.00540501 "Bot_HealthCheck_Unverified_NewBot" 7
+2:3:3 0.00316056 "Bot_HealthCheck_Unverified_Review" 8
+3:1:1:1 0.0221789 "Content_Approve_NewArticle" 12
+3:1:1:2 0.0185236 "Content_Review_Standard" 19
+3:1:1:3 0.0120926 "Content_Detect" 15
+3:1:1:4 0.00566152 "Content_Review_Major_New" 18
+3:1:1:5 0.00304146 "Content_Approve_Standard" 13
+3:1:1:6 0.000146577 "Content_Approve_Major" 11
+3:1:2:1 0.0241851 "Content_Cache" 14
+3:1:2:2 0.0241851 "Content_Index" 16
+3:1:2:3 0.0092618 "Content_Standard_Complete" 20
+3:1:2:4 0.00283076 "Content_Major_Log" 17
+3:2:1 0.00191466 "Vandalism_Analyze_MassiveDeletion_NewUser" 37
+3:2:2 0.00188717 "Vandalism_Detect" 42
+3:2:3 0.00136499 "Vandalism_Analyze_ModerateDeletion_NewUser" 39
+3:2:4 0.00128254 "Vandalism_Verify_LowRisk" 49
+3:2:5 0.0012001 "Vandalism_Analyze_LargeDeletion_NewUser" 35
+3:2:6 0.0012001 "InitializeUserActivity" 28
+3:2:7 0.000641272 "Vandalism_NoFlag_LowSeverity" 46
+3:2:8 0.000467213 "Vandalism_Analyze_ModerateDeletion_RegularUser" 40
+3:2:9 0.000348119 "Vandalism_Analyze_LargeDeletion_RegularUser" 36
+3:2:10 9.16103e-05 "Vandalism_Verify_MediumRisk_OtherArticles" 50
+3:3:1 0.00230858 "Vandalism_Complete" 41
+3:3:2 0.00201543 "Vandalism_Verify_HighRisk_NoArticleData" 47
+3:3:3 0.00196962 "Vandalism_Flag_HighSeverity_Standard_FirstTime" 43
+3:3:4 0.00115429 "Vandalism_Logged_Complete" 45
+3:3:5 0.00101687 "Vandalism_Flag_HighSeverity_Standard_RepeatOffender" 44
+3:4:1 0.000494696 "Vandalism_Analyze_MassiveDeletion_RegularUser" 38
+3:4:2 0.000430569 "Vandalism_Verify_HighRisk_StandardArticle" 48
+3:4:3 0.000311475 "CorrelateHighRiskUser" 21
+4:1:1 0.000934425 "Discussion_Analyze" 22
+4:1:2 0.000934425 "Discussion_Sentiment" 27
+4:1:3 0.000467213 "Discussion_Detect" 24
+4:2:1 0.000934425 "Discussion_Notify" 25
+4:2:2 0.000934425 "Discussion_Route" 26
+4:2:3 0.000467213 "Discussion_Complete" 23
+*Links undirected
+#*Links path enterFlow exitFlow numEdges numChildren
+*Links root 0 0 1 4
+2 3 0.000311475
+*Links 1 0 0 1 2
+2 1 0.130929
+*Links 1:1 0.0654647 0.0654647 2 3
+1 2 0.130929
+2 3 0.130929
+*Links 1:2 0.0654647 0.0654647 2 3
+1 2 0.130929
+3 1 0.130929
+*Links 2 0.000155738 0.000155738 3 3
+1 2 0.0353799
+1 3 0.00586306
+3 2 0.00586306
+*Links 2:1 0.0207772 0.0207772 3 4
+1 2 0.032595
+1 4 0.00278495
+3 1 0.0353799
+*Links 2:2 0.0206215 0.0206215 2 3
+1 2 0.0345921
+2 3 0.0345921
+*Links 2:3 0.00586306 0.00586306 2 3
+1 2 0.00540501
+1 3 0.00586306
+*Links 3 0.000155738 0.000155738 5 4
+1 4 0.000274831
+2 3 0.00183221
+2 4 0.000751205
+4 2 7.32883e-05
+4 3 0.000476374
+*Links 3:1 0.000137415 0.000137415 1 2
+1 2 0.0241851
+*Links 3:1:1 0.01223 0.01223 10 6
+1 5 0.000934425
+1 6 7.32883e-05
+2 1 0.0159768
+2 5 0.00254677
+3 2 0.0185236
+3 4 0.00566152
+4 1 0.00556991
+4 6 9.16103e-05
+5 6 1.83221e-05
+6 5 1.83221e-05
+*Links 3:1:2 0.0120926 0.0120926 3 4
+1 3 0.0185236
+1 4 0.00566152
+2 1 0.0241851
+*Links 3:2 0.00132835 0.00132835 24 10
+1 3 5.49662e-05
+1 5 5.49662e-05
+1 8 1.83221e-05
+1 9 1.83221e-05
+2 1 0.00122758
+2 3 0.000952747
+2 5 0.000787849
+2 8 0.000329797
+2 9 0.000183221
+3 1 1.83221e-05
+3 4 0.000952747
+3 8 3.66441e-05
+4 7 0.00128254
+5 1 1.83221e-05
+5 3 1.83221e-05
+5 8 3.66441e-05
+5 9 3.66441e-05
+6 1 0.00106268
+6 3 0.000696238
+6 5 0.000641272
+8 4 0.000329797
+8 9 7.32883e-05
+9 8 5.49662e-05
+9 10 0.000183221
+*Links 3:3 0.00115429 0.00115429 6 5
+1 4 0.00230858
+2 3 0.00152073
+2 5 0.000494696
+3 1 0.00163066
+3 5 0.000677916
+5 1 0.000677916
+*Links 3:4 0.000943586 0.000943586 2 3
+1 2 0.000109932
+1 3 0.000183221
+*Links 4 0 0 1 2
+1 2 0.000934425
+*Links 4:1 0.000467213 0.000467213 2 3
+1 2 0.000934425
+3 1 0.000934425
+*Links 4:2 0.000467213 0.000467213 2 3
+1 3 0.000934425
+2 1 0.000934425

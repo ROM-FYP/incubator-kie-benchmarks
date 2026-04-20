@@ -1,0 +1,140 @@
+*Vertices 50
+1 "Bot_Categorize_Registered"
+2 "Bot_Categorize_Unverified"
+3 "Bot_Complete"
+4 "Bot_Detect"
+5 "Bot_HealthCheck_Registered_Healthy"
+6 "Bot_HealthCheck_Registered_RateLimitExceeded"
+7 "Bot_HealthCheck_Unverified_NewBot"
+8 "Bot_HealthCheck_Unverified_Review"
+9 "Bot_Metrics"
+10 "Bot_Report"
+11 "Content_Approve_Major"
+12 "Content_Approve_NewArticle"
+13 "Content_Approve_Standard"
+14 "Content_Cache"
+15 "Content_Detect"
+16 "Content_Index"
+17 "Content_Major_Log"
+18 "Content_Review_Major_New"
+19 "Content_Review_Standard"
+20 "Content_Standard_Complete"
+21 "CorrelateHighRiskUser"
+22 "Discussion_Analyze"
+23 "Discussion_Complete"
+24 "Discussion_Detect"
+25 "Discussion_Notify"
+26 "Discussion_Route"
+27 "Discussion_Sentiment"
+28 "InitializeUserActivity"
+29 "Minor_Accept"
+30 "Minor_Classify"
+31 "Minor_Complete"
+32 "Minor_Detect"
+33 "Minor_Track"
+34 "Minor_Validate_Standard"
+35 "Vandalism_Analyze_LargeDeletion_NewUser"
+36 "Vandalism_Analyze_LargeDeletion_RegularUser"
+37 "Vandalism_Analyze_MassiveDeletion_NewUser"
+38 "Vandalism_Analyze_MassiveDeletion_RegularUser"
+39 "Vandalism_Analyze_ModerateDeletion_NewUser"
+40 "Vandalism_Analyze_ModerateDeletion_RegularUser"
+41 "Vandalism_Complete"
+42 "Vandalism_Detect"
+43 "Vandalism_Flag_HighSeverity_Standard_FirstTime"
+44 "Vandalism_Flag_HighSeverity_Standard_RepeatOffender"
+45 "Vandalism_Logged_Complete"
+46 "Vandalism_NoFlag_LowSeverity"
+47 "Vandalism_Verify_HighRisk_NoArticleData"
+48 "Vandalism_Verify_HighRisk_StandardArticle"
+49 "Vandalism_Verify_LowRisk"
+50 "Vandalism_Verify_MediumRisk_OtherArticles"
+*Arcs
+1 5 152
+1 6 1779
+2 7 295
+2 8 320
+4 1 1931
+4 2 320
+5 9 152
+6 9 1779
+6 21 17
+7 9 295
+8 9 25
+9 10 1888
+10 3 1888
+11 13 1
+11 16 5
+12 11 4
+12 13 51
+12 16 1176
+12 48 14
+13 11 1
+13 16 139
+13 48 1
+14 17 309
+14 20 1011
+15 18 309
+15 19 1011
+16 14 1320
+18 11 5
+18 12 304
+19 12 872
+19 13 139
+22 27 51
+24 22 51
+25 23 51
+26 25 51
+27 26 51
+28 35 35
+28 37 58
+28 39 38
+29 33 7146
+30 34 7146
+32 30 7146
+33 31 7146
+34 29 7146
+35 21 1
+35 36 2
+35 37 1
+35 39 1
+35 40 2
+35 47 41
+35 48 2
+36 38 5
+36 40 3
+36 50 10
+37 21 6
+37 35 3
+37 36 1
+37 38 1
+37 39 3
+37 40 1
+37 47 59
+37 48 8
+38 21 10
+38 36 3
+38 40 1
+38 47 10
+38 48 6
+39 37 1
+39 40 2
+39 49 52
+40 36 4
+40 38 2
+40 49 18
+41 45 126
+42 35 43
+42 36 10
+42 37 67
+42 38 16
+42 39 52
+42 40 18
+43 41 89
+43 44 37
+44 41 37
+47 43 83
+47 44 27
+48 43 6
+48 44 10
+49 46 70
