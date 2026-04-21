@@ -91,82 +91,97 @@ public class WikimediaStreamRecorder {
         try {
             // Ensure output directory exists
             Files.createDirectories(outputPath.getParent());
+            // Open in append mode in case of reconnects
+            writer = new BufferedWriter(new FileWriter(outputPath.toFile(), true));
             
-            // Connect to stream
-            System.out.println("Connecting to Wikimedia stream...");
-            URL url = new URL(WIKIMEDIA_STREAM_URL);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Accept", "text/event-stream");
-            connection.setRequestProperty("User-Agent", "WikimediaStreamRecorder/1.0 (Apache KIE Benchmarks)");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(0); // Infinite for streaming
-            
-            int responseCode = connection.getResponseCode();
-            if (responseCode != 200) {
-                System.err.println("Failed to connect: HTTP " + responseCode);
-                return;
-            }
-            
-            System.out.println("✓ Connected! Recording stream data...");
-            System.out.println();
-            
-            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            writer = new BufferedWriter(new FileWriter(outputPath.toFile()));
-            
-            String line;
-            StringBuilder eventData = new StringBuilder();
-            long lastProgressTime = startTime;
-            
-            while (System.currentTimeMillis() < endTime && (line = reader.readLine()) != null) {
-                if (line.startsWith("data: ")) {
-                    // Extract raw JSON payload
-                    String jsonData = line.substring(6);
-                    eventData.append(jsonData);
-                } else if (line.isEmpty() && eventData.length() > 0) {
-                    // End of SSE event - write to file
-                    String rawJson = eventData.toString().trim();
-                    if (!rawJson.isEmpty()) {
-                        writer.write(rawJson);
-                        writer.newLine();
-                        eventCount.incrementAndGet();
-                        
-                        // Flush periodically to avoid data loss
-                        if (eventCount.get() % 100 == 0) {
-                            writer.flush();
+            while (System.currentTimeMillis() < endTime) {
+                try {
+                    // Connect to stream
+                    System.out.println("Connecting to Wikimedia stream...");
+                    URL url = new URL(WIKIMEDIA_STREAM_URL);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("GET");
+                    connection.setRequestProperty("Accept", "text/event-stream");
+                    connection.setRequestProperty("User-Agent", "WikimediaStreamRecorder/1.0 (Apache KIE Benchmarks)");
+                    connection.setConnectTimeout(10000);
+                    connection.setReadTimeout(0); // Infinite for streaming
+                    
+                    int responseCode = connection.getResponseCode();
+                    if (responseCode != 200) {
+                        System.err.println("Failed to connect: HTTP " + responseCode + ". Retrying in 5 seconds...");
+                        Thread.sleep(5000);
+                        continue;
+                    }
+                    
+                    System.out.println("✓ Connected! Recording stream data...");
+                    System.out.println();
+                    
+                    reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                    
+                    String line;
+                    StringBuilder eventData = new StringBuilder();
+                    long lastProgressTime = System.currentTimeMillis();
+                    
+                    while (System.currentTimeMillis() < endTime && (line = reader.readLine()) != null) {
+                        if (line.startsWith("data: ")) {
+                            // Extract raw JSON payload
+                            String jsonData = line.substring(6);
+                            eventData.append(jsonData);
+                        } else if (line.isEmpty() && eventData.length() > 0) {
+                            // End of SSE event - write to file
+                            String rawJson = eventData.toString().trim();
+                            if (!rawJson.isEmpty()) {
+                                writer.write(rawJson);
+                                writer.newLine();
+                                eventCount.incrementAndGet();
+                                
+                                // Flush periodically to avoid data loss
+                                if (eventCount.get() % 100 == 0) {
+                                    writer.flush();
+                                }
+                            }
+                            eventData.setLength(0);
+                            
+                            // Progress update every 10 seconds
+                            long now = System.currentTimeMillis();
+                            if (now - lastProgressTime >= 10000) {
+                                long elapsedSec = (now - startTime) / 1000;
+                                long remainingSec = (endTime - now) / 1000;
+                                double eventsPerSec = eventCount.get() / (double) Math.max(1, elapsedSec);
+                                System.out.printf("Progress: %d events recorded (%.1f/sec), %d seconds remaining%n",
+                                        eventCount.get(), eventsPerSec, remainingSec);
+                                lastProgressTime = now;
+                            }
                         }
                     }
-                    eventData.setLength(0);
-                    
-                    // Progress update every 10 seconds
-                    long now = System.currentTimeMillis();
-                    if (now - lastProgressTime >= 10000) {
-                        long elapsedSec = (now - startTime) / 1000;
-                        long remainingSec = (endTime - now) / 1000;
-                        double eventsPerSec = eventCount.get() / (double) elapsedSec;
-                        System.out.printf("Progress: %d events recorded (%.1f/sec), %d seconds remaining%n",
-                                eventCount.get(), eventsPerSec, remainingSec);
-                        lastProgressTime = now;
+                } catch (IOException e) {
+                    System.err.println("Stream interrupted: " + e.getMessage() + ". Reconnecting in 3 seconds...");
+                    try { Thread.sleep(3000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                } finally {
+                    // Cleanup connection and reader before retrying
+                    if (reader != null) {
+                        try { reader.close(); } catch (IOException e) { /* ignore */ }
+                    }
+                    if (connection != null) {
+                        connection.disconnect();
                     }
                 }
             }
             
             // Final flush
-            writer.flush();
+            if (writer != null) {
+                writer.flush();
+            }
             
         } catch (IOException e) {
-            System.err.println("Error: " + e.getMessage());
+            System.err.println("Fatal Error initializing recorder: " + e.getMessage());
             e.printStackTrace();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } finally {
-            // Cleanup
-            if (reader != null) {
-                try { reader.close(); } catch (IOException e) { /* ignore */ }
-            }
+            // Final cleanup of writer
             if (writer != null) {
                 try { writer.close(); } catch (IOException e) { /* ignore */ }
-            }
-            if (connection != null) {
-                connection.disconnect();
             }
         }
         
