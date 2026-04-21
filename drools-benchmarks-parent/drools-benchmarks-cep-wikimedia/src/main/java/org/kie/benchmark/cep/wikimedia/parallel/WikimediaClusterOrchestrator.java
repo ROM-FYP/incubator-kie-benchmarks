@@ -112,8 +112,15 @@ public class WikimediaClusterOrchestrator {
         // Alpha-filter routing: route events to matching sessions
         for (WikiEvent event : events) {
             try {
-                // C3 always receives all events (InitializeUserActivity matches all)
-                eventQueues.get(3).put(event);
+                // C3: Content + Vandalism + Bot (Duplicated)
+                // Content: sizeDelta > 200 && !bot
+                // Vandalism: sizeDelta < -100
+                // Bot: bot == true
+                if ((event.getSizeDelta() > 200 && !event.isBot()) || 
+                    event.getSizeDelta() < -100 || 
+                    event.isBot()) {
+                    eventQueues.get(3).put(event);
+                }
 
                 // C2: Bot pipeline — bot == true
                 if (event.isBot()) {

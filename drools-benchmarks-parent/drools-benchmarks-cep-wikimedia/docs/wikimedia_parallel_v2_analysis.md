@@ -56,7 +56,30 @@ Speedup                             1.00x           0.93x
   C4 (Discussion)        [6 rules]       Events:      729  Fired:    4,374
 ```
 
-### Bottleneck Diagnosis
+### 1. Refined Filtering (Drop Unconditional C3 Routing)
+By duplicating `InitializeUserActivity` into all clusters, we dismantled the mandate that C3 must receive the unfiltered stream. C3's router stringent alpha-filters (`bot == true || sizeDelta < -100 || (sizeDelta > 200 && !bot)`) successfully dropped its event intake from 222,165 down to 131,894! 
+
+However, because 114,772 of those remaining 131,894 events are strictly Bot events, C3 is still heavily bogged down repeating the Bot Categorization pipeline (our second underlying anchoring issue).
+
+### 2. Hybrid Run (Reverting User Tracking to C3 Only)
+Removing the `InitializeUserActivity` duplication from C1, C2, and C4 (but keeping the strict C3 routing filter) marginally pushed the speedup from **0.85x back up to 0.90x**. This confirmed that the 25,000 extra rules we added horizontally across the cluster caused minor drag, but the fundamental anchor limiting the 222,000-event benchmark remains the fact that C3 is running the duplicated Bot pipeline against 114,000 Bot events while suffering from synchronous `fireAllRules` lock contention.
+
+```text
+── Comparison ──────────────────────────────
+                                   Single    Cluster (4T)
+Rules fired                       937,966       1,119,195
+Duration                        17,425 ms       19,458 ms
+Events/sec                       12749.78        11417.67
+Speedup                             1.00x           0.90x
+
+── Per-Session Breakdown ───────────────────
+  C1 (Minor)             [7 rules]       Events:   80,524  Fired:  483,144
+  C2 (Bot)               [10 rules]      Events:  114,772  Fired:  314,094
+  C3 (Content+Vandalism) [47 rules]      Events:  131,894  Fired:  317,583
+  C4 (Discussion)        [6 rules]       Events:      729  Fired:    4,374
+```
+
+### Future Remediation
 The speedup completely evaporated on the 222k dataset, dropping from **1.8x to 0.93x**. The breakdown exposes two significant scaling flaws:
 
 1. **Rule Duplication Weight (The C3 Anchor):** Because we duplicated the Bot Pipeline (7 rules) into C3 to satisfy a correlation condition, C3 was forced to execute bot classification logic for all **114,772 Bot events** in the stream. This directly caused 200,000 extra redundant rule firings exactly where we didn't want them: inside the slowest thread. C3 (our anchor) took the entire 27 seconds to process the stream alone, while C1/C2 likely finished much earlier.
