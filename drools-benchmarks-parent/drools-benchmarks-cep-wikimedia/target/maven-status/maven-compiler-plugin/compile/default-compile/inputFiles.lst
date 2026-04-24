@@ -25,6 +25,7 @@ D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\VerifiedEdit.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\WikimediaEventSource.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\parallel\DrlSplitter.java
+D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\jmh\WikimediaClusterJmhBenchmark.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\ContentModerationRunner.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\parallel\WikimediaClusterBenchmark.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\MiningTraceLogger.java
@@ -34,6 +35,7 @@ D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\CepBenchmarkConfig.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\DrlFacts.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\Alert.java
+D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\jmh\WikimediaBaselineJmhBenchmark.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\util\FactRegistry.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\parallel\WikimediaClusterOrchestrator.java
 D:\projects\incubator-kie-benchmarks\drools-benchmarks-parent\drools-benchmarks-cep-wikimedia\src\main\java\org\kie\benchmark\cep\wikimedia\model\UserDiversity.java

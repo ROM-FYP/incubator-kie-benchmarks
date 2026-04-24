@@ -33,9 +33,6 @@ From: 'an unknown organization'
   - JPMML model (http://www.jpmml.org/pmml-model) org.jpmml:pmml-model:jar:1.6.4
     License: BSD 3-Clause License  (http://opensource.org/licenses/BSD-3-Clause)
 
-  - JMH Generators: Annotation Processors (http://openjdk.java.net/projects/code-tools/jmh/jmh-generator-annprocess/) org.openjdk.jmh:jmh-generator-annprocess:jar:1.37
-    License: GNU General Public License (GPL), version 2, with the Classpath exception  (http://openjdk.java.net/legal/gplv2+ce.html)
-
   - XML Resolver (https://github.com/xmlresolver/xmlresolver) org.xmlresolver:xmlresolver:jar:5.3.3
     License: Apache License version 2.0  (https://www.apache.org/licenses/LICENSE-2.0)
 

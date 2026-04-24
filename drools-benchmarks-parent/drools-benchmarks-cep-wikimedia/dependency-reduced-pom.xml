@@ -44,7 +44,10 @@
               <finalName>drools-benchmarks-cep-wikimedia</finalName>
               <transformers>
                 <transformer>
-                  <mainClass>org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark</mainClass>
+                  <resource>META-INF/kie.conf</resource>
+                </transformer>
+                <transformer>
+                  <mainClass>org.openjdk.jmh.Main</mainClass>
                 </transformer>
                 <transformer />
               </transformers>
@@ -64,4 +67,15 @@
       </plugin>
     </plugins>
   </build>
+  <dependencies>
+    <dependency>
+      <groupId>org.openjdk.jmh</groupId>
+      <artifactId>jmh-generator-annprocess</artifactId>
+      <version>1.37</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+  <properties>
+    <jmh.version>1.37</jmh.version>
+  </properties>
 </project>
