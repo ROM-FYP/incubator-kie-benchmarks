@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 target/
 /local
 /bin
@@ -22,3 +23,40 @@ hs_err_pid*
 /*.ipr
 /*.iws
 /*.iml
+=======
+# Maven
+target/
+dependency-reduced-pom.xml
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# JMH
+jmh-result.json
+*.jfr
+
+# Results
+docs/results/*.csv
+docs/results/*.html
+docs/results/*.jfr
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*~
+>>>>>>> routing_experiment_opeskyAirTrafficking
