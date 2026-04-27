@@ -21,6 +21,7 @@ bench\opensky\benchmark\jmh_generated\OpenSkyReplayDroolsBenchmark_jmhType.class
 bench\opensky\router\ClusterRuleMapping.class
 bench\opensky\model\Params.class
 bench\opensky\model\AlertAck.class
+bench\opensky\router\AlphaRouter.class
 bench\opensky\model\CpaMetrics.class
 bench\opensky\model\OpenSkyFlatRecord$BBox.class
 bench\opensky\replay\CausalTraceListener.class
@@ -30,6 +31,7 @@ META-INF\CompilerHints
 bench\opensky\replay\CsvLoggingRuleListener.class
 bench\opensky\router\TreeNode.class
 bench\opensky\model\ConflictCandidate.class
+bench\opensky\benchmark\MetricsMain.class
 bench\opensky\replay\CausalTraceListener$2.class
 bench\opensky\benchmark\jmh_generated\OpenSkyReplayDroolsBenchmark_jmhType_B1.class
 bench\opensky\replay\OpenSkyJsonlLoader$Mode.class

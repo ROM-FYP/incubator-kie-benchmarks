@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.SECONDS)
 @State(Scope.Thread)
 @Fork(1)
-@Warmup(iterations = 3, time = 5)
+@Warmup(iterations = 10, time = 5)
 @Measurement(iterations = 5, time = 10)
 public class OpenSkyReplayDroolsBenchmark {
 
@@ -46,7 +46,7 @@ public class OpenSkyReplayDroolsBenchmark {
     @Param({"false"})
     private boolean causalTracingEnabled;
 
-    @Param({"baseline"})
+    @Param({"baseline", "routed", "parallel_broadcast", "parallel_alpha_routed"})
     private String mode;
 
     @Param({"src/main/resources/tree_rules.txt"})
@@ -64,6 +64,7 @@ public class OpenSkyReplayDroolsBenchmark {
 
     // ---- routed mode components ----
     private Router router;
+    private bench.opensky.router.AlphaRouter alphaRouter;
     private SessionManager sessionManager;
 
     // -------------------------------------------------------------------------
@@ -93,6 +94,19 @@ public class OpenSkyReplayDroolsBenchmark {
             sessionManager = new SessionManager();
             sessionManager.init("airTraffick_rules.drl", ftreeFile);
             // No baseline engine.init() needed in routed mode
+        } else if ("parallel_broadcast".equals(mode)) {
+            // Parallel broadcast mode (89/13 empirical check)
+            System.setProperty("opensky.empirical.override", "true");
+            sessionManager = new SessionManager();
+            sessionManager.init("airTraffick_rules.drl", ftreeFile);
+            System.clearProperty("opensky.empirical.override");
+        } else if ("parallel_alpha_routed".equals(mode)) {
+            // Parallel alpha mode (same 89/13 tree but with java router)
+            System.setProperty("opensky.empirical.override", "true");
+            alphaRouter = new bench.opensky.router.AlphaRouter();
+            sessionManager = new SessionManager();
+            sessionManager.init("airTraffick_rules.drl", ftreeFile);
+            System.clearProperty("opensky.empirical.override");
         } else {
             // Baseline mode: single session
             engine.init();
@@ -109,12 +123,13 @@ public class OpenSkyReplayDroolsBenchmark {
 
     @TearDown(Level.Iteration)
     public void tearDownIteration() {
-        if ("routed".equals(mode)) {
+        if ("routed".equals(mode) || "parallel_broadcast".equals(mode) || "parallel_alpha_routed".equals(mode)) {
             if (sessionManager != null) {
                 sessionManager.disposeAll();
                 sessionManager = null;
             }
             router = null;
+            alphaRouter = null;
         } else {
             if (profilingEnabled && engine != null && engine.getProfilingLogger() != null) {
                 engine.getProfilingLogger().printReport();
@@ -142,6 +157,10 @@ public class OpenSkyReplayDroolsBenchmark {
 
             if ("routed".equals(mode)) {
                 total += engine.ingestEventRouted(sv, router, sessionManager);
+            } else if ("parallel_broadcast".equals(mode)) {
+                total += engine.ingestEventBroadcastParallel(sv, sessionManager);
+            } else if ("parallel_alpha_routed".equals(mode)) {
+                total += engine.ingestEventAlphaRoutedParallel(sv, sessionManager, alphaRouter);
             } else {
                 total += engine.ingestEvent(sv);
             }
@@ -157,7 +176,7 @@ public class OpenSkyReplayDroolsBenchmark {
         Options opt = new OptionsBuilder()
                 .include(OpenSkyReplayDroolsBenchmark.class.getSimpleName())
                 .forks(1)
-                .warmupIterations(3)
+                .warmupIterations(10)
                 .measurementIterations(5)
                 .build();
         new Runner(opt).run();

@@ -127,16 +127,6 @@ public class OpenSkyReplayEngine {
         return session.fireAllRules(5000);
     }
 
-    /**
-     * Ingest a single state-vector event using the routed multi-session architecture.
-     * The Router determines which clusters the fact should be dispatched to,
-     * and only those cluster sessions receive the fact.
-     *
-     * @param sv         the state vector to ingest
-     * @param router     the decision tree router
-     * @param sessionMgr the multi-session manager
-     * @return total number of rule activations fired across all cluster sessions
-     */
     public int ingestEventRouted(OpenSkyStateVector sv, Router router, SessionManager sessionMgr) {
         long targetMs = sv.getSnapshotTime() * 1000L;
         if (targetMs > lastEventTimeMs) {
@@ -156,6 +146,53 @@ public class OpenSkyReplayEngine {
         }
 
         return total;
+    }
+
+    /**
+     * Broadcasts a single state-vector event to ALL cluster sessions in parallel.
+     * This is used for empirical testing of the 89/13 rule split without routing.
+     */
+    public int ingestEventBroadcastParallel(OpenSkyStateVector sv, SessionManager sessionMgr) {
+        long targetMs = sv.getSnapshotTime() * 1000L;
+        if (targetMs > lastEventTimeMs) {
+            sessionMgr.advanceAllClocks(targetMs);
+            lastEventTimeMs = targetMs;
+        }
+
+        return sessionMgr.getActiveClusterIds().parallelStream()
+            .mapToInt(clusterId -> {
+                KieSession clusterSession = sessionMgr.getSession(clusterId);
+                if (clusterSession != null) {
+                    clusterSession.insert(sv);
+                    return clusterSession.fireAllRules(5000);
+                }
+                return 0;
+            })
+            .sum();
+    }
+
+    /**
+     * Broadcasts using the AlphaRouter to filter events BEFORE inserting them into sessions.
+     */
+    public int ingestEventAlphaRoutedParallel(OpenSkyStateVector sv, SessionManager sessionMgr, bench.opensky.router.AlphaRouter alphaRouter) {
+        long targetMs = sv.getSnapshotTime() * 1000L;
+        if (targetMs > lastEventTimeMs) {
+            sessionMgr.advanceAllClocks(targetMs);
+            lastEventTimeMs = targetMs;
+        }
+
+        Set<String> clusters = alphaRouter.route(sv);
+
+        return clusters.parallelStream()
+            .mapToInt(clusterId -> {
+                KieSession clusterSession = sessionMgr.getSession(clusterId);
+                if (clusterSession != null) {
+                    clusterSession.insert(sv);
+                    return clusterSession.fireAllRules(5000);
+                }
+                return 0;
+            })
+            .sum();
     }
 
     /** Dispose the KieSession, releasing all resources. */
