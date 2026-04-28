@@ -235,10 +235,12 @@ then
 end
 
 rule "R022_SuddenSpeedJumpAudit"
+// GAP-1 FIX: kinematic anomaly now also flags TrackQuality so track is excluded from pairing
 when
     KinematicDelta( $id:icao24, dVel != null && Math.abs(dVel) > 80 )
 then
     insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "sudden speed jump"));
+    insert(new TrackQuality($id, false, false, false, false, true, "sudden speed jump >80 m/s"));
 end
 
 rule "R023_SuddenVerticalRateAudit"
@@ -443,6 +445,21 @@ then
     retract($pc);
 end
 
+rule "R050_SkipIfVerticalSeparationSufficient"
+// GAP-6 FIX: Early exit at PairCandidate stage if vertical separation exceeds minimum.
+// Per Eurocontrol Guidelines §3.3: pairs with >= 1000ft (305m) vertical sep need no CPA computation.
+when
+    $p : Params()
+    $pc : PairCandidate( $a:a, $b:b )
+    $sa : OpenSkyStateVector( icao24 == $a,
+                              $aa: (geoAltitudeM != null ? geoAltitudeM : baroAltitudeM) != null )
+    $sb : OpenSkyStateVector( icao24 == $b,
+                              $ba: (geoAltitudeM != null ? geoAltitudeM : baroAltitudeM) != null )
+    eval( Math.abs($aa - $ba) > ($p.getVertMinFt() * 0.3048) )
+then
+    retract($pc);
+end
+
 rule "R049_SkipIfAnyTrackQualityBad"
 when
     $pc : PairCandidate( $a:a, $b:b )
@@ -493,12 +510,14 @@ then
 end
 
 rule "R055_HighAccelerationAudit"
+// GAP-1 FIX: high acceleration also flags TrackQuality so track is excluded from pairing
 when
     KinematicDelta( $id:icao24, $dVel:dVel != null, $dt:dtSec != null, dtSec > 0,
                    Math.abs(dVel) / dtSec > 5 )
 then
     insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000,
            "high linear acceleration " + String.format("%.1f", Math.abs($dVel)/$dt) + " m/s2"));
+    insert(new TrackQuality($id, false, false, false, false, true, "high acceleration >5 m/s2"));
 end
 
 
@@ -507,6 +526,9 @@ end
    ============================================================ */
 
 rule "R056_BuildConflictCandidateBasic"
+// GAP-4 FIX: removed faulty scalar TTC (distance/speed-diff); TTC now seeded as POSITIVE_INFINITY.
+// GAP-5 FIX: closing is computed from relative velocity dot-product, not a distance threshold.
+// CPA pipeline (R068b→R069→R071/R072) provides the authoritative TTC and closing determination.
 when
     $p : Params()
     $pc : PairCandidate( $a:a, $b:b )
@@ -520,14 +542,26 @@ then
     double d = haversineMeters($alat,$alon,$blat,$blon);
     double vert = ( ($aa!=null && $ba!=null) ? Math.abs($aa-$ba) : Double.NaN );
 
-    boolean closing = d < metersFromNm($p.getNearDistNm());
+    // GAP-5: Correct closing detection — use relative velocity dot-product.
+    // If the dot product of the relative-position vector and relative-velocity vector is negative,
+    // the aircraft are geometrically converging (closing).
+    double latMidRad = Math.toRadians(($alat + $blat) / 2.0);
+    double mPerLonDeg = Math.cos(latMidRad) * 111320.0;
+    double dx = ($blon - $alon) * mPerLonDeg;  // B east of A
+    double dy = ($blat - $alat) * 111320.0;    // B north of A
+    double vax = $avel * Math.sin(Math.toRadians($atrk));
+    double vay = $avel * Math.cos(Math.toRadians($atrk));
+    double vbx = $bvel * Math.sin(Math.toRadians($btrk));
+    double vby = $bvel * Math.cos(Math.toRadians($btrk));
+    double dvx = vbx - vax;  // relative velocity of B w.r.t. A
+    double dvy = vby - vay;
+    // dot(relPos, relVel) < 0 => closing
+    boolean closing = (dx * dvx + dy * dvy) < 0;
 
-    double rel = Math.abs($avel - $bvel);
-    double ttc = (rel > 1.0) ? (d / rel) : Double.POSITIVE_INFINITY;
-
+    // GAP-4: TTC seeded as POSITIVE_INFINITY; authoritative TTC comes from CPA pipeline (R068b).
     // Severity is always seeded as "INFO" here.
     // Classification to WARN / ALERT is fully delegated to R057-R062 via modify().
-    insert(new ConflictCandidate($a,$b,d,vert,closing,ttc,"INFO"));
+    insert(new ConflictCandidate($a,$b,d,vert,closing,Double.POSITIVE_INFINITY,"INFO"));
 end
 
 rule "R057_DowngradeIfVerticalSeparationLarge"
@@ -878,12 +912,16 @@ then
 end
 
 rule "R083_AlertPersistsWhileConditionExists"
+// GAP-2 FIX: replaced no-op then body with a meaningful audit event.
+// This records when an alert has been active beyond the configured persistence window without an ack.
 when
     $p : Params()
-    $a : Alert( $key:(a+"|"+b+"|"+type), createdAt <= (clock.getCurrentTime() / 1000 - $p.persistSec) )
+    $al : Alert( $key:(a+"|"+b+"|"+type), createdAt <= (clock.getCurrentTime() / 1000 - $p.persistSec) )
     not AlertAck( key == $key )
+    not AuditEvent( kind == "ALERT_PERSIST", key == $key )
 then
-    // keep alert (no retract) - persistence intent
+    insert(new AuditEvent("ALERT_PERSIST", $key, clock.getCurrentTime() / 1000,
+           $al.getType() + " persisted beyond " + $p.getPersistSec() + "s without ack"));
 end
 
 rule "R084_AckSilencesAudibleEquivalent"
@@ -921,13 +959,9 @@ then
     retract($al);
 end
 
-rule "R088_InhibitionMustBeKnown_Audit"
-    no-loop true
-when
-    $i : AlertInhibit( enabled == true )
-then
-    insert(new AuditEvent("INHIBIT_SET", $i.getKind()+":"+ $i.getKey(), clock.getCurrentTime() / 1000, "inhibit enabled"));
-end
+/* GAP-3 FIX: R088 was a duplicate of R078 — both inserted INHIBIT_SET AuditEvents for every AlertInhibit.
+   R088 has been removed. R078 (no-loop true) is the sole inhibit audit rule. */
+
 
 rule "R089_StatusWhenNotAvailable"
     no-loop true
@@ -954,9 +988,13 @@ then
 end
 
 rule "R092_DoNotSpamNuisanceAlerts"
+// GAP-7 FIX: always retract the OLDER alert (smaller createdAt), keeping the most recent one.
+// Previous version could non-deterministically retract either alert based on match order.
 when
     $al : Alert( $a:a, $b:b, $t:createdAt, $type:type )
-    Alert( this != $al, a == $a, b == $b, type == $type, (clock.getCurrentTime() / 1000 - $t) < 10 )
+    $al2 : Alert( this != $al, a == $a, b == $b, type == $type,
+                  createdAt > $t,
+                  (createdAt - $t) < 10 )
 then
     retract($al);
 end

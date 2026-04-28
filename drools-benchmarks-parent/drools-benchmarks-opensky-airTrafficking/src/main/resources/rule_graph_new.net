@@ -1,0 +1,205 @@
+*Vertices 64
+1 "R000_LoadDefaultParams"
+2 "R002_StalePositionFlag"
+3 "R003_StaleContactFlag"
+4 "R006_OnGroundButHighSpeed"
+5 "R007_MissingCallsignAudit"
+6 "R008_SquawkSpecialPurposeAudit"
+7 "R010_FilterStalePositionFromPairing"
+8 "R011_FilterBadVelocityFromPairing"
+9 "R013_FilterStaleContactFromPairing"
+10 "R014_StalePosClearsOldAlerts"
+11 "R016_CategoryUnknownAudit"
+12 "R019_NullAltitudesAudit"
+13 "R021_DeltaVelocityOver10s"
+14 "R024_SuddenTurnRateApproxAudit"
+15 "R025_AltitudeJumpAudit"
+16 "R026_OnGroundStateFlipAudit"
+17 "R029_ClimbWhileOnGroundAudit"
+18 "R030_BaroGeoDisagreeAudit"
+19 "R036_SquawkChangedAudit"
+20 "R037_SpiSetAudit"
+21 "R038_CallsignWhitespaceAudit"
+22 "R041_AssignGridCell"
+23 "R042_PairWithinCell"
+24 "R048_SkipOnGroundPairs"
+25 "R049_SkipIfAnyTrackQualityBad"
+26 "R050_SkipIfVerticalSeparationSufficient"
+27 "R051_PairDedupGuard"
+28 "R052_FinalPairReadyForConflictCheck"
+29 "R053_BusyAirspaceCellAudit"
+30 "R055_HighAccelerationAudit"
+31 "R056_BuildConflictCandidateBasic"
+32 "R058_UpgradeIfVeryClose"
+33 "R059_WarnIfBelowPrototypeRadarMinima"
+34 "R060_AlertIfBelowPrototypeRadarMinima"
+35 "R061_WarnIfTTCWithinWarningTime"
+36 "R062_AlertIfTTCWithinAlertTime"
+37 "R063_SuppressIfNotClosingAndFar"
+38 "R064_SuppressIfAnyOnGround"
+39 "R065_ConflictCandidateAudit_WARN"
+40 "R066_ConflictCandidateAudit_ALERT"
+41 "R067a_DedupeConflictCandidates_KeepALERT"
+42 "R067b_DedupeConflictCandidates_KeepFirst"
+43 "R068_ClearOldConflictCandidates"
+44 "R068b_ComputeCpaMetrics"
+45 "R069_CreateConflictFromCpaMetrics"
+46 "R070_SuppressIfNotClosingOrPastCPA"
+47 "R071_UpgradeToWARN_UsingCPA"
+48 "R072_UpgradeToALERT_UsingCPA"
+49 "R073_InitPairRiskState"
+50 "R074a_UpdateStreaks_ALERT"
+51 "R074b_UpdateStreaks_WARN"
+52 "R074c_UpdateStreaks_INFO"
+53 "R075_RaiseAlertsOnlyAfterPersistence"
+54 "R079_MultiConflictHotspotEscalation"
+55 "R080_RecordCPAForAnalysis"
+56 "R081_RaiseTrafficAdvisoryOnWARN"
+57 "R082_RaiseSafetyAlertOnALERT"
+58 "R090_SafetyAlertPriorityAudit"
+59 "R091_TrafficAdvisoryAudit"
+60 "R093_EscalateFromAdvisoryToSafetyAlert"
+61 "R096_RecordEverySafetyAlert"
+62 "R097_RecordEveryTrafficAdvisory"
+63 "R098_PerformanceCountersPlaceholder"
+64 "R099_IgnoreNonJustifiedAlertPlaceholder"
+*Arcs
+1 2 3615
+1 3 2915
+1 22 32218
+1 26 322705
+1 31 2411
+1 32 148
+1 35 99
+1 36 67
+1 37 157
+1 45 156
+1 47 1871
+1 48 1613
+2 7 14898
+2 10 11
+2 25 23871
+3 9 12062
+4 63 3
+5 63 379
+6 63 16
+7 63 14898
+8 63 36
+9 63 12062
+11 63 37748
+12 63 5017
+13 30 8
+14 63 180
+15 63 29
+16 63 53
+17 63 2
+18 63 167
+19 63 307
+20 63 16
+21 63 60
+22 23 37107
+22 29 73095
+23 24 4
+23 25 23972
+23 26 322705
+23 27 67364
+23 28 37107
+23 31 2411
+23 44 354826
+28 63 240
+29 63 59859
+30 8 36
+30 25 101
+30 63 8
+31 32 110
+31 33 402
+31 37 157
+31 38 3
+31 41 194
+31 42 5438
+31 43 2350
+31 46 701
+31 47 1737
+31 48 1504
+31 49 549
+31 52 1809
+31 53 64
+32 40 148
+32 41 132
+32 42 18
+32 46 6
+32 50 131
+32 53 4
+32 54 630
+32 57 32
+33 34 322
+33 39 322
+33 41 292
+33 51 296
+33 56 71
+34 40 322
+34 41 386
+34 42 55
+34 46 23
+34 50 313
+34 53 14
+34 54 1848
+34 57 74
+35 39 59
+35 51 26
+35 56 36
+36 40 41
+36 41 41
+36 50 41
+36 57 29
+39 63 364
+39 64 364
+40 63 741
+44 45 156
+44 46 730
+44 47 1871
+44 48 1613
+44 55 238
+45 32 38
+45 33 68
+45 35 99
+45 36 67
+45 41 73
+45 42 323
+45 43 156
+45 47 134
+45 48 109
+45 49 59
+45 52 97
+45 53 5
+47 39 346
+47 51 346
+47 56 14
+48 40 233
+48 50 233
+49 50 52
+49 51 11
+49 52 8
+50 51 542
+50 52 1407
+50 53 87
+51 50 9
+51 52 267
+52 50 3
+52 51 5
+53 10 4
+53 58 90
+53 61 9
+54 63 1494
+55 63 238
+56 59 63
+56 60 9
+56 62 14
+57 10 6
+57 58 406
+57 60 9
+57 61 44
+58 63 496
+59 63 63
+61 63 53
+62 63 14

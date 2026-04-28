@@ -36,9 +36,11 @@ public class SessionManager {
      * Regex that matches a complete rule block:
      * {@code rule "RuleName" ... end}
      * Uses DOTALL so the body can span multiple lines.
+     * The 'end' keyword must appear at the start of a line (with optional leading whitespace)
+     * to avoid false matches on words like 'depend' inside comments.
      */
     private static final Pattern RULE_BLOCK = Pattern.compile(
-            "(rule\\s+\"([^\"]+)\".*?end)", Pattern.DOTALL);
+            "(rule\\s+\"([^\"]+)\".*?^\\s*end\\s*$)", Pattern.DOTALL | Pattern.MULTILINE);
 
     private final Map<String, KieSession> sessions = new LinkedHashMap<>();
     private final Map<String, SessionPseudoClock> clocks = new LinkedHashMap<>();
@@ -57,6 +59,103 @@ public class SessionManager {
         ClusterRuleMapping mapper = new ClusterRuleMapping();
         Map<String, List<String>> clusterRules = mapper.parse(ftreeFile);
         
+        // TWO-SESSION CLUSTER OVERRIDE (Session A = conflict core, Session B = audit/quality)
+        if (System.getProperty("opensky.cluster.two.session") != null) {
+            LOG.info("SessionManager: Applying two-session cluster split (C1+C4+C6+C7+C8 vs C2+C3+C5+C9)");
+            clusterRules.clear();
+
+            // SESSION A: C1 (Pairing) + C4 (Conflict/Streaks) + C6 (Escalation) + C7 (Safety Alert) + C8 (Advisory)
+            // R049 duplicated from C3 (PairCandidate quality gate — needs PairCandidate from C1)
+            // R080 duplicated from C2 (RecordCPAForAnalysis — needs CpaMetrics from C1)
+            // SESSION A: C1, C3, C4, C5, C6, C7, C8, C9
+            // Includes R041 duplicated from C2
+            List<String> sessionA = Arrays.asList(
+                // C1
+                "R000_LoadDefaultParams", "R041_AssignGridCell", "R042_PairWithinCell",
+                "R043_NoPairIfSameAircraft", "R044_PairInhibitByCell", "R045_PairInhibitByFlight",
+                "R046_PairInhibitByFlightB", "R047_PairInhibitByPairKey", "R048_SkipOnGroundPairs",
+                "R050_SkipIfVerticalSeparationSufficient",
+                "R051_PairDedupGuard", "R052_FinalPairReadyForConflictCheck", "R068b_ComputeCpaMetrics",
+                
+                // C3
+                "R001_MissingPositionFlag", "R002_StalePositionFlag", "R004_BadAltitudeFlag",
+                "R005_BadVelocityFlag", "R009_FilterTracksMissingPositionFromPairing",
+                "R010_FilterStalePositionFromPairing", "R012_FilterBadAltitudeFromPairing",
+                "R049_SkipIfAnyTrackQualityBad", "R049b_RetractConflictIfTrackQualityBad",
+
+                // C5
+                "R003_StaleContactFlag", "R013_FilterStaleContactFromPairing",
+
+                // C9
+                "R021_DeltaVelocityOver10s", "R022_SuddenSpeedJumpAudit",
+                "R055_HighAccelerationAudit", "R011_FilterBadVelocityFromPairing",
+
+                // C4
+                "R056_BuildConflictCandidateBasic", "R057_DowngradeIfVerticalSeparationLarge",
+                "R059_WarnIfBelowPrototypeRadarMinima", "R061_WarnIfTTCWithinWarningTime",
+                "R063_SuppressIfNotClosingAndFar", "R064_SuppressIfAnyOnGround",
+                "R065_ConflictCandidateAudit_WARN",
+                "R067b_DedupeConflictCandidates_KeepFirst", "R068_ClearOldConflictCandidates",
+                "R069_CreateConflictFromCpaMetrics", "R070_SuppressIfNotClosingOrPastCPA",
+                "R071_UpgradeToWARN_UsingCPA", "R072_UpgradeToALERT_UsingCPA",
+                "R073_InitPairRiskState", "R074a_UpdateStreaks_ALERT", "R074b_UpdateStreaks_WARN",
+                "R074c_UpdateStreaks_INFO", "R099_IgnoreNonJustifiedAlertPlaceholder",
+
+                // C6
+                "R058_UpgradeIfVeryClose", "R060_AlertIfBelowPrototypeRadarMinima",
+                "R062_AlertIfTTCWithinAlertTime", "R066_ConflictCandidateAudit_ALERT",
+                "R067a_DedupeConflictCandidates_KeepALERT", "R079_MultiConflictHotspotEscalation",
+
+                // C7
+                "R014_StalePosClearsOldAlerts", "R015_StaleContactClearsOldAlerts",
+                "R075_RaiseAlertsOnlyAfterPersistence", "R076_Hysteresis_ClearOnlyAfterSafePersistence",
+                "R077_InhibitSafetyAlertsByPair", "R082_RaiseSafetyAlertOnALERT",
+                "R083_AlertPersistsWhileConditionExists", "R084_AckSilencesAudibleEquivalent",
+                "R085_ClearAlertAfterAckAndNoNewConflicts", "R086_InhibitAlertsByFlight",
+                "R087_InhibitAlertsByPair", "R090_SafetyAlertPriorityAudit",
+                "R092_DoNotSpamNuisanceAlerts", "R095_ClearOldAcks", "R096_RecordEverySafetyAlert",
+
+                // C8
+                "R081_RaiseTrafficAdvisoryOnWARN", "R091_TrafficAdvisoryAudit",
+                "R093_EscalateFromAdvisoryToSafetyAlert", "R094_ClearOldAdvisories",
+                "R097_RecordEveryTrafficAdvisory",
+                
+                // R080 belongs with conflict handling logically
+                "R080_RecordCPAForAnalysis",
+                
+                // General
+                "R078_InhibitMustBeKnown_Audit", "R088_InhibitionMustBeKnown_Audit",
+                "R089_StatusWhenNotAvailable", "R100_EndOfCycleMarker"
+            );
+
+            // SESSION B: C2 Only
+            List<String> sessionB = Arrays.asList(
+                // C2 — Data Quality & Grid Auditing
+                // R000 duplicated from C1
+                "R000_LoadDefaultParams",
+                
+                // Pure C2 audit rules
+                "R006_OnGroundButHighSpeed", "R007_MissingCallsignAudit", "R008_SquawkSpecialPurposeAudit",
+                "R016_CategoryUnknownAudit", "R017_NonAdsbPositionSourceAudit",
+                "R018_TooFastForAltitudeBandAudit", "R019_NullAltitudesAudit", "R020_TrackDegRangeAudit",
+                "R023_SuddenVerticalRateAudit", "R024_SuddenTurnRateApproxAudit", "R025_AltitudeJumpAudit",
+                "R026_OnGroundStateFlipAudit", "R027_UnknownVelButMovingAudit",
+                "R028_UnknownTrackButMovingAudit", "R029_ClimbWhileOnGroundAudit",
+                "R030_BaroGeoDisagreeAudit", "R031_SlowHoveringRotorcraftAudit",
+                "R032_UAVAudit", "R033_GliderAudit", "R034_EmergencyVehicleAudit",
+                "R035_PointObstacleAudit", "R036_SquawkChangedAudit", "R037_SpiSetAudit",
+                "R038_CallsignWhitespaceAudit", "R039_OriginCountryMissingAudit",
+                
+                // R041 Assigns grid cell
+                "R041_AssignGridCell",
+                
+                "R053_BusyAirspaceCellAudit", "R098_PerformanceCountersPlaceholder"
+            );
+
+            clusterRules.put("session_a", sessionA);
+            clusterRules.put("session_b", sessionB);
+        }
+
         // EMPIRICAL RESOLUTION OVERRIDE
         if (ftreeFile.contains("rule_graph_full.ftree") && System.getProperty("opensky.empirical.override") != null) {
             LOG.info("SessionManager: Applying 89/13 empirical resolution override");

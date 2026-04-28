@@ -46,7 +46,7 @@ public class OpenSkyReplayDroolsBenchmark {
     @Param({"false"})
     private boolean causalTracingEnabled;
 
-    @Param({"baseline", "routed", "parallel_broadcast", "parallel_alpha_routed"})
+    @Param({"baseline", "routed", "parallel_broadcast", "parallel_alpha_routed", "cluster_two_session"})
     private String mode;
 
     @Param({"src/main/resources/tree_rules.txt"})
@@ -57,6 +57,10 @@ public class OpenSkyReplayDroolsBenchmark {
 
     // ---- loaded once at trial setup ----
     private List<OpenSkyStateVector> events;
+
+    // ---- cluster_two_session: sessions live for the ENTIRE trial (not per iteration) ----
+    private SessionManager trialSessionManager;
+    private OpenSkyReplayEngine sharedEngine; // clock-less passthrough engine for two-session mode
 
     // ---- fresh per iteration (like AbstractCEPBenchmark) ----
     private OpenSkyReplayEngine engine;
@@ -71,12 +75,29 @@ public class OpenSkyReplayDroolsBenchmark {
     // JMH lifecycle
     // -------------------------------------------------------------------------
 
-    /** Load event list once for the entire trial. */
+    /** Load event list once for the entire trial. Also initialises two-session cluster if needed. */
     @Setup(Level.Trial)
     public void loadData() throws IOException {
         OpenSkyJsonlLoader loader = new OpenSkyJsonlLoader();
         events = loader.loadFlat(dataset);
         System.out.println("[Setup] Loaded " + events.size() + " events");
+
+        if ("cluster_two_session".equals(mode)) {
+            System.setProperty("opensky.cluster.two.session", "true");
+            trialSessionManager = new SessionManager();
+            trialSessionManager.init("airTraffick_rules.drl", ftreeFile);
+            System.clearProperty("opensky.cluster.two.session");
+            sharedEngine = new OpenSkyReplayEngine(); // used only as a call target (no KieSession)
+            System.out.println("[Setup] Two-session cluster ready: " + trialSessionManager.getActiveClusterIds());
+        }
+    }
+
+    @org.openjdk.jmh.annotations.TearDown(Level.Trial)
+    public void tearDownTrial() {
+        if (trialSessionManager != null) {
+            trialSessionManager.disposeAll();
+            trialSessionManager = null;
+        }
     }
 
     /**
@@ -107,6 +128,8 @@ public class OpenSkyReplayDroolsBenchmark {
             sessionManager = new SessionManager();
             sessionManager.init("airTraffick_rules.drl", ftreeFile);
             System.clearProperty("opensky.empirical.override");
+        } else if ("cluster_two_session".equals(mode)) {
+            // Sessions are long-lived (trial-level); nothing to do per iteration
         } else {
             // Baseline mode: single session
             engine.init();
@@ -130,6 +153,8 @@ public class OpenSkyReplayDroolsBenchmark {
             }
             router = null;
             alphaRouter = null;
+        } else if ("cluster_two_session".equals(mode)) {
+            // sessions are trial-scoped; do NOT dispose here
         } else {
             if (profilingEnabled && engine != null && engine.getProfilingLogger() != null) {
                 engine.getProfilingLogger().printReport();
@@ -161,6 +186,8 @@ public class OpenSkyReplayDroolsBenchmark {
                 total += engine.ingestEventBroadcastParallel(sv, sessionManager);
             } else if ("parallel_alpha_routed".equals(mode)) {
                 total += engine.ingestEventAlphaRoutedParallel(sv, sessionManager, alphaRouter);
+            } else if ("cluster_two_session".equals(mode)) {
+                total += sharedEngine.ingestEventTwoSessionParallel(sv, trialSessionManager);
             } else {
                 total += engine.ingestEvent(sv);
             }

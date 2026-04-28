@@ -195,6 +195,38 @@ public class OpenSkyReplayEngine {
             .sum();
     }
 
+    /**
+     * Two-session clustered parallel ingest.
+     *
+     * <p>Broadcasts the {@link OpenSkyStateVector} to BOTH Session A (conflict/alert core)
+     * and Session B (audit/quality) concurrently via Java parallel streams.
+     * Each session advances its pseudo-clock independently to the event timestamp.
+     * Sessions are long-lived (not recreated per iteration).</p>
+     *
+     * @param sv         the incoming state vector event
+     * @param sessionMgr the SessionManager holding "session_a" and "session_b" KieSessions
+     * @return total rule firings across both sessions
+     */
+    public int ingestEventTwoSessionParallel(OpenSkyStateVector sv, SessionManager sessionMgr) {
+        long targetMs = (long)(sv.getLastContact() * 1000L);
+
+        // Advance both clocks (synchronized on each session to avoid concurrent clock conflicts)
+        sessionMgr.advanceAllClocks(targetMs);
+
+        // Broadcast OSV to both sessions in parallel
+        return java.util.stream.Stream.of("session_a", "session_b")
+            .parallel()
+            .mapToInt(sessionId -> {
+                KieSession s = sessionMgr.getSession(sessionId);
+                if (s == null) return 0;
+                synchronized (s) {
+                    s.insert(sv);
+                    return s.fireAllRules();
+                }
+            })
+            .sum();
+    }
+
     /** Dispose the KieSession, releasing all resources. */
     public void dispose() {
         if (session != null) {
