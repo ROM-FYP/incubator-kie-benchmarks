@@ -47,7 +47,7 @@ public class WikimediaBaselineJmhBenchmark {
 
     private static final String DRL_PATH = "rules/wikimedia_content_moderation_join_heavy.drl";
     private static final String DEFAULT_DATA_FILE =
-            "src/main/java/org/kie/benchmark/cep/wikimedia/data/wikimedia_stream_20260421_104232.jsonl";
+            "src/main/resources/data/wikimedia_stream_20260421_104232.jsonl";
 
     @Param({DEFAULT_DATA_FILE})
     private String dataFile;

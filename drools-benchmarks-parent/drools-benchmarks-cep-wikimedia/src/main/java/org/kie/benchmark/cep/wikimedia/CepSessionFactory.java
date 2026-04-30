@@ -36,17 +36,33 @@ import java.io.InputStream;
 
 /**
  * Factory for creating Drools KieSession configured for CEP with STREAM mode.
+ * Supports optional parallel execution modes (PARALLEL_EVALUATION, FULLY_PARALLEL).
  */
 public class CepSessionFactory {
     private static final Logger logger = LoggerFactory.getLogger(CepSessionFactory.class);
 
     private final KieBase kieBase;
+    private final String parallelMode;
 
+    /**
+     * Create a factory with sequential (default) execution mode.
+     */
     public CepSessionFactory(String rulesPath) {
-        this.kieBase = createKieBase(rulesPath);
+        this(rulesPath, "SEQUENTIAL");
     }
 
-    private KieBase createKieBase(String rulesPath) {
+    /**
+     * Create a factory with the specified parallel execution mode.
+     *
+     * @param rulesPath    classpath path to DRL file (e.g. "rules/wikimedia_content_moderation_join_heavy.drl")
+     * @param parallelMode one of "SEQUENTIAL", "PARALLEL_EVALUATION", "FULLY_PARALLEL"
+     */
+    public CepSessionFactory(String rulesPath, String parallelMode) {
+        this.parallelMode = parallelMode;
+        this.kieBase = createKieBase(rulesPath, parallelMode);
+    }
+
+    private KieBase createKieBase(String rulesPath, String parallelMode) {
         try {
             KieServices kieServices = KieServices.Factory.get();
             KieFileSystem kfs = kieServices.newKieFileSystem();
@@ -60,8 +76,23 @@ public class CepSessionFactory {
             kfs.write("src/main/resources/" + rulesPath,
                     ResourceFactory.newInputStreamResource(rulesStream));
 
+            // Inject parallel execution mode via system property before buildAll()
+            String prevProp = System.getProperty("drools.parallelExecution");
+            if (!"SEQUENTIAL".equals(parallelMode)) {
+                System.setProperty("drools.parallelExecution", parallelMode);
+            }
+
             KieBuilder kieBuilder = kieServices.newKieBuilder(kfs);
             kieBuilder.buildAll();
+
+            // Restore previous system property to avoid affecting other benchmarks
+            if (!"SEQUENTIAL".equals(parallelMode)) {
+                if (prevProp == null) {
+                    System.clearProperty("drools.parallelExecution");
+                } else {
+                    System.setProperty("drools.parallelExecution", prevProp);
+                }
+            }
 
             if (kieBuilder.getResults().hasMessages(Message.Level.ERROR, Message.Level.WARNING)) {
                 logger.info("Builder results: \n{}", kieBuilder.getResults().toString());
@@ -76,7 +107,10 @@ public class CepSessionFactory {
             kieBaseConfig.setOption(EventProcessingOption.STREAM);
             
             KieContainer kieContainer = kieServices.newKieContainer(kieServices.getRepository().getDefaultReleaseId());
-            return kieContainer.newKieBase(kieBaseConfig);
+            KieBase base = kieContainer.newKieBase(kieBaseConfig);
+
+            System.out.println("Loaded rules from: " + rulesPath + " [parallelMode=" + parallelMode + "]");
+            return base;
 
         } catch (Exception e) {
             logger.error("Failed to create KieBase", e);
