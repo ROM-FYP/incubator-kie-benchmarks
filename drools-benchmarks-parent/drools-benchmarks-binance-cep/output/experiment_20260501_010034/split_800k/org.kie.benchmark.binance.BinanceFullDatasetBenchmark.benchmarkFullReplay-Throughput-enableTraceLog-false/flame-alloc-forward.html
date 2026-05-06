@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<style>
+	body {margin: 0; padding: 10px 10px 22px 10px; background-color: #ffffff}
+	h1 {margin: 5px 0 0 0; font-size: 18px; font-weight: normal; text-align: center}
+	header {margin: -24px 0 5px 0; line-height: 24px}
+	button {font: 12px sans-serif; cursor: pointer}
+	p {position: fixed; bottom: 0; margin: 0; padding: 2px 3px 2px 3px; outline: 1px solid #ffc000; display: none; overflow: hidden; white-space: nowrap; background-color: #ffffe0}
+	a {color: #0366d6}
+	#hl {position: absolute; display: none; overflow: hidden; white-space: nowrap; pointer-events: none; background-color: #ffffe0; outline: 1px solid #ffc000; height: 15px}
+	#hl span {padding: 0 3px 0 3px}
+	#status {left: 0}
+	#match {right: 0}
+	#reset {cursor: pointer}
+	#canvas {width: 100%; height: 912px}
+</style>
+</head>
+<body style='font: 12px Verdana, sans-serif'>
+<h1>BinanceFullDatasetBenchmark_Alloc</h1>
+<header style='text-align: left'><button id='reverse' title='Reverse'>&#x1f53b;</button>&nbsp;&nbsp;<button id='search' title='Search'>&#x1f50d;</button></header>
+<header style='text-align: right'>Produced by <a href='https://github.com/async-profiler/async-profiler'>async-profiler</a></header>
+<canvas id='canvas'></canvas>
+<div id='hl'><span></span></div>
+<p id='status'></p>
+<p id='match'>Matched: <span id='matchval'></span> <span id='reset' title='Clear'>&#x274c;</span></p>
+<script>
+	// Copyright The async-profiler authors
+	// SPDX-License-Identifier: Apache-2.0
+	'use strict';
+	let root, rootLevel, px, pattern;
+	let level0 = 0, left0 = 0, width0 = 0;
+	let reverse = false;
+	const levels = Array(57);
+	for (let h = 0; h < levels.length; h++) {
+		levels[h] = [];
+	}
+
+	const canvas = document.getElementById('canvas');
+	const c = canvas.getContext('2d');
+	const hl = document.getElementById('hl');
+	const status = document.getElementById('status');
+
+	const canvasWidth = canvas.offsetWidth;
+	const canvasHeight = canvas.offsetHeight;
+	canvas.style.width = canvasWidth + 'px';
+	canvas.width = canvasWidth * (devicePixelRatio || 1);
+	canvas.height = canvasHeight * (devicePixelRatio || 1);
+	if (devicePixelRatio) c.scale(devicePixelRatio, devicePixelRatio);
+	c.font = document.body.style.font;
+
+	const palette = [
+		[0xb2e1b2, 20, 20, 20],
+		[0x50e150, 30, 30, 30],
+		[0x50cccc, 30, 30, 30],
+		[0xe15a5a, 30, 40, 40],
+		[0xc8c83c, 30, 30, 10],
+		[0xe17d00, 30, 30,  0],
+		[0xcce880, 20, 20, 20],
+	];
+
+	function getColor(p) {
+		const v = Math.random();
+		return '#' + (p[0] + ((p[1] * v) << 16 | (p[2] * v) << 8 | (p[3] * v))).toString(16);
+	}
+
+	function f(key, level, left, width, inln, c1, int) {
+		levels[level0 = level].push({left: left0 += left, width: width0 = width || width0,
+			color: getColor(palette[key & 7]), title: cpool[key >>> 3],
+			details: (int ? ', int=' + int : '') + (c1 ? ', c1=' + c1 : '') + (inln ? ', inln=' + inln : '')
+		});
+	}
+
+	function u(key, width, inln, c1, int) {
+		f(key, level0 + 1, 0, width, inln, c1, int)
+	}
+
+	function n(key, width, inln, c1, int) {
+		f(key, level0, width0, width, inln, c1, int)
+	}
+
+	function samples(n) {
+		return n === 1 ? '1 sample' : n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' samples';
+	}
+
+	function pct(a, b) {
+		return a >= b ? '100' : (100 * a / b).toFixed(2);
+	}
+
+	function findFrame(frames, x) {
+		let left = 0;
+		let right = frames.length - 1;
+
+		while (left <= right) {
+			const mid = (left + right) >>> 1;
+			const f = frames[mid];
+
+			if (f.left > x) {
+				right = mid - 1;
+			} else if (f.left + f.width <= x) {
+				left = mid + 1;
+			} else {
+				return f;
+			}
+		}
+
+		if (frames[left] && (frames[left].left - x) * px < 0.5) return frames[left];
+		if (frames[right] && (x - (frames[right].left + frames[right].width)) * px < 0.5) return frames[right];
+
+		return null;
+	}
+
+	function search(r) {
+		if (r === true && (r = prompt('Enter regexp to search:', '')) === null) {
+			return;
+		}
+
+		pattern = r ? RegExp(r) : undefined;
+		const matched = render(root, rootLevel);
+		document.getElementById('matchval').textContent = pct(matched, root.width) + '%';
+		document.getElementById('match').style.display = r ? 'inline-block' : 'none';
+	}
+
+	function render(newRoot, newLevel) {
+		if (root) {
+			c.fillStyle = '#ffffff';
+			c.fillRect(0, 0, canvasWidth, canvasHeight);
+		}
+
+		root = newRoot || levels[0][0];
+		rootLevel = newLevel || 0;
+		px = canvasWidth / root.width;
+
+		const x0 = root.left;
+		const x1 = x0 + root.width;
+		const marked = [];
+
+		function mark(f) {
+			return marked[f.left] >= f.width || (marked[f.left] = f.width);
+		}
+
+		function totalMarked() {
+			let total = 0;
+			let left = 0;
+			Object.keys(marked).sort(function(a, b) { return a - b; }).forEach(function(x) {
+				if (+x >= left) {
+					total += marked[x];
+					left = +x + marked[x];
+				}
+			});
+			return total;
+		}
+
+		function drawFrame(f, y, alpha) {
+			if (f.left < x1 && f.left + f.width > x0) {
+				c.fillStyle = pattern && f.title.match(pattern) && mark(f) ? '#ee00ee' : f.color;
+				c.fillRect((f.left - x0) * px, y, f.width * px, 15);
+
+				if (f.width * px >= 21) {
+					const chars = Math.floor(f.width * px / 7);
+					const title = f.title.length <= chars ? f.title : f.title.substring(0, chars - 2) + '..';
+					c.fillStyle = '#000000';
+					c.fillText(title, Math.max(f.left - x0, 0) * px + 3, y + 12, f.width * px - 6);
+				}
+
+				if (alpha) {
+					c.fillStyle = 'rgba(255, 255, 255, 0.5)';
+					c.fillRect((f.left - x0) * px, y, f.width * px, 15);
+				}
+			}
+		}
+
+		for (let h = 0; h < levels.length; h++) {
+			const y = reverse ? h * 16 : canvasHeight - (h + 1) * 16;
+			const frames = levels[h];
+			for (let i = 0; i < frames.length; i++) {
+				drawFrame(frames[i], y, h < rootLevel);
+			}
+		}
+
+		return totalMarked();
+	}
+
+	function unpack(cpool) {
+		for (let i = 1; i < cpool.length; i++) {
+			cpool[i] = cpool[i - 1].substring(0, cpool[i].charCodeAt(0) - 32) + cpool[i].substring(1);
+		}
+	}
+
+	canvas.onmousemove = function() {
+		const h = Math.floor((reverse ? event.offsetY : (canvasHeight - event.offsetY)) / 16);
+		if (h >= 0 && h < levels.length) {
+			const f = findFrame(levels[h], event.offsetX / px + root.left);
+			if (f) {
+				if (f !== root) getSelection().removeAllRanges();
+				hl.style.left = (Math.max(f.left - root.left, 0) * px + canvas.offsetLeft) + 'px';
+				hl.style.width = (Math.min(f.width, root.width) * px) + 'px';
+				hl.style.top = ((reverse ? h * 16 : canvasHeight - (h + 1) * 16) + canvas.offsetTop) + 'px';
+				hl.firstChild.textContent = f.title;
+				hl.style.display = 'block';
+				canvas.title = f.title + '\n(' + samples(f.width) + f.details + ', ' + pct(f.width, levels[0][0].width) + '%)';
+				canvas.style.cursor = 'pointer';
+				canvas.onclick = function() {
+					if (f !== root) {
+						render(f, h);
+						canvas.onmousemove();
+					}
+				};
+				status.textContent = 'Function: ' + canvas.title;
+				status.style.display = 'inline-block';
+				return;
+			}
+		}
+		canvas.onmouseout();
+	}
+
+	canvas.onmouseout = function() {
+		hl.style.display = 'none';
+		status.style.display = 'none';
+		canvas.title = '';
+		canvas.style.cursor = '';
+		canvas.onclick = null;
+	}
+
+	canvas.ondblclick = function() {
+		getSelection().selectAllChildren(hl);
+	}
+
+	document.getElementById('reverse').onclick = function() {
+		reverse = !reverse;
+		render();
+	}
+
+	document.getElementById('search').onclick = function() {
+		search(true);
+	}
+
+	document.getElementById('reset').onclick = function() {
+		search(false);
+	}
+
+	window.onkeydown = function() {
+		if (event.ctrlKey && event.keyCode === 70) {
+			event.preventDefault();
+			search(true);
+		} else if (event.keyCode === 27) {
+			search(false);
+		}
+	}
+
+const cpool = [
+'all',
+' byte[]',
+' char[]',
+' java.lang.Double',
+'*Long',
+'%util.ArrayList$Itr',
+'*Date',
+'*HashMap',
+'1$KeyIterator',
+'5Set',
+'.Set',
+'*TreeMap$Entry',
+'*concurrent.ConcurrentHashMap$Node',
+'5locks.AbstractQueuedSynchronizer$ConditionNode',
+'VSharedNode',
+'$/lang/Double.valueOf',
+'*Long.valueOf',
+'*Thread.run',
+'*invoke/DirectMethodHandle$Holder.newInvokeSpecial',
+'C.allocateInstance',
+'1Invokers$Holder.linkToTargetMethod',
+'*reflect/Method.invoke',
+'%util/ArrayList.iterator',
+'*HashMap$KeySet.iterator',
+'1.keySet',
+'.Set.<init>',
+'2iterator',
+'*Properties$LineReader.<init>',
+'4.load',
+'*TreeMap.addEntry',
+':ToEmptyMap',
+'2put',
+'.Set.add',
+'*concurrent/ConcurrentHashMap.put',
+'JVal',
+'7untDownLatch.await',
+'5ExecutorCompletionService.poll',
+'=s$RunnableAdapter.call',
+'5FutureTask.run',
+'5LinkedBlockingQueue.poll',
+'5ThreadPoolExecutor$Worker.run',
+'G.runWorker',
+'5locks/AbstractQueuedSynchronizer$ConditionObject.awaitNanos',
+'U.acquire',
+']SharedInterruptibly',
+'!dk/internal/reflect/DelegatingMethodAccessorImpl.invoke',
+'5NativeMethodAccessorImpl.invoke',
+'T0',
+' org.drools.core.common.DefaultEventHandle',
+'>FactHandle$SingleLinkedTuples',
+'7PhreakPropagationContext',
+'7TupleSetsImpl',
+'0impl.WorkingMemoryReteExpireAction',
+'0phreak.PropagationEntry$Delete',
+'HInsert',
+'HUpdate',
+'7SegmentCursor',
+'0reteoo.CompositeObjectSinkAdapter$HashKey',
+'7EvalNodeLeftTuple',
+'7LeftTuple',
+'7ModifyPreviousTuples',
+'K$$Lambda$448.0x00007f93084568c0',
+'V9.0x00007f9308456af8',
+'7NotNodeLeftTuple',
+'7ObjectTypeNode$$Lambda$456.0x00007f9308451a88',
+'P7.0x00007f9308451cc0',
+'FExpireJobContext',
+'7RightTuple',
+'7SegmentMemory',
+'0time.SelfRemovalJob',
+'CContext',
+'5impl.DefaultJobHandle',
+'ATimerJobInstance',
+':PointInTimeTrigger',
+'0util.AbstractHashTable$IndexTupleList',
+'GSingleHashEntry',
+'5LinkedList',
+'5index.TupleList[]',
+'+tms.agenda.TruthMaintenanceSystemRuleTerminalNodeLeftTuple',
+'+util.bitmask.LongBitMask',
+'$kie.benchmark.binance.rules.DepthUpdateTick',
+'@MarkPriceTick',
+'@SignificantTrade',
+'#/drools/compiler/kie/builder/impl/KieServicesImpl.newKieSessionConfiguration',
+'-re/BaseConfiguration.getPropertyValue',
+'0CompositeSessionConfiguration.<init>',
+'0SessionConfiguration.<init>',
+'Einit',
+'DFactories$1.create',
+'0common/AbstractFactHandleFactory.createEventFactHandle',
+'QnewFactHandle',
+'8gendaGroupQueueImpl.add',
+'7ConcurrentNodeMemories.createNodeMemory',
+'NgetNodeMemory',
+'7DefaultEventHandle.<init>',
+'JunscheduleAllJobs',
+'>FactHandle$SingleLinkedTuples.forEachLeftTuple',
+'cRightTuple',
+'H.<init>',
+'IdetachLinkedTuples',
+'IforEachLeftTuple',
+'PRightTuple',
+'IsetLinkedTuples',
+'7Memory.getOrCreateSegmentMemory',
+'7PhreakPropagationContextFactory.createPropagationContext',
+'7SingleBetaConstraints.createBetaMemory',
+'7TupleSetsImpl.createLeftTupleTupleSets',
+'EtakeAll',
+'2ncurrent/AbstractGroupEvaluator.evaluateAndFire',
+'0phreak/PhreakEvalNode.doLeftInserts',
+'HNode',
+'=JoinNode.doLeftInserts',
+'HNode',
+'HRightInserts',
+'FinsertChildLeftTuple',
+'=NodeOperations.doAddExistentialRightMemoryForReorder',
+'NExistentialUpdatesReorderChildLeftTuple',
+'NUpdatesExistentialReorderLeftMemory',
+'UReorderLeftMemory',
+'?tNode.doLeftInserts',
+'KUpdates',
+'GNode',
+'IrmalNode',
+'EinsertChildLeftTuple',
+'8ropagationEntry$Delete.execute',
+'OinternalExecute',
+'HInsert.<init>',
+'OinternalExecute',
+'Opropagate',
+'OscheduleExpiration',
+'HUpdate.execute',
+'OinternalExecute',
+'G.execute',
+'7RuleExecutor.evaluateNetwork',
+'SAndFire',
+'SIfDirty',
+'Dfire',
+'HActivation',
+'REvent',
+'DruleWithHigherSalienceActivated',
+';NetworkEvaluatorImpl.evaluateBetaNode',
+'XNetwork',
+'YonBetaNonTerminalNode',
+'[TerminalNode',
+'PflushLeftTupleIfNecessary',
+'QorceFlushLeftTuple',
+'ZPaths',
+'PinnerEval',
+'PouterEval',
+'PprepareStagedLeftTuples',
+'RocessPeerInserts',
+'[s',
+'Spagate',
+'PswitchOnDoBetaNode',
+'7SegmentCursor.createSegmentCursor',
+'EmoveToNextNodeOrSegment',
+'EsaveStagedLeftTuples',
+'>MemorySupportImpl.getOrCreateSegmentMemory',
+'PrestoreSegmentFromPrototype',
+'8ynchronizedPropagationList.flush',
+'0reteoo/AlphaNode.assertObject',
+'AbyPassModifyToBetaNode',
+'AmodifyObject',
+'<TerminalNode.assertObject',
+'IgetRuleAgendaItem',
+'ImodifyObject',
+'7BetaMemory.linkNode',
+'BsetNodeDirty',
+'BunlinkNode',
+';Node.createMemory',
+'7ClassObjectTypeConf.createFactHandle',
+'8ompositeObjectSinkAdapter.doPropagateAssertObject',
+']ModifyObject',
+'RpropagateAssertObject',
+'[ModifyObject',
+'7EntryPointNode.assertObject',
+'FmodifyObject',
+'FpropagateRetract',
+'FretractObject',
+'7JoinRightAdapterNode.retractRightTuple',
+'7LeftInputAdapterNode$LiaNodeMemory.linkNode',
+'ZsetNodeDirty',
+'K.assertObject',
+'LbyPassModifyToBetaNode',
+'LdoDeleteObject',
+'TSegmentMemory',
+'NInsertObject',
+'TSegmentMemory',
+'NUpdateObject',
+'TSegmentMemory',
+'LmodifyObject',
+'LretractLeftTuple',
+'7ModifyPreviousTuples$$Lambda$448.0x00007f93084568c0.accept',
+'K.doDeleteObject',
+'Llambda$retractTuples$0',
+'LretractTuples',
+'7NotRight.assertObject',
+'@reorderRightTuple',
+'7ObjectTypeNode$$Lambda$456.0x00007f9308451a88.accept',
+'P7.0x00007f9308451cc0.accept',
+'E.doRetractObject',
+'Flambda$retractLeftTuples$0',
+'TRightTuples$2',
+'FmodifyObject',
+'FpropagateAssert',
+'FretractLeftTuples',
+'MObject',
+'MRightTuples',
+'7PathMemory.doLinkRule',
+'DUnlinkRule',
+'BlinkSegment',
+'BqueueRuleAgendaItem',
+'BunlinkedSegment',
+'7RightInputAdapterNode.assertObject',
+'McreateRightTuple',
+'MdoDeleteRightTuple',
+'OUpdateRightTuple',
+'MmodifyObject',
+'<Tuple.retractTuple',
+'7SegmentMemory$SegmentPrototype.newSegmentMemory',
+'VupdateSegmentMemory',
+'D.linkNode',
+'EnotifyRuleLinkSegment',
+'EunlinkNode',
+'>PrototypeRegistryImpl.createSegmentFromPrototype',
+'8ingleObjectSinkAdapter.byPassModifyToBetaNode',
+'OpropagateAssertObject',
+'XModifyObject',
+'7TupleFactory.createLeftTuple',
+'JPeer',
+'0time/impl/PointInTimeTrigger.<init>',
+'McreatePointInTimeTrigger',
+';seudoClockScheduler.internalSchedule',
+'OremoveJob',
+'OscheduleJob',
+':ThreadSafeTrackableTimeJobFactoryManager.createJobContext',
+';rackableTimeJobFactoryManager.addTimerJobInstance',
+'YcreateTimerJobInstance',
+'YremoveTimerJobInstance',
+'0util/AbstractHashTable$SingleHashEntry.clone',
+'F.<init>',
+'5TreeSetQueue.enqueue',
+'5index/IndexFactory.createBetaMemory',
+'NLeftMemory',
+'@Memory$InternalEqualityMemoryFactory.createMemory',
+'F.createEqualityMemory',
+';TupleIndexHashTable.<init>',
+'Oadd',
+'OgetOrCreate',
+'+kiesession/agenda/DefaultAgenda.evaluateEagerList',
+'KfireAllRules',
+'OLoop',
+'LlushPropagations',
+'KinternalFireAllRules',
+'6consequence/DefaultKnowledgeHelper.delete',
+'Yinsert',
+'Yupdate',
+'6entrypoints/NamedEntryPoint.createHandle',
+'Rdelete',
+'XStated',
+'Rinsert',
+'Rupdate',
+'6session/StatefulKnowledgeSessionImpl.fireAllRules',
+'[insert',
+']ternalFireAllRules',
+'+tms/TruthMaintenanceSystemAgendaComponentFactory.createTerminalTuple',
+'$kie/benchmark/binance/BinanceFullDatasetBenchmark.benchmarkFullReplay',
+'VinsertBootstrapFacts',
+'VsetupInvocation',
+':jmh_generated/BinanceFullDatasetBenchmark_benchmarkFullReplay_jmhTest.benchmarkFullReplay_Throughput',
+'.benchmarkFullReplay_thrpt_jmhStub',
+':provider/BinanceRulesProvider.createSession',
+':rules/Rule_B12_TradeActiveBookSilent955561527.defaultConsequence',
+'gDefaultConsequenceInvoker.evaluate',
+'rGenerated.evaluate',
+'G3_BookActiveTradeSilent363397048.defaultConsequence',
+'gDefaultConsequenceInvoker.evaluate',
+'rGenerated.evaluate',
+'G4_StaleMark2008565549.defaultConsequence',
+'\\DefaultConsequenceInvoker.evaluate',
+'uGenerated.evaluate',
+'ECLEANUP_RetractDepthUpdateTick411370353.defaultConsequence',
+'lDefaultConsequenceInvoker.evaluate',
+'nvokerGenerated.evaluate',
+'TMarkPriceTick411638472.defaultConsequence',
+'jDefaultConsequenceInvoker.evaluate',
+'okerGenerated.evaluate',
+'TProcessedEvent411400144.defaultConsequence',
+'kDefaultConsequenceInvoker.evaluate',
+'vokerGenerated.evaluate',
+'TSignificantTrade116349574.defaultConsequence',
+'mDefaultConsequenceInvoker.evaluate',
+'InvokerGenerated.evaluate',
+'EDERIVE_BestBidAsk_Update1310948982.defaultConsequence',
+'gDefaultConsequenceInvoker.evaluate',
+'rGenerated.evaluate',
+'EE33_SpreadComputeAndTier_Update958694836.defaultConsequence',
+'mDefaultConsequenceInvoker.evaluate',
+'InvokerGenerated.evaluate',
+'EJ71_Alpha_SignificantTrade1411731797.defaultConsequence',
+'iDefaultConsequenceInvoker.evaluate',
+'kerGenerated.evaluate',
+'EK75_Alpha_DepthUpdate670193769.defaultConsequence',
+'cDefaultConsequenceInvoker.evaluate',
+'|Generated.evaluate',
+'G6_Beta_SpreadVelocity329307792.defaultConsequence',
+'eDefaultConsequenceInvoker.evaluate',
+'~Generated.evaluate',
+'G7_Beta_AssessMicroVolRisk1555277363.defaultConsequence',
+'jDefaultConsequenceInvoker.evaluate',
+'okerGenerated.evaluate',
+'G8_Beta_EmitMicroVolSignal985164811.defaultConsequence',
+'iDefaultConsequenceInvoker.evaluate',
+'kerGenerated.evaluate',
+'EL79_Alpha_MarkPriceUpdate142298430.defaultConsequence',
+'gDefaultConsequenceInvoker.evaluate',
+'rGenerated.evaluate',
+'F80_Beta_MarkDivergence148579362.defaultConsequence',
+'eDefaultConsequenceInvoker.evaluate',
+'~Generated.evaluate',
+'G1_Beta_AssessDislocation469991056.defaultConsequence',
+'hDefaultConsequenceInvoker.evaluate',
+'erGenerated.evaluate',
+'G2_Beta_EmitDislocationSignal189638703.defaultConsequence',
+'lDefaultConsequenceInvoker.evaluate',
+'nvokerGenerated.evaluate',
+'EUPD_LastSeen_Depth595880697.defaultConsequence',
+'`DefaultConsequenceInvoker.evaluate',
+'yGenerated.evaluate',
+'RMark2124531232.defaultConsequence',
+'`DefaultConsequenceInvoker.evaluate',
+'yGenerated.evaluate',
+'RTrade1045282179.defaultConsequence',
+'aDefaultConsequenceInvoker.evaluate',
+'zGenerated.evaluate',
+':util/EventReplayController.replayEvents',
+'(internal/conf/CompositeConfiguration.<init>',
+'1utils/ChainedProperties.<init>',
+'IgetChainedProperties',
+'LProperty',
+'IloadProperties',
+'Iread',
+'$openjdk/jmh/runner/BaseRunner.doSingle',
+'BrunBenchmark',
+'NsForked',
+'8enchmarkHandler$BenchmarkTask.call',
+'G.runIteration',
+'7ForkedMain.main',
+'=Runner.run',
+'7InfraControl.awaitWarmdownReady',
+'CL2.awaitWarmdownReady'
+];
+unpack(cpool);
+
+n(3,63549)
+u(137,63547)
+u(321)
+u(329)
+u(305)
+u(297)
+u(305)
+u(2761)
+u(2761)
+u(169)
+u(361)
+u(369)
+u(377)
+u(2153)
+u(2161)
+u(2129,63540)
+u(2681)
+u(2097,60406)
+u(2097)
+u(2113)
+u(2001)
+u(2025)
+u(2009)
+u(865,32974)
+u(1073)
+u(1081,5035)
+u(1065)
+u(1129)
+u(1185,3579)
+u(610,744)
+n(1177,2835)
+u(1145,2750)
+u(1121,2203)
+u(1225)
+u(410,1126)
+n(897,1066)
+u(857)
+u(410)
+f(969,33,1066,11)
+u(977)
+u(857)
+u(410)
+f(1137,31,11,547)
+u(410)
+f(1193,30,547,45)
+u(1249)
+u(857)
+u(410)
+f(1241,30,45,40)
+u(857)
+u(410)
+f(1233,28,40,1456)
+u(450)
+f(1089,25,1456,27939)
+u(1097,6187)
+u(1105)
+u(2185,716)
+u(2193)
+u(2177)
+u(634,156)
+n(2049,560)
+u(2089)
+u(833,334)
+u(402)
+f(2089,33,334,226)
+u(1409)
+u(442)
+f(2209,28,226,57)
+u(2217)
+u(2201)
+u(634,14)
+n(2049,43)
+u(2089)
+u(833,29)
+u(402)
+f(2089,33,29,14)
+u(1409)
+u(442)
+f(2233,28,14,13)
+u(2241)
+u(2225)
+u(634,5)
+n(2049,8)
+u(2089)
+u(833,5)
+u(402)
+f(2089,33,5,3)
+u(1409)
+u(442)
+f(2257,28,3,57)
+u(2265)
+u(2249)
+u(2033)
+u(2033)
+u(2065)
+u(2073)
+u(2065)
+u(2065)
+u(833,31)
+u(402)
+f(1425,37,31,26)
+u(426)
+f(2281,28,26,6)
+u(2289)
+u(2273)
+u(2033)
+u(2033)
+u(2065)
+u(2073)
+u(2065)
+u(2065)
+u(833)
+u(402)
+f(2305,28,6,570)
+u(2313)
+u(2297)
+u(2033)
+u(2033)
+u(2065)
+u(2073)
+u(2065)
+u(2065)
+u(833,379)
+u(402)
+f(1425,37,379,191)
+u(426)
+f(2329,28,191,334)
+u(2337)
+u(2321)
+u(2033)
+u(2033)
+u(2065)
+u(2073)
+u(2065)
+u(2065)
+u(833,209)
+u(402)
+f(1425,37,209,125)
+u(426)
+f(2353,28,125,90)
+u(2361)
+u(121,20)
+u(26)
+f(129,30,20,16)
+u(34)
+f(2345,30,16,54)
+u(634,12)
+n(2049,42)
+u(2089)
+u(833,26)
+u(402)
+f(2089,33,26,16)
+u(1409)
+u(442)
+f(2377,28,16,171)
+u(2385)
+u(121,79)
+u(26)
+f(129,30,79,19)
+u(34)
+f(2369,30,19,73)
+u(634,21)
+n(2049,52)
+u(2089)
+u(833,34)
+u(402)
+f(2089,33,34,18)
+u(1409)
+u(442)
+f(2401,28,18,2543)
+u(2409)
+u(121,190)
+u(26)
+f(129,30,190,101)
+u(34)
+f(2393,30,101,2252)
+u(658,163)
+n(2041,2089)
+u(2041)
+u(2081)
+u(833,254)
+u(402)
+f(2057,34,254,632)
+u(721)
+u(721)
+u(721)
+u(1361)
+u(713)
+u(386,407)
+n(753,225)
+u(610,95)
+n(785,130)
+u(785)
+u(817)
+u(394)
+f(2081,34,130,1203)
+u(1401)
+u(434,125)
+n(1009,1078)
+u(1033)
+u(1033)
+u(418,95)
+n(530,93)
+n(1849,173)
+u(586,67)
+n(1841,106)
+u(50)
+f(1873,39,106,717)
+u(570,177)
+n(1857,225)
+u(1889)
+u(129,97)
+u(34)
+f(265,42,97,128)
+u(273)
+u(98)
+f(1897,40,128,315)
+u(554,68)
+n(578,162)
+n(1881,85)
+u(562)
+f(2425,28,85,383)
+u(2433)
+u(121,34)
+u(26)
+f(129,30,34,19)
+u(34)
+f(2417,30,19,330)
+u(642,33)
+n(2041,297)
+u(2041)
+u(2081)
+u(833,38)
+u(402)
+f(2057,34,38,80)
+u(721)
+u(721)
+u(721)
+u(1361)
+u(713)
+u(386,50)
+n(753,30)
+u(610,10)
+n(785,20)
+u(785)
+u(817)
+u(394)
+f(2081,34,20,179)
+u(1401)
+u(434,21)
+n(1009,158)
+u(1033)
+u(1033)
+u(418,22)
+n(530,14)
+n(1849,29)
+u(586,12)
+n(1841,17)
+u(50)
+f(1873,39,17,93)
+u(570,20)
+n(1857,29)
+u(1889)
+u(129,15)
+u(34)
+f(265,42,15,14)
+u(273)
+u(98)
+f(1897,40,14,44)
+u(554,10)
+n(578,26)
+n(1881,8)
+u(562)
+f(2449,28,8,155)
+u(2457)
+u(121,65)
+u(26)
+f(129,30,65,12)
+u(34)
+f(2441,30,12,78)
+u(634,16)
+n(2049,62)
+u(2089)
+u(833,40)
+u(402)
+f(2089,33,40,22)
+u(1409)
+u(442)
+f(2473,28,22,100)
+u(2481)
+u(129,20)
+u(34)
+f(2465,30,20,80)
+u(634,17)
+n(2049,63)
+u(2089)
+u(833,42)
+u(402)
+f(2089,33,42,21)
+u(1409)
+u(442)
+f(2497,28,21,88)
+u(2505)
+u(129,17)
+u(34)
+f(2489,30,17,71)
+u(634,14)
+n(2049,57)
+u(2089)
+u(833,34)
+u(402)
+f(2089,33,34,23)
+u(1409)
+u(442)
+f(2521,28,23,42)
+u(2529)
+u(121,1)
+u(26)
+f(129,30,1)
+u(34)
+f(2513,30,1,40)
+u(650,4)
+n(2041,36)
+u(2041)
+u(2081)
+u(833,4)
+u(402)
+f(2057,34,4,9)
+u(721)
+u(721)
+u(721)
+u(1361)
+u(713)
+u(386,7)
+n(753,2)
+u(785)
+u(785)
+u(817)
+u(394)
+f(2081,34,2,23)
+u(1401)
+u(434,2)
+n(1009,21)
+u(1033)
+u(1033)
+u(418,2)
+n(530)
+n(1849,3)
+u(586,1)
+n(1841,2)
+u(50)
+f(1873,39,2,14)
+u(570,3)
+n(1857,4)
+u(1889)
+u(129,2)
+u(34)
+f(265,42,2)
+u(273)
+u(98)
+f(1897,40,2,7)
+u(578,6)
+n(1881,1)
+u(562)
+f(2545,28,1,10)
+u(2553)
+u(121,3)
+u(26)
+f(129,30,3,2)
+u(34)
+f(2537,30,2,5)
+u(2049)
+u(2089)
+u(833,4)
+u(402)
+f(2089,33,4,1)
+u(1409)
+u(442)
+f(2569,28,1,8)
+u(2577)
+u(129,2)
+u(34)
+f(2561,30,2,6)
+u(634,2)
+n(2049,4)
+u(2089)
+u(833,3)
+u(402)
+f(2089,33,3,1)
+u(1409)
+u(442)
+f(2593,28,1,7)
+u(2601)
+u(129,1)
+u(34)
+f(2585,30,1,6)
+u(634,3)
+n(2049)
+u(2089)
+u(833,2)
+u(402)
+f(2089,33,2,1)
+u(1409)
+u(442)
+f(2617,28,1,87)
+u(2625)
+u(129,11)
+u(34)
+f(2609,30,11,76)
+u(634,14)
+n(2049,62)
+u(2089)
+u(833,40)
+u(402)
+f(2089,33,40,22)
+u(1409)
+u(442)
+f(2641,28,22,14)
+u(2649)
+u(129,2)
+u(34)
+f(2633,30,2,12)
+u(634,3)
+n(2049,9)
+u(2089)
+u(833,4)
+u(402)
+f(2089,33,4,5)
+u(1409)
+u(442)
+f(2665,28,5,736)
+u(2673)
+u(129,120)
+u(34)
+f(2657,30,120,616)
+u(634,139)
+n(2049,477)
+u(2089)
+u(833,290)
+u(402)
+f(2089,33,290,187)
+u(1409)
+u(442)
+f(1113,26,187,8096)
+u(1993)
+u(1065)
+u(1129)
+u(1185,5891)
+u(610,1120)
+n(1177,4771)
+u(1145,4638)
+u(1121,4013)
+u(1225)
+u(410,1487)
+n(897,2214)
+u(857,1168)
+u(410)
+f(889,36,1168,1)
+u(913)
+u(1825)
+u(2121)
+u(626)
+f(905,36,1,114)
+u(913,68)
+u(1825)
+u(466)
+f(1977,37,68,46)
+u(1985)
+u(594,31)
+n(1913,15)
+u(602)
+f(945,36,15,931)
+u(1977)
+u(1985)
+u(594,615)
+n(1913,316)
+u(602)
+f(969,35,316,312)
+u(977)
+u(857,250)
+u(410)
+f(937,37,250,25)
+u(1977)
+u(1985)
+u(594,17)
+n(1913,8)
+u(602)
+f(961,37,8,37)
+u(1977)
+u(1985)
+u(594,15)
+n(1913,22)
+u(602)
+f(1137,33,22,625)
+u(410)
+f(1193,32,625,71)
+u(1249)
+u(857)
+u(410)
+f(1217,32,71,1)
+u(1209)
+u(1201)
+u(1833)
+u(474)
+f(1241,32,1,61)
+u(857)
+u(410)
+f(1233,30,61,2205)
+u(450)
+f(2017,26,2205,13656)
+u(1273)
+u(1273)
+u(1057)
+u(1001,5796)
+u(993)
+u(1417)
+u(761,300)
+u(1865)
+u(1905)
+u(129)
+u(34)
+f(1649,33,300,5496)
+u(1601)
+u(1641,3973)
+u(161,249)
+u(145)
+u(153)
+u(522)
+f(801,36,249,3724)
+u(769)
+u(1593)
+u(1609)
+u(1529)
+u(1473)
+u(1481)
+u(1153,3153)
+u(849,572)
+u(410)
+f(1161,44,572,2581)
+u(1185,1657)
+u(610,401)
+n(1177,1256)
+u(1145)
+u(1121,1068)
+u(1225)
+u(410,514)
+n(897,359)
+u(857)
+u(410)
+f(969,50,359,195)
+u(977)
+u(857)
+u(410)
+f(1137,48,195,188)
+u(410)
+f(1233,45,188,924)
+u(450)
+f(1449,43,924,571)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1657,35,571,1523)
+u(161,249)
+u(145)
+u(153)
+u(514)
+f(809,36,249,1274)
+u(777)
+u(1585)
+u(1617)
+u(1745)
+u(1433)
+u(1721)
+u(1345)
+u(1785)
+u(1697)
+u(1673)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1017,30,1274,3060)
+u(1025)
+u(1633)
+u(1385)
+u(1369)
+u(1305,915)
+u(1313,203)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1825,36,203,712)
+u(2121)
+u(626)
+f(1457,35,712,2145)
+u(1489)
+u(1441,23)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1497,37,23,1648)
+u(849,155)
+u(410)
+f(1161,38,155,1493)
+u(1185,1235)
+u(610,117)
+n(1177,1118)
+u(1145)
+u(1121)
+u(1225)
+u(410,312)
+n(897,806)
+u(857,306)
+u(410)
+f(889,45,306,500)
+u(913,165)
+u(1825)
+u(474,67)
+n(2121,98)
+u(626)
+f(1977,46,98,335)
+u(1985)
+u(594,199)
+n(1913,136)
+u(602)
+f(1233,39,136,258)
+u(450)
+f(1825,37,258,474)
+u(474)
+f(1049,30,474,4800)
+u(1041)
+u(482,272)
+n(793,536)
+u(394)
+f(1561,32,536,805)
+u(161,803)
+u(145)
+u(153)
+u(490,413)
+n(498,390)
+f(769,33,390,2)
+u(1537)
+u(1553)
+u(1545)
+u(1473)
+u(1481)
+u(1449)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1625,32,2,3187)
+u(1393)
+u(458,431)
+n(1377,2654)
+u(1297,1014)
+u(1289,508)
+u(1801)
+u(1465)
+u(1321)
+u(1313)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1817,36,508,506)
+u(1321,172)
+u(1313,45)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1825,38,45,127)
+u(2121)
+u(626)
+f(1521,37,127,121)
+u(1489,71)
+u(1497,2)
+u(1449)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1825,39,2,69)
+u(474)
+f(1505,38,69,50)
+u(1513)
+u(1449)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1737,37,50,213)
+u(1705,87)
+u(1713)
+u(538)
+f(1729,38,87,126)
+u(1337)
+u(1337)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1521,35,126,27)
+u(1505)
+u(1513)
+u(1449)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1737,35,27,1613)
+u(1577,965)
+u(929)
+u(921)
+u(1977)
+u(1985)
+u(594,614)
+n(1913,351)
+u(602)
+f(1729,36,351,648)
+u(1337)
+u(1337)
+u(1777)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1817,34,648,102)
+u(1521,11)
+u(1489)
+u(1825)
+u(474)
+f(1737,35,11,91)
+u(1705)
+u(1329,31)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1713,37,31,60)
+u(538)
+f(1273,23,60,13019)
+u(1273)
+u(1057)
+u(1017)
+u(1025)
+u(1633)
+u(1385)
+u(458,199)
+n(1369,5732)
+u(1281,710)
+u(1809)
+u(1281,3)
+u(1809)
+u(1705)
+u(1329,1)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1713,36,1,2)
+u(538)
+f(1705,33,2,707)
+u(1713)
+u(538)
+f(1305,31,707,1200)
+u(1313,233)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1825,32,233,967)
+u(2121)
+u(626)
+f(1457,31,967,1947)
+u(1489)
+u(1441,243)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1497,33,243,1043)
+u(849,202)
+u(410)
+f(1161,34,202,841)
+u(1185,566)
+u(610,141)
+n(1177,425)
+u(1145)
+u(1121)
+u(1225)
+u(410,220)
+n(969,205)
+u(977)
+u(857)
+u(410)
+f(1233,35,205,275)
+u(450)
+f(1825,33,275,661)
+u(506)
+f(1705,31,661,1875)
+u(1329,547)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1713,32,547,1328)
+u(538)
+f(1385,30,1328,7088)
+u(1369)
+u(1281,1686)
+u(1809)
+u(1281,838)
+u(1385)
+u(1369)
+u(1305,117)
+u(1313,23)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1825,38,23,94)
+u(2121)
+u(626)
+f(1457,37,94,721)
+u(1489)
+u(82,4)
+n(201,32)
+u(58)
+f(1169,39,32)
+u(209)
+u(185,25)
+u(66)
+f(193,41,25,7)
+u(74)
+f(1441,39,7,74)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233,46)
+u(90)
+f(241,51,46,28)
+u(90)
+f(1497,39,28,416)
+u(849,67)
+u(410)
+f(1161,40,67,349)
+u(1185,262)
+u(610,49)
+n(1177,213)
+u(1145)
+u(1121,192)
+u(1225)
+u(410,40)
+n(897,137)
+u(857,16)
+u(410)
+f(889,47,16,121)
+u(913,91)
+u(1825)
+u(2121)
+u(626)
+f(1977,48,91,30)
+u(1985)
+u(594,16)
+n(1913,14)
+u(602)
+f(969,46,14,15)
+u(977)
+u(857)
+u(410)
+f(1137,44,15,21)
+u(410)
+f(1233,41,21,87)
+u(450)
+f(1825,39,87,120)
+u(466,64)
+n(506,56)
+f(1833,39,56,43)
+u(474)
+f(1305,34,43,848)
+u(1313,155)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(241)
+u(90)
+f(1825,35,155,693)
+u(2121)
+u(626)
+f(1457,32,693,1559)
+u(1489)
+u(1441,232)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233)
+u(90)
+f(1497,34,232,726)
+u(849,176)
+u(410)
+f(1161,35,176,550)
+u(1185,318)
+u(610,156)
+n(1177,162)
+u(1145)
+u(1137)
+u(410)
+f(1233,36,162,232)
+u(450)
+f(1825,34,232,601)
+u(466)
+f(1569,32,601,591)
+u(1713)
+u(538)
+f(1705,32,591,3252)
+u(1329,749)
+u(1769)
+u(1777)
+u(1777)
+u(1681)
+u(1665)
+u(1689)
+u(729)
+u(1929)
+u(257)
+u(249)
+u(249)
+u(233,701)
+u(90)
+f(241,45,701,48)
+u(90)
+f(1713,33,48,2503)
+u(538)
+f(1993,23,2503,14413)
+u(1065)
+u(1129)
+u(1185,12380)
+u(610,1080)
+n(1177,11300)
+u(1145,11134)
+u(1121,8457)
+u(1225)
+u(410,1260)
+n(897,6884)
+u(857,1013)
+u(410)
+f(889,32,1013,5)
+u(913,1)
+u(1825)
+u(2121)
+u(626)
+f(1977,33,1,4)
+u(1985)
+u(594,3)
+n(1913,1)
+u(602)
+f(905,32,1,5866)
+u(913,3892)
+u(1825)
+u(466,2050)
+n(506,66)
+n(2121,1776)
+u(626)
+f(1977,33,1776,1974)
+u(1985)
+u(594,1249)
+n(1913,725)
+u(602)
+f(969,31,725,313)
+u(977)
+u(857,216)
+u(410)
+f(953,33,216,97)
+u(985)
+u(1825,56)
+u(466)
+f(1977,35,56,41)
+u(1985)
+u(594,32)
+n(1913,9)
+u(602)
+f(1137,29,9,2677)
+u(410,638)
+n(881,2039)
+u(873)
+u(1825)
+u(2121)
+u(626)
+f(1193,28,2039,31)
+u(1249)
+u(857)
+u(410)
+f(1217,28,31,99)
+u(1209)
+u(1201)
+u(1833)
+u(2121)
+u(626)
+f(1241,28,99,36)
+u(857)
+u(410)
+f(1233,26,36,2033)
+u(450)
+f(2105,17,2033,3134)
+u(2105)
+u(2105)
+u(2081)
+u(833,339)
+u(402)
+f(2057,21,339,966)
+u(721)
+u(721)
+u(721)
+u(1361)
+u(713)
+u(386,640)
+n(753,326)
+u(610,142)
+n(785,184)
+u(785)
+u(817)
+u(394)
+f(2081,21,184,1829)
+u(1401)
+u(434,185)
+n(1009,1644)
+u(1033)
+u(1033)
+u(418,142)
+n(530,169)
+n(1849,254)
+u(586,105)
+n(1841,149)
+u(50)
+f(1873,26,149,1079)
+u(570,264)
+n(1857,357)
+u(1889)
+u(129,148)
+u(34)
+f(265,29,148,209)
+u(273)
+u(98)
+f(1897,27,209,458)
+u(554,88)
+n(578,248)
+n(1881,122)
+u(562)
+f(2145,15,122,7)
+u(2137,4)
+u(2097)
+u(2097)
+u(2113)
+u(2001)
+u(2025)
+u(2009)
+u(1273,3)
+u(1273)
+u(1057)
+u(1017)
+u(1025)
+u(1633)
+u(1385)
+u(1369)
+u(1457)
+u(1489)
+u(201,1)
+u(58)
+f(825,33,1,2)
+u(1257)
+u(1265)
+u(1793)
+u(1753)
+u(546,1)
+n(1761)
+u(745)
+u(737)
+u(1353)
+u(841)
+u(1937)
+u(1945)
+u(1961)
+u(1953)
+u(1969)
+u(1969)
+u(1921)
+u(618)
+f(1993,23,1)
+u(1065)
+u(1129)
+u(1185)
+u(1177)
+u(1145)
+u(1121)
+u(1225)
+u(897)
+u(889)
+u(1977)
+u(1985)
+u(594)
+f(2169,16,1,3)
+u(665)
+u(665)
+u(681,1)
+u(2689)
+u(705)
+u(689)
+u(697)
+u(673)
+u(2713)
+u(177)
+u(42)
+f(2705,19,1,2)
+u(2705)
+u(2697)
+u(2721)
+u(2729)
+u(225)
+u(217)
+u(10,1)
+n(18)
+f(2777,1,1,2)
+u(2785)
+u(2753)
+u(2737)
+u(2745)
+u(2745)
+u(2769)
+u(289,1)
+u(313)
+u(337)
+u(106)
+f(2793,8,1)
+u(2801)
+u(281)
+u(353)
+u(345)
+u(114)
+
+search();
+</script></body></html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RETE Graph — Clusters 3 &amp; 5 | Binance CEP</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter',sans-serif;background:#fff;color:#1a1a2e;min-height:100vh;}
+  .stats-bar{display:flex;justify-content:center;gap:2rem;padding:0.7rem 1rem;background:#eef2fb;border-bottom:1px solid #d0d8ee;font-size:0.8rem;color:#334;}
+  .stats-bar span b{color:#2563eb;}
+  h1{text-align:center;font-size:1.2rem;font-weight:700;color:#1e293b;padding:1.2rem 0 0.3rem;}
+  .page-sub{text-align:center;font-size:0.8rem;color:#64748b;margin-bottom:0.5rem;}
+  .graphs{display:flex;gap:2rem;justify-content:center;padding:0 1rem 0.5rem;flex-wrap:wrap;}
+  .panel{border:1px solid #d0d8ee;border-radius:12px;padding:1.2rem 1rem 1rem;background:#fff;}
+  .panel h2{font-size:0.92rem;font-weight:700;color:#1e293b;text-align:center;margin-bottom:0.5rem;}
+  .panel .psub{font-size:0.72rem;color:#64748b;text-align:center;margin-bottom:0.8rem;}
+  .legend{max-width:920px;margin:0 auto 0.5rem;padding:0.8rem 1.5rem;background:#fff;border:1px solid #d0d8ee;border-radius:8px;font-size:0.78rem;}
+  .legend h3{font-size:0.85rem;font-weight:700;margin-bottom:0.6rem;color:#1e293b;}
+  .lgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem 1.5rem;}
+  .li{display:flex;align-items:center;gap:0.5rem;}
+  .ls{width:14px;height:14px;border-radius:3px;border:2px solid;flex-shrink:0;}
+  figcaption{text-align:center;font-size:0.78rem;color:#555;padding:0.2rem 1rem 0.5rem;max-width:920px;margin:0 auto;line-height:1.5;}
+  .badge{font-size:0.65rem;font-weight:700;padding:0.2rem 0.5rem;border-radius:12px;background:#eef2fb;color:#334;border:1px solid #d0d8ee;display:inline-block;}
+</style>
+</head>
+<body>
+
+<div class="stats-bar">
+  <span>RETE Network — <b>Clusters 3 &amp; 5</b></span>
+  <span><b>4</b> rules</span>
+  <span><b>2</b> fact types shared via common alpha</span>
+  <span>source: <b>taxonomy.drl</b></span>
+</div>
+
+<h1>RETE Graph — Clusters 3 &amp; 5</h1>
+<p class="page-sub">Infomap community clusters · alpha/beta node network · inter-cluster dependency shown in purple dashes</p>
+
+<div class="graphs">
+
+<!-- ═══════════════════════════════ CLUSTER 3 ═══════════════════════════════ -->
+<div class="panel">
+  <h2>Cluster 1</h2>
+  <svg width="430" height="590" viewBox="0 0 430 590">
+    <defs>
+      <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#64748b"/></marker>
+      <marker id="ap" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#7b1fa2"/></marker>
+    </defs>
+
+    <!-- ROOT -->
+    <circle cx="215" cy="36" r="22" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+    <text x="215" y="41" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" font-weight="700" fill="#fff">ROOT</text>
+
+    <!-- Root → OTN:MarketEvent -->
+    <line x1="197" y1="52" x2="140" y2="93" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+    <!-- Root → OTN:SignificantTrade -->
+    <line x1="233" y1="52" x2="308" y2="93" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- OTN: MarketEvent -->
+    <rect x="42" y="98" width="192" height="48" rx="7" fill="#e3f2fd" stroke="#1976d2" stroke-width="2"/>
+    <text x="138" y="116" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#64748b">OTN</text>
+    <text x="138" y="131" text-anchor="middle" font-family="Inter,sans-serif" font-size="15.5" font-weight="600" fill="#0d47a1">MarketEvent</text>
+
+    <!-- OTN: SignificantTrade -->
+    <rect x="252" y="98" width="162" height="48" rx="7" fill="#e3f2fd" stroke="#1976d2" stroke-width="2"/>
+    <text x="333" y="116" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#64748b">OTN</text>
+    <text x="333" y="131" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" font-weight="600" fill="#0d47a1">SignificantTrade</text>
+
+    <!-- OTN:MarketEvent → Alpha 1 -->
+    <line x1="138" y1="146" x2="138" y2="180" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- Alpha 1: eventType == "TRADE" -->
+    <rect x="42" y="185" width="192" height="48" rx="7" fill="#e8f5e9" stroke="#388e3c" stroke-width="2"/>
+    <text x="138" y="203" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#388e3c" font-weight="700">α  Alpha Node</text>
+    <text x="138" y="219" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" fill="#1b5e20">eventType == "TRADE"</text>
+
+    <!-- Alpha 1 → Alpha 2 -->
+    <line x1="138" y1="233" x2="138" y2="267" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- Alpha 2: p2 >= 0.01 -->
+    <rect x="42" y="272" width="192" height="48" rx="7" fill="#e8f5e9" stroke="#388e3c" stroke-width="2"/>
+    <text x="138" y="290" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#388e3c" font-weight="700">α  Alpha Node</text>
+    <text x="138" y="306" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" fill="#1b5e20">qty (p2) ≥ 0.01</text>
+
+    <!-- Alpha 2 → Terminal J71 -->
+    <line x1="138" y1="320" x2="138" y2="354" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- Terminal: J71 -->
+    <rect x="22" y="359" width="232" height="58" rx="8" fill="#e8eaf6" stroke="#5c6bc0" stroke-width="2"/>
+    <text x="138" y="377" text-anchor="middle" font-family="Inter,sans-serif" font-size="11.5" fill="#5c6bc0" font-weight="700">RULE TERMINAL · depth 1</text>
+    <text x="138" y="393" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" font-weight="700" fill="#283593">J71_Alpha</text>
+    <text x="138" y="407" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" font-weight="700" fill="#283593">_SignificantTrade</text>
+
+    <!-- Terminal J71 → Action -->
+    <line x1="138" y1="417" x2="138" y2="451" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- Action: insert -->
+    <rect x="22" y="456" width="232" height="40" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="138" y="472" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#f9a825" font-weight="700">ACTION</text>
+    <text x="138" y="487" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" fill="#e65100">insert( SignificantTrade )</text>
+
+    <!-- OTN:SignificantTrade → Terminal CLEANUP -->
+    <line x1="333" y1="146" x2="333" y2="267" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- Terminal: CLEANUP -->
+    <rect x="258" y="272" width="158" height="58" rx="8" fill="#fce4ec" stroke="#c62828" stroke-width="2"/>
+    <text x="337" y="290" text-anchor="middle" font-family="Inter,sans-serif" font-size="11.5" fill="#c62828" font-weight="700">RULE TERMINAL · salience −1000</text>
+    <text x="337" y="306" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" font-weight="700" fill="#b71c1c">CLEANUP_Retract</text>
+    <text x="337" y="320" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" font-weight="700" fill="#b71c1c">SignificantTrade</text>
+
+    <!-- Terminal CLEANUP → Action -->
+    <line x1="337" y1="330" x2="337" y2="364" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- Action: retract -->
+    <rect x="258" y="369" width="158" height="40" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="337" y="385" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#f9a825" font-weight="700">ACTION</text>
+    <text x="337" y="400" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" fill="#e65100">retract( $st )</text>
+
+    <!-- Feedback arc: insert → feeds CLEANUP (purple dashed) -->
+    <path d="M 138,496 C 138,590 410,480 340,160" stroke="#7b1fa2" stroke-width="1.5" stroke-dasharray="4,3" fill="none" marker-end="url(#ap)"/>
+    <text x="80" y="565" font-family="Inter,sans-serif" font-size="12.5" fill="#7b1fa2" font-style="italic">inserted fact feeds OTN</text>
+
+    <!-- Shared fact type label -->
+    <text x="215" y="575" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#94a3b8">Shared fact: SignificantTrade (producer → consumer)</text>
+  </svg>
+</div>
+
+<!-- ═══════════════════════════════ CLUSTER 5 ═══════════════════════════════ -->
+<div class="panel">
+  <h2>Cluster 2</h2>
+  <svg width="430" height="590" viewBox="0 0 430 590">
+    <defs>
+      <marker id="b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#64748b"/></marker>
+      <marker id="bp" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#7b1fa2"/></marker>
+    </defs>
+
+    <!-- ROOT -->
+    <circle cx="215" cy="36" r="22" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+    <text x="215" y="41" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" font-weight="700" fill="#fff">ROOT</text>
+
+    <!-- Root → OTN:RiskConfig -->
+    <line x1="195" y1="51" x2="128" y2="93" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+    <!-- Root → OTN:TradeStats -->
+    <line x1="235" y1="51" x2="315" y2="93" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+
+    <!-- OTN: RiskConfig -->
+    <rect x="38" y="98" width="180" height="48" rx="7" fill="#e3f2fd" stroke="#1976d2" stroke-width="2"/>
+    <text x="128" y="116" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#64748b">OTN</text>
+    <text x="128" y="131" text-anchor="middle" font-family="Inter,sans-serif" font-size="15.5" font-weight="600" fill="#0d47a1">RiskConfig</text>
+
+    <!-- OTN: TradeStats -->
+    <rect x="242" y="98" width="160" height="48" rx="7" fill="#e3f2fd" stroke="#1976d2" stroke-width="2"/>
+    <text x="322" y="116" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#64748b">OTN</text>
+    <text x="322" y="131" text-anchor="middle" font-family="Inter,sans-serif" font-size="15.5" font-weight="600" fill="#0d47a1">TradeStats</text>
+
+    <!-- OTN:RiskConfig → Left Input Adapter -->
+    <line x1="128" y1="146" x2="128" y2="180" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+
+    <!-- Left Input Adapter -->
+    <rect x="38" y="185" width="180" height="48" rx="7" fill="#eef2fb" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="128" y="203" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#475569" font-weight="600">Left Input Adapter</text>
+    <text x="128" y="220" text-anchor="middle" font-family="Inter,sans-serif" font-size="14.5" fill="#334155">RiskConfig( $sym )</text>
+
+    <!-- LIA → Beta NOT (BOOTSTRAP) -->
+    <line x1="100" y1="233" x2="80" y2="268" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+    <!-- LIA → Beta JOIN (D30) -->
+    <line x1="156" y1="233" x2="190" y2="268" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+
+    <!-- OTN:TradeStats → Beta NOT (right input) -->
+    <line x1="280" y1="146" x2="110" y2="268" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#b)"/>
+    <!-- OTN:TradeStats → Beta JOIN (right input) -->
+    <line x1="340" y1="146" x2="260" y2="268" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+
+    <!-- Beta NOT: not TradeStats -->
+    <rect x="28" y="273" width="150" height="52" rx="7" fill="#fce4ec" stroke="#c62828" stroke-width="2"/>
+    <text x="103" y="290" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#c62828" font-weight="700">β  Not Node</text>
+    <text x="103" y="305" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" fill="#b71c1c">not TradeStats</text>
+    <text x="103" y="319" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" fill="#b71c1c">( symbol == $sym )</text>
+
+    <!-- Beta JOIN: TradeStats -->
+    <rect x="196" y="273" width="208" height="52" rx="7" fill="#f3e5f5" stroke="#7b1fa2" stroke-width="2"/>
+    <text x="300" y="290" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#7b1fa2" font-weight="700">β  Join Node</text>
+    <text x="300" y="305" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" fill="#4a148c">$stats : TradeStats</text>
+    <text x="300" y="319" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" fill="#4a148c">( symbol == $sym )</text>
+
+    <!-- Beta NOT → Terminal BOOTSTRAP -->
+    <line x1="103" y1="325" x2="103" y2="359" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+    <!-- Beta JOIN → Terminal D30 -->
+    <line x1="300" y1="325" x2="300" y2="359" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+
+    <!-- Terminal: BOOTSTRAP -->
+    <rect x="18" y="364" width="175" height="60" rx="8" fill="#e8eaf6" stroke="#5c6bc0" stroke-width="2"/>
+    <text x="105" y="381" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#5c6bc0" font-weight="700">RULE TERMINAL · salience 998</text>
+    <text x="105" y="397" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" font-weight="700" fill="#283593">BOOTSTRAP</text>
+    <text x="105" y="411" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" font-weight="700" fill="#283593">_TradeStats</text>
+
+    <!-- Terminal: D30 -->
+    <rect x="208" y="364" width="205" height="60" rx="8" fill="#e8eaf6" stroke="#5c6bc0" stroke-width="2"/>
+    <text x="310" y="381" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#5c6bc0" font-weight="700">RULE TERMINAL · no-loop</text>
+    <text x="310" y="397" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" font-weight="700" fill="#283593">D30_TradeRate</text>
+    <text x="310" y="411" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" font-weight="700" fill="#283593">Tiering</text>
+
+    <!-- Terminal BOOTSTRAP → Action -->
+    <line x1="105" y1="424" x2="105" y2="458" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+    <!-- Terminal D30 → Action -->
+    <line x1="310" y1="424" x2="310" y2="458" stroke="#64748b" stroke-width="1.5" marker-end="url(#b)"/>
+
+    <!-- Action: insert TradeStats -->
+    <rect x="18" y="463" width="175" height="42" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="105" y="479" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#f9a825" font-weight="700">ACTION</text>
+    <text x="105" y="495" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" fill="#e65100">insert( TradeStats )</text>
+
+    <!-- Action: modify TradeStats -->
+    <rect x="208" y="463" width="205" height="42" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="310" y="479" text-anchor="middle" font-family="Inter,sans-serif" font-size="12.5" fill="#f9a825" font-weight="700">ACTION</text>
+    <text x="310" y="495" text-anchor="middle" font-family="Inter,sans-serif" font-size="13.5" fill="#e65100">modify( setTradeRateTier )</text>
+
+    <!-- Feedback: BOOTSTRAP insert → activates D30 (purple dashed) -->
+    <path d="M 105,505 C 105,590 380,480 322,160" stroke="#7b1fa2" stroke-width="1.5" stroke-dasharray="4,3" fill="none" marker-end="url(#bp)"/>
+    <text x="80" y="565" font-family="Inter,sans-serif" font-size="12.5" fill="#7b1fa2" font-style="italic">inserted fact feeds OTN</text>
+
+    <!-- Shared beta structure annotation -->
+    <text x="215" y="575" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#94a3b8">Shared OTN[RiskConfig] → beta join in both rules</text>
+  </svg>
+</div>
+
+</div><!-- end .graphs -->
+
+<!-- LEGEND -->
+<div class="legend" style="max-width:920px;margin:0 auto 1.5rem;">
+  <h3>Legend</h3>
+  <div class="lgrid">
+    <div class="li"><div class="ls" style="background:#e3f2fd;border-color:#1976d2;"></div>OTN — Object Type Node</div>
+    <div class="li"><div class="ls" style="background:#e8f5e9;border-color:#388e3c;"></div>α — Alpha Node (single-pattern filter)</div>
+    <div class="li"><div class="ls" style="background:#f3e5f5;border-color:#7b1fa2;"></div>β — Beta Join Node (multi-pattern)</div>
+    <div class="li"><div class="ls" style="background:#fce4ec;border-color:#c62828;"></div>β NOT — Negation Node</div>
+    <div class="li"><div class="ls" style="background:#e8eaf6;border-color:#5c6bc0;"></div>Rule Terminal (fires RHS)</div>
+    <div class="li"><div class="ls" style="background:#eef2fb;border-color:#94a3b8;"></div>Left Input Adapter</div>
+    <div class="li"><div class="ls" style="background:#fff8e1;border-color:#f9a825;"></div>Action (insert / modify / retract)</div>
+    <div class="li" style="align-items:flex-start;gap:0.5rem;">
+      <svg width="28" height="14"><line x1="2" y1="7" x2="26" y2="7" stroke="#7b1fa2" stroke-width="2" stroke-dasharray="4,3"/></svg>
+      Inter-rule dependency (purple dashed)
+    </div>
+  </div>
+</div>
+
+<figcaption>
+  <b>Fig.</b> RETE alpha/beta network for Infomap Clusters 3 and 5 of <code>taxonomy.drl</code>.
+  Cluster 3 is a pure alpha chain: <code>MarketEvent</code> → two alpha filters → insert <code>SignificantTrade</code>, which immediately activates the CLEANUP terminal.
+  Cluster 5 shares a single <code>OTN[RiskConfig]</code> node feeding a Left Input Adapter into both a <em>Not Node</em> (BOOTSTRAP guard) and a <em>Join Node</em> (D30).
+  The BOOTSTRAP insert of <code>TradeStats</code> subsequently activates the D30 join (purple dashed arc).
+</figcaption>
+
+</body>
+</html>

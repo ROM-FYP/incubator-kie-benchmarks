@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wikimedia CEP Benchmark Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1f2937;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --seq: #58a6ff; --par-eval: #3fb950; --par-full: #d2a8ff; --cluster: #ff7b72;
+    --c1: #f78166; --c2: #79c0ff; --c3: #56d364; --c4: #e3b341;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; padding: 2rem; }
+  header { text-align: center; margin-bottom: 3rem; }
+  header h1 { font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #58a6ff, #d2a8ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  header p { color: var(--muted); margin-top: 0.5rem; font-size: 0.9rem; }
+  .legend-bar { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin: 1.5rem 0; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--muted); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; max-width: 1400px; margin: 0 auto; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; transition: box-shadow 0.2s; }
+  .card:hover { box-shadow: 0 4px 24px rgba(88,166,255,0.12); }
+  .card.full-width { grid-column: 1 / -1; }
+  .card h2 { font-size: 0.95rem; font-weight: 600; color: var(--text); margin-bottom: 0.25rem; }
+  .card .subtitle { font-size: 0.78rem; color: var(--muted); margin-bottom: 1.2rem; }
+  .chart-wrap { position: relative; height: 320px; }
+  .chart-wrap.tall { height: 380px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .card.full-width { grid-column: 1; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wikimedia CEP Benchmark Dashboard</h1>
+  <p>JMH SingleShotTime · 5 measurement iterations · -Xms4g -Xmx4g · Drools 17.0.12</p>
+</header>
+
+<div class="legend-bar">
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Sequential Baseline</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>PARALLEL_EVALUATION (avg)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d2a8ff"></div>FULLY_PARALLEL (avg)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff7b72"></div>Cluster V3</div>
+</div>
+
+<div class="grid">
+
+  <!-- Chart 1: Execution Time Grouped Bar -->
+  <div class="card">
+    <h2>① Execution Time vs. Dataset Size</h2>
+    <div class="subtitle">Mean time per operation (ms/op) — lower is better</div>
+    <div class="chart-wrap"><canvas id="c1"></canvas></div>
+  </div>
+
+  <!-- Chart 2: Throughput Scaling Line -->
+  <div class="card">
+    <h2>② Throughput Scaling</h2>
+    <div class="subtitle">Events processed per second — higher is better</div>
+    <div class="chart-wrap"><canvas id="c2"></canvas></div>
+  </div>
+
+  <!-- Chart 3: Memory per Operation -->
+  <div class="card">
+    <h2>③ Memory per Operation</h2>
+    <div class="subtitle">Heap allocated per full run (GB) — lower is better</div>
+    <div class="chart-wrap"><canvas id="c3"></canvas></div>
+  </div>
+
+  <!-- Chart 4: GC Overhead -->
+  <div class="card">
+    <h2>④ GC Overhead</h2>
+    <div class="subtitle">Total GC time (ms) and GC count per run</div>
+    <div class="chart-wrap"><canvas id="c4"></canvas></div>
+  </div>
+
+  <!-- Chart 5: Variability Error Bars -->
+  <div class="card">
+    <h2>⑤ Execution Time Variability (Mean ± Stdev)</h2>
+    <div class="subtitle">Error bars show standard deviation across 5 iterations</div>
+    <div class="chart-wrap tall"><canvas id="c5"></canvas></div>
+  </div>
+
+  <!-- Chart 6: Cluster Workload Stacked Bar -->
+  <div class="card">
+    <h2>⑥ Cluster V3 — Per-Session Rules Fired</h2>
+    <div class="subtitle">Workload distribution across clusters by dataset size</div>
+    <div class="chart-wrap tall"><canvas id="c6"></canvas></div>
+  </div>
+
+  <!-- Chart 7: Time Scaling Scatter -->
+  <div class="card full-width">
+    <h2>⑦ Time Scaling — Linear Fit</h2>
+    <div class="subtitle">Execution time vs. event count with linear trend lines (O(n) check)</div>
+    <div class="chart-wrap"><canvas id="c7"></canvas></div>
+  </div>
+
+</div>
+
+<script>
+const SPLITS = ['400K', '800K', '1200K', '1600K'];
+const EVENTS = [400000, 800000, 1200000, 1600000];
+
+// ── Raw data ──────────────────────────────────────────────────────────────
+const data = {
+  seq:   { time: [26247.8, 52596.0, 77081.5, 107591.1], evs: [15239,15210,15568,14871], mem: [1.04e10,2.10e10,3.12e10,4.20e10], gc_count:[20,42,61,84], gc_time:[411,835,1191,3091] },
+  peval: { time: [26627.6, 52893.2, 78520.6, 107719.5], evs: [14946,15126,15284,14855] },
+  pfull: { time: [26328.6, 52711.8, 78518.6, 105696.7], evs: [15195,15177,15286,15138] },
+  clv3:  { time: [7935.5,  15358.9, 27042.6, 38923.1],  evs: [50406,52087,44374,41107], mem: [3.03e9,5.77e9,8.67e9,1.21e10], gc_count:[7,16,35,67], gc_time:[232,661,1115,1832] },
+};
+
+// Per-iteration stdev (averaged across runs for parallel modes)
+const stdev = {
+  seq:   [348.7, 804.7, 579.1, 1134.0],
+  peval: [306.5, 364.5, 2291.7, 1345.5], // avg of 3 run stdevs
+  pfull: [269.7, 205.4, 2268.4, 946.6],
+  clv3:  [126.5, 166.1, 402.6, 254.4],
+};
+
+// Cluster V3 rules fired per session
+const clusterRules = {
+  c1: [835260,  1656882, 2589606, 3452904],
+  c2: [212675,  429488,  631278,  841045],
+  c3: [368681,  750719,  1098328, 1481173],
+  c4: [4668,    11130,   18876,   29172],
+};
+
+// ── Shared chart defaults ─────────────────────────────────────────────────
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = 'Inter';
+
+const COLORS = { seq:'#58a6ff', peval:'#3fb950', pfull:'#d2a8ff', clv3:'#ff7b72' };
+const alpha = (hex, a) => hex + Math.round(a*255).toString(16).padStart(2,'0');
+
+function baseOpts(title='', extra={}) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { backgroundColor:'#1f2937', borderColor:'#30363d', borderWidth:1, titleColor:'#e6edf3', bodyColor:'#8b949e', padding:10 }, ...extra },
+    scales: {
+      x: { grid: { color:'#21262d' }, ticks: { color:'#8b949e' } },
+      y: { grid: { color:'#21262d' }, ticks: { color:'#8b949e' } }
+    }
+  };
+}
+
+// ── Chart 1: Execution Time Grouped Bar ───────────────────────────────────
+new Chart(document.getElementById('c1'), {
+  type: 'bar',
+  data: {
+    labels: SPLITS,
+    datasets: [
+      { label:'Sequential',        data: data.seq.time,  backgroundColor: alpha(COLORS.seq,0.8),  borderColor: COLORS.seq,  borderWidth:1 },
+      { label:'PARALLEL_EVAL',     data: data.peval.time, backgroundColor: alpha(COLORS.peval,0.8), borderColor: COLORS.peval, borderWidth:1 },
+      { label:'FULLY_PARALLEL',    data: data.pfull.time, backgroundColor: alpha(COLORS.pfull,0.8), borderColor: COLORS.pfull, borderWidth:1 },
+      { label:'Cluster V3',        data: data.clv3.time,  backgroundColor: alpha(COLORS.clv3,0.8),  borderColor: COLORS.clv3,  borderWidth:1 },
+    ]
+  },
+  options: { ...baseOpts(), plugins: { legend:{ display:true, labels:{color:'#8b949e',boxWidth:12} } }, scales: { x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}, y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}, title:{display:true,text:'ms / op',color:'#8b949e'}} } }
+});
+
+// ── Chart 2: Throughput Line ───────────────────────────────────────────────
+new Chart(document.getElementById('c2'), {
+  type: 'line',
+  data: {
+    labels: SPLITS,
+    datasets: [
+      { label:'Sequential',     data: data.seq.evs,   borderColor: COLORS.seq,   backgroundColor: alpha(COLORS.seq,0.1),   fill:true, tension:0.3, pointRadius:5, borderWidth:2 },
+      { label:'PARALLEL_EVAL',  data: data.peval.evs,  borderColor: COLORS.peval, backgroundColor: alpha(COLORS.peval,0.1), fill:true, tension:0.3, pointRadius:5, borderWidth:2 },
+      { label:'FULLY_PARALLEL', data: data.pfull.evs,  borderColor: COLORS.pfull, backgroundColor: alpha(COLORS.pfull,0.1), fill:true, tension:0.3, pointRadius:5, borderWidth:2 },
+      { label:'Cluster V3',     data: data.clv3.evs,   borderColor: COLORS.clv3,  backgroundColor: alpha(COLORS.clv3,0.1),  fill:true, tension:0.3, pointRadius:5, borderWidth:2 },
+    ]
+  },
+  options: { ...baseOpts(), plugins:{ legend:{display:true,labels:{color:'#8b949e',boxWidth:12}} }, scales:{ x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}, y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'Events / s',color:'#8b949e'}} } }
+});
+
+// ── Chart 3: Memory per Operation Bar ─────────────────────────────────────
+const memGB_seq  = data.seq.mem.map(v => +(v/1e9).toFixed(2));
+const memGB_clv3 = data.clv3.mem.map(v => +(v/1e9).toFixed(2));
+new Chart(document.getElementById('c3'), {
+  type: 'bar',
+  data: {
+    labels: SPLITS,
+    datasets: [
+      { label:'Sequential', data: memGB_seq,  backgroundColor: alpha(COLORS.seq,0.8),  borderColor: COLORS.seq,  borderWidth:1 },
+      { label:'Cluster V3', data: memGB_clv3, backgroundColor: alpha(COLORS.clv3,0.8), borderColor: COLORS.clv3, borderWidth:1 },
+    ]
+  },
+  options: { ...baseOpts(), plugins:{legend:{display:true,labels:{color:'#8b949e',boxWidth:12}}}, scales:{ x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}, y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'GB allocated / op',color:'#8b949e'}} } }
+});
+
+// ── Chart 4: GC Overhead (dual axis) ─────────────────────────────────────
+new Chart(document.getElementById('c4'), {
+  type: 'bar',
+  data: {
+    labels: SPLITS,
+    datasets: [
+      { label:'GC Time – Sequential (ms)', data: data.seq.gc_time,  backgroundColor: alpha(COLORS.seq,0.7),  borderColor: COLORS.seq,  borderWidth:1, yAxisID:'y' },
+      { label:'GC Time – Cluster V3 (ms)', data: data.clv3.gc_time, backgroundColor: alpha(COLORS.clv3,0.7), borderColor: COLORS.clv3, borderWidth:1, yAxisID:'y' },
+      { label:'GC Count – Sequential',     data: data.seq.gc_count,  type:'line', borderColor: COLORS.seq,  backgroundColor:'transparent', borderDash:[4,4], pointRadius:5, yAxisID:'y2', borderWidth:2 },
+      { label:'GC Count – Cluster V3',     data: data.clv3.gc_count, type:'line', borderColor: COLORS.clv3, backgroundColor:'transparent', borderDash:[4,4], pointRadius:5, yAxisID:'y2', borderWidth:2 },
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:true,labels:{color:'#8b949e',boxWidth:12}} },
+    scales:{
+      x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}},
+      y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'GC Time (ms)',color:'#8b949e'},position:'left'},
+      y2:{grid:{drawOnChartArea:false},ticks:{color:'#8b949e'},title:{display:true,text:'GC Count',color:'#8b949e'},position:'right'}
+    }
+  }
+});
+
+// ── Chart 5: Variability Error-Bar via custom plugin ──────────────────────
+const errPlugin = {
+  id:'errBars',
+  afterDatasetsDraw(chart) {
+    const {ctx, data: d, scales:{x,y}} = chart;
+    d.datasets.forEach((ds,di) => {
+      if (!ds._stdev) return;
+      ds._stdev.forEach((sd, i) => {
+        const xPos = x.getPixelForValue(i) + (di - 1.5) * 14;
+        const yMid = y.getPixelForValue(ds.data[i]);
+        const yTop = y.getPixelForValue(ds.data[i] + sd);
+        const yBot = y.getPixelForValue(ds.data[i] - sd);
+        ctx.save(); ctx.strokeStyle = ds.borderColor; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xPos, yTop); ctx.lineTo(xPos, yBot); ctx.stroke();
+        [-5,5].forEach(w => { ctx.beginPath(); ctx.moveTo(xPos-5,yTop+w*0); ctx.lineTo(xPos+5,yTop+w*0); ctx.stroke(); });
+        ctx.beginPath(); ctx.moveTo(xPos-5,yTop); ctx.lineTo(xPos+5,yTop); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xPos-5,yBot); ctx.lineTo(xPos+5,yBot); ctx.stroke();
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(errPlugin);
+
+new Chart(document.getElementById('c5'), {
+  type: 'bar',
+  data: {
+    labels: SPLITS,
+    datasets: [
+      { label:'Sequential',     data: data.seq.time,   _stdev: stdev.seq,   backgroundColor: alpha(COLORS.seq,0.75),   borderColor: COLORS.seq,   borderWidth:1 },
+      { label:'PARALLEL_EVAL',  data: data.peval.time,  _stdev: stdev.peval, backgroundColor: alpha(COLORS.peval,0.75), borderColor: COLORS.peval, borderWidth:1 },
+      { label:'FULLY_PARALLEL', data: data.pfull.time,  _stdev: stdev.pfull, backgroundColor: alpha(COLORS.pfull,0.75), borderColor: COLORS.pfull, borderWidth:1 },
+      { label:'Cluster V3',     data: data.clv3.time,   _stdev: stdev.clv3,  backgroundColor: alpha(COLORS.clv3,0.75),  borderColor: COLORS.clv3,  borderWidth:1 },
+    ]
+  },
+  options: { ...baseOpts(), plugins:{legend:{display:true,labels:{color:'#8b949e',boxWidth:12}}}, scales:{ x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}, y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'ms / op',color:'#8b949e'}} } }
+});
+
+// ── Chart 6: Cluster V3 Stacked Workload ──────────────────────────────────
+new Chart(document.getElementById('c6'), {
+  type: 'bar',
+  data: {
+    labels: SPLITS,
+    datasets: [
+      { label:'C1 Minor',            data: clusterRules.c1.map(v=>v/1e6), backgroundColor: alpha('#f78166',0.85), borderColor:'#f78166', borderWidth:1 },
+      { label:'C2 Bot',              data: clusterRules.c2.map(v=>v/1e6), backgroundColor: alpha('#79c0ff',0.85), borderColor:'#79c0ff', borderWidth:1 },
+      { label:'C3 Content+Vandalism',data: clusterRules.c3.map(v=>v/1e6), backgroundColor: alpha('#56d364',0.85), borderColor:'#56d364', borderWidth:1 },
+      { label:'C4 Discussion',       data: clusterRules.c4.map(v=>v/1e6), backgroundColor: alpha('#e3b341',0.85), borderColor:'#e3b341', borderWidth:1 },
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:true,labels:{color:'#8b949e',boxWidth:12}}, tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${(c.raw*1e6).toLocaleString()} rules`}} },
+    scales:{
+      x:{stacked:true,grid:{color:'#21262d'},ticks:{color:'#8b949e'}},
+      y:{stacked:true,grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'Rules Fired (millions)',color:'#8b949e'}}
+    }
+  }
+});
+
+// ── Chart 7: Time Scaling Scatter + Trend ─────────────────────────────────
+function linReg(xs, ys) {
+  const n = xs.length, sx = xs.reduce((a,b)=>a+b,0), sy = ys.reduce((a,b)=>a+b,0);
+  const sxy = xs.reduce((a,v,i)=>a+v*ys[i],0), sxx = xs.reduce((a,v)=>a+v*v,0);
+  const m = (n*sxy - sx*sy) / (n*sxx - sx*sx), b = (sy - m*sx)/n;
+  return {m, b};
+}
+function trendLine(xs, m, b, pts=50) {
+  const mn = Math.min(...xs), mx = Math.max(...xs);
+  return Array.from({length:pts}, (_,i)=>{ const x=mn+(mx-mn)*i/(pts-1); return {x,y:m*x+b}; });
+}
+
+const archs = [
+  { label:'Sequential',     col:COLORS.seq,   ys: data.seq.time  },
+  { label:'PARALLEL_EVAL',  col:COLORS.peval,  ys: data.peval.time },
+  { label:'FULLY_PARALLEL', col:COLORS.pfull,  ys: data.pfull.time },
+  { label:'Cluster V3',     col:COLORS.clv3,   ys: data.clv3.time  },
+];
+
+const scatterDS = [];
+archs.forEach(a => {
+  const pts = EVENTS.map((x,i) => ({x: x/1000, y: a.ys[i]}));
+  const {m,b} = linReg(EVENTS.map(v=>v/1000), a.ys);
+  const trend = trendLine(EVENTS.map(v=>v/1000), m, b);
+  scatterDS.push({ label: a.label, data: pts, backgroundColor: a.col, pointRadius:6, showLine:false, type:'scatter' });
+  scatterDS.push({ label: a.label+' (trend)', data: trend, borderColor: a.col+'99', borderWidth:1.5, borderDash:[3,3], pointRadius:0, showLine:true, fill:false, type:'line' });
+});
+
+new Chart(document.getElementById('c7'), {
+  type:'scatter',
+  data:{ datasets: scatterDS },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:true,labels:{color:'#8b949e',boxWidth:12,filter:i=>!i.text.includes('trend')}} },
+    scales:{
+      x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'Event Count (thousands)',color:'#8b949e'}},
+      y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'ms / op',color:'#8b949e'}}
+    }
+  }
+});
+</script>
+</body>
+</html>
