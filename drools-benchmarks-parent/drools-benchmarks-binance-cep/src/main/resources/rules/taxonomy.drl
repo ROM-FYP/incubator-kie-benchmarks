@@ -721,28 +721,35 @@ then
   modify($d) { setTier(depthTier($bd, $ad, $dCrit, $dLow, $dMed)) }
 end
 
+// Option B: ModeState guard added — now a 2-fact join (DepthState + ModeState).
+// Suppresses alert if symbol is HALTED (kill-switch active).
 rule "E35_DepthCollapse"
   no-loop
 when
-  $d : DepthState( $sym : symbol, tier == "CRIT_LOW" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $d : DepthState( symbol == $sym, tier == "CRIT_LOW" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "E35_DepthCollapse", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "E35_DepthCollapse", "HIGH", System.currentTimeMillis(), "Book depth critically thin"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "E36_SpreadBlowout"
   no-loop
 when
-  $s : SpreadState( $sym : symbol, tier == "CRIT" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $s : SpreadState( symbol == $sym, tier == "CRIT" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "E36_SpreadBlowout", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "E36_SpreadBlowout", "HIGH", System.currentTimeMillis(), "Spread critically wide"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "E37_PersistentThinLiquidity"
   no-loop
 when
-  $d : DepthState( $sym : symbol, tier == "LOW" || tier == "CRIT_LOW" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "E37_PersistentThinLiquidity", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "E37_PersistentThinLiquidity", "MED", System.currentTimeMillis(), "Liquidity persistently thin"));
 end
 
 rule "E38_ImbalanceComputeTier_New"
@@ -769,20 +776,24 @@ then
   modify($is) { setImbalance(im), setTier(tier), setTsMs($ts) }
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "E39_ImbalancePersistence"
   no-loop
 when
-  $i : ImbalanceState( $sym : symbol, tier == "EXTREME" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $i : ImbalanceState( symbol == $sym, tier == "EXTREME" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "E39_ImbalancePersistence", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "E39_ImbalancePersistence", "MED", System.currentTimeMillis(), "Order-book imbalance extreme"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "E40_ImbalanceFlipFlop"
   no-loop
 when
-  $i : ImbalanceState( $sym : symbol )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $i : ImbalanceState( symbol == $sym )
 then
-  channels["alerts"].send(new RiskSignal($sym, "E40_ImbalanceFlipFlop", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "E40_ImbalanceFlipFlop", "LOW", System.currentTimeMillis(), "Imbalance state updated"));
 end
 
 rule "E41_LiquidityStressCombine"
@@ -810,20 +821,24 @@ end
 
 
 
+// Option B: ModeState guard — 2-fact join.
 rule "F47_VolSpike"
   no-loop
 when
-  $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $v : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "F47_VolSpike", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "F47_VolSpike", "HIGH", System.currentTimeMillis(), "Volatility spiked to HIGH/CRIT tier"));
 end
 
+// Option B: ModeState guard — 2-fact join (distinguishes from F47 via alert severity).
 rule "F48_VolPersistenceHigh"
   no-loop
 when
-  $v : VolState( $sym : symbol, tier == "HIGH" || tier == "CRIT" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $v : VolState( symbol == $sym, tier == "CRIT" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "F48_VolPersistenceHigh", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "F48_VolPersistenceHigh", "CRIT", System.currentTimeMillis(), "Volatility persists at CRIT tier"));
 end
 
 
@@ -837,20 +852,24 @@ then
   channels["alerts"].send(new RiskSignal($sym, "F50_BookDrivenMove", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "F51_RegimeShiftToSafe"
   no-loop
 when
-  $v : VolState( $sym : symbol, tier == "CRIT" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $v : VolState( symbol == $sym, tier == "CRIT" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "F51_RegimeShiftToSafe", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "F51_RegimeShiftToSafe", "CRIT", System.currentTimeMillis(), "Extreme volatility regime active"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "F52_RegimeNormalizationEligibility"
   no-loop
 when
-  $v : VolState( $sym : symbol, tier == "LOW" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $v : VolState( symbol == $sym, tier == "LOW" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "F52_RegimeNormalizationEligibility", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "F52_RegimeNormalizationEligibility", "LOW", System.currentTimeMillis(), "Volatility normalised — regime eligible for reset"));
 end
 
 // ==========================================================
@@ -938,12 +957,14 @@ then
   channels["alerts"].send(new RiskSignal($sym, "G59_MarkStaleButMarketActive", "INFO", System.currentTimeMillis(), "Fired"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "G60_SuddenDivergenceReversalFlag"
   no-loop
 when
-  $d : MarkIndexState( $sym : symbol, tier == "LOW" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $d : MarkIndexState( symbol == $sym, tier == "LOW" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "G60_SuddenDivergenceReversalFlag", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "G60_SuddenDivergenceReversalFlag", "LOW", System.currentTimeMillis(), "Mark-index divergence resolved"));
 end
 
 // ==========================================================
@@ -992,20 +1013,84 @@ then
 end
 
 
+// Option B: ModeState guard — 2-fact join.
 rule "H66_CascadePersistenceEscalate"
   no-loop
 when
-  $l : LiquidationStats( $sym : symbol, tier == "CRIT" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $l : LiquidationStats( symbol == $sym, tier == "CRIT" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "H66_CascadePersistenceEscalate", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "H66_CascadePersistenceEscalate", "CRIT", System.currentTimeMillis(), "Liquidation cascade persists at CRIT tier"));
 end
 
+// Option B: ModeState guard — 2-fact join.
 rule "H67_CascadeCooldownEligibility"
   no-loop
 when
-  $l : LiquidationStats( $sym : symbol, tier == "LOW" )
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $l : LiquidationStats( symbol == $sym, tier == "LOW" )
 then
-  channels["alerts"].send(new RiskSignal($sym, "H67_CascadeCooldownEligibility", "INFO", System.currentTimeMillis(), "Fired"));
+  channels["alerts"].send(new RiskSignal($sym, "H67_CascadeCooldownEligibility", "LOW", System.currentTimeMillis(), "Liquidation cascade cooled down"));
+end
+
+// ==========================================================
+// N) Compound Cross-Section Alerts (Rules N88-N90)
+// Option C: Multi-fact compound rules joining 3-4 derived states
+// from different sections. These rules exercise the Rete beta network
+// more heavily than single-section alerts.
+// ==========================================================
+
+// N88: Liquidity Triple Threat — spread blowout + thin book + extreme imbalance
+// Requires simultaneous stress across 3 independently-derived liquidity dimensions.
+// Join: SpreadState (E) x DepthState (E) x ImbalanceState (E) x ModeState (I)
+// Category: JOIN (4 conditions)
+rule "N88_CompoundLiquidityTripleThreat"
+  no-loop
+when
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $s : SpreadState( symbol == $sym, tier == "CRIT" )
+  $d : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
+  $i : ImbalanceState( symbol == $sym, tier == "EXTREME" )
+then
+  channels["alerts"].send(new RiskSignal($sym, "N88_LiquidityTripleThreat", "CRIT",
+      System.currentTimeMillis(),
+      "Compound: spread CRIT + depth thin + imbalance EXTREME simultaneously"));
+end
+
+// N89: Dislocation-Volatility Convergence — mark dislocation AND high volatility AND thin book
+// Detects when futures mark price is dislocated from index at the same time as
+// volatility is elevated and the book is thin — a compounding systemic risk signal.
+// Join: MarkIndexState (G) x VolState (F) x DepthState (E) x ModeState (I)
+// Category: JOIN (4 conditions)
+rule "N89_DislocationVolatilityConvergence"
+  no-loop
+when
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $mis : MarkIndexState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
+  $vs  : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
+  $ds  : DepthState( symbol == $sym, tier == "LOW" || tier == "CRIT_LOW" )
+then
+  channels["alerts"].send(new RiskSignal($sym, "N89_DislocationVolatilityConvergence", "CRIT",
+      System.currentTimeMillis(),
+      "Compound: mark dislocation + high vol + thin book — systemic stress"));
+end
+
+// N90: Liquidation-Spread-Volatility Storm — liq cascade + spread blowout + vol spike
+// Detects the most dangerous combination: forced liquidations driving spread and vol
+// simultaneously. Requires LiquidationStats (H), SpreadState (E), VolState (F).
+// Join: LiquidationStats (H) x SpreadState (E) x VolState (F) x ModeState (I)
+// Category: JOIN (4 conditions)
+rule "N90_LiquidationStorm"
+  no-loop
+when
+  $mode : ModeState( $sym : symbol, mode != "HALTED" )
+  $ls  : LiquidationStats( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
+  $ss  : SpreadState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
+  $vs  : VolState( symbol == $sym, tier == "HIGH" || tier == "CRIT" )
+then
+  channels["alerts"].send(new RiskSignal($sym, "N90_LiquidationStorm", "CRIT",
+      System.currentTimeMillis(),
+      "Compound: liquidation cascade + spread blowout + volatility spike"));
 end
 
 // ==========================================================
