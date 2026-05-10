@@ -100,17 +100,23 @@ public class RiskConfig {
         this.spreadMedBps = 5;
         this.spreadHighBps = 20;
         this.spreadCritBps = 100;
-        this.depthHigh = 100000;
-        this.depthMed = 50000;
-        this.depthLow = 10000;
-        this.depthCritLow = 1000;
+        // Depth thresholds calibrated to DERIVE_DepthState_Update proxy.
+        // depthProxy = 10000/spreadBps. Typical BTCUSDT: spreadBps~1 => depth~10000.
+        // LOW tier means spread is wide (thin book).
+        this.depthHigh    = 5000;  // spreadBps <= 2  => healthy book
+        this.depthMed     = 1000;  // spreadBps <= 10 => moderate
+        this.depthLow     =  500;  // spreadBps <= 20 => thin
+        this.depthCritLow =  100;  // spreadBps >= 100 bps => critically thin
         this.trMed = 10;
         this.trHigh = 50;
         this.trCrit = 200;
         this.tradeOutlierBps = 100;
-        this.volMed = 50;
-        this.volHigh = 200;
-        this.volCrit = 500;
+        // Vol thresholds calibrated to UPD_VolSpreadProxy output.
+        // vol10s = |spreadBps_change| per DEPTH event. Typical BTCUSDT spread
+        // moves 0.2-1.0 bps between ticks. HIGH = notable jump, CRIT = extreme.
+        this.volMed  = 0.5;   // 0.5 bps spread change => elevated vol
+        this.volHigh = 2.0;   // 2.0 bps change       => high vol
+        this.volCrit = 5.0;   // 5.0 bps change       => critical vol
         this.dislocMedBps = 10;
         this.dislocHighBps = 50;
         this.dislocCritBps = 200;
