@@ -1,0 +1,67 @@
+
+digraph RulePipeline {
+    rankdir=TB;
+    fontname="Helvetica";
+    fontsize=13;
+    bgcolor="white";
+    ranksep=0.55;
+    nodesep=0.5;
+    margin=0.2;
+
+    node [fontname="Helvetica", fontsize=10, style="filled,rounded", shape=box,
+          penwidth=1.5, margin="0.18,0.12", width=2.2];
+    edge [fontname="Helvetica", fontsize=8, color="#333333", penwidth=1.1, arrowsize=0.7];
+
+    // ── INPUT ──
+    INPUT [label="MarketEvent Stream\n(DEPTH · TRADE · MARK · INDEX · LIQ)",
+           shape=parallelogram, fillcolor="#E8E8E8", color="#333333", fontsize=11, width=3.2];
+
+    // ── PHASE 1: Lifecycle ──
+    P1 [label="Phase 1: Lifecycle\nBootstrap singletons · Event cleanup\n(16 rules)",
+        fillcolor="#F5F5F5", color="#666666"];
+
+    // ── PHASE 2: Ingestion ──
+    P2 [label="Phase 2: Ingestion\nValidation · Filtering · Timestamp update\n(13 rules)",
+        fillcolor="#DCEDC8", color="#558B2F"];
+
+    // ── PHASE 3: Data Quality ──
+    P3 [label="Phase 3: Data Quality\nFeed health · Book validity · Trade sanity\n(24 rules)",
+        fillcolor="#BBDEFB", color="#1565C0"];
+
+    // ── PHASE 4: Derived Analytics ──
+    P4 [label="Phase 4: Derived Analytics\nSpread · Depth · Imbalance · Volatility\n(20 rules)",
+        fillcolor="#FFE0B2", color="#EF6C00"];
+
+    // ── PHASE 5: Risk Detection ──
+    P5 [label="Phase 5: Risk Detection\nDislocation · Liquidation · Forward chains\n(27 rules)",
+        fillcolor="#D1C4E9", color="#4527A0"];
+
+    // ── PHASE 6: Policy Engine ──
+    P6 [label="Phase 6: Policy Engine\nMode transitions · Kill-switch · Recovery\n(5 rules)",
+        fillcolor="#FFCDD2", color="#C62828"];
+
+    // ── OUTPUTS ──
+    SIGNAL [label="RiskSignal\n(alerts channel)",
+            shape=parallelogram, fillcolor="#E8E8E8", color="#333333", fontsize=11, width=2.4];
+    MODE [label="ModeState\n(NORMAL → THROTTLED → HALTED)",
+          shape=parallelogram, fillcolor="#E8E8E8", color="#333333", fontsize=11, width=2.8];
+
+    // ══════════════════════════
+    //  Main pipeline flow
+    // ══════════════════════════
+    INPUT -> P1 [label="  raw events"];
+    P1 -> P2 [label="  initialised facts"];
+    P2 -> P3 [label="  valid events +\n  timestamps"];
+    P3 -> P4 [label="  BestBidAsk ·\n  FeedHealth"];
+    P4 -> P5 [label="  SpreadState · DepthState\n  VolState · ImbalanceState"];
+    P5 -> P6 [label="  risk signals +\n  cascade status"];
+
+    // Signal outputs (multiple phases emit)
+    P3 -> SIGNAL [style=dashed, color="#555555", constraint=false];
+    P4 -> SIGNAL [style=dashed, color="#555555", constraint=false];
+    P5 -> SIGNAL [style=dashed, color="#555555"];
+    P6 -> MODE;
+
+    // Layout hints
+    { rank=same; SIGNAL; MODE; }
+}

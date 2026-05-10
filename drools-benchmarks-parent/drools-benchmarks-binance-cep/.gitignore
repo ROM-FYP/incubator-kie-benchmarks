@@ -1,0 +1,62 @@
+# Maven
+target/
+dependency-reduced-pom.xml
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Annotation processing (Eclipse/Maven)
+.apt_generated/
+.apt_generated_tests/
+
+# JMH
+jmh-result.json
+*.jfr
+
+# Experiment outputs (large, generated)
+output/
+
+# Results
+docs/results/*.csv
+docs/results/*.html
+docs/results/*.jfr
+
+# Logs
+*.log
+*.out
+nohup.out
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Stray compiled classes in project root
+*.class
+
+# Raw data CSVs and recorder outputs (large, not for repo)
+# Catches binance-full-*.csv, binance-risk-*.csv and any future recorder output
+*.csv
+!src/**/*.csv
+
+# Causal trace outputs (large)
+*.jsonl
+binance_rule_graph.csv
+binance_rule_graph.net
