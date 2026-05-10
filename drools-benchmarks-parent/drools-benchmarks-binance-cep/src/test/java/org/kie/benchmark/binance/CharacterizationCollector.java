@@ -32,6 +32,7 @@ import org.kie.api.event.rule.RuleRuntimeEventListener;
 import org.kie.api.runtime.KieSession;
 import org.kie.benchmark.binance.analysis.DependencyGraphBuilder;
 import org.kie.benchmark.binance.analysis.DrlRuleParser;
+import org.kie.benchmark.binance.analysis.ForwardChainFinder;
 import org.kie.benchmark.binance.analysis.RuleMeta;
 import org.kie.benchmark.binance.model.*;
 import org.kie.benchmark.binance.provider.BinanceEventProvider;
@@ -450,6 +451,129 @@ public class CharacterizationCollector {
                 .filter(r -> !firedRuleNames.contains(r))
                 .sorted()
                 .forEach(r -> System.out.println("  ❌ " + r));
+
+        // ── Section E: Category firing probabilities ────────────────────────
+        // P(category fires | event arrives) = category_activations / total_events
+        // Categories derived from rule name prefix (section letter A-N + INFRA).
+        System.out.println();
+        System.out.println("── [E] Category Firing Probabilities ────────────────────");
+        System.out.println("  P(category fires | event) = category_activations / total_events");
+        System.out.println();
+
+        // Category classifier based on rule name prefix
+        java.util.function.Function<String, String> categorize = name -> {
+            if (name.startsWith("BOOTSTRAP_") || name.startsWith("CLEANUP_") ||
+                name.startsWith("UPD_")        || name.startsWith("DERIVE_") ||
+                name.startsWith("RECOVERY_"))            return "INFRA / LIFECYCLE";
+            if (name.startsWith("A"))                    return "A  Ingestion & Schema";
+            if (name.startsWith("B"))                    return "B  Feed Health & Connectivity";
+            if (name.startsWith("C"))                    return "C  Order Book Validity";
+            if (name.startsWith("D"))                    return "D  Trade Tape Sanity";
+            if (name.startsWith("E"))                    return "E  Derived Metrics (Spread/Depth)";
+            if (name.startsWith("F"))                    return "F  Volatility Regime";
+            if (name.startsWith("G"))                    return "G  Mark/Index Dislocation";
+            if (name.startsWith("H"))                    return "H  Liquidation Cascade";
+            if (name.startsWith("I"))                    return "I  Policy FSM (Mode Control)";
+            if (name.startsWith("J"))                    return "J  Forward Chain (Trade Sweep)";
+            if (name.startsWith("K"))                    return "K  Forward Chain (Micro-Vol)";
+            if (name.startsWith("L"))                    return "L  Forward Chain (Mark Diverge)";
+            if (name.startsWith("M"))                    return "M  Temporal CEP Sequences";
+            if (name.startsWith("N"))                    return "N  Compound Systemic Risk";
+            return "OTHER";
+        };
+
+        // Aggregate activations per category
+        Map<String, Long> catActivations = new TreeMap<>();
+        Map<String, Long> catRuleCount   = new TreeMap<>();
+        Map<String, Long> catFiredRules  = new TreeMap<>();
+        for (String ruleName : allRuleNames) {
+            String cat = categorize.apply(ruleName);
+            catRuleCount.merge(cat, 1L, Long::sum);
+            long fires = agendaM.fireCounts.containsKey(ruleName)
+                    ? agendaM.fireCounts.get(ruleName).get() : 0L;
+            catActivations.merge(cat, fires, Long::sum);
+            if (fires > 0) catFiredRules.merge(cat, 1L, Long::sum);
+        }
+
+        long totalEvts = allEvents.size();
+        long totalActs = totalFired;
+        System.out.printf("  %-35s  %6s  %8s  %10s  %8s  %8s%n",
+                "Category", "Rules", "Fired", "Activns", "P(fire)", "% of total");
+        System.out.println("  " + "-".repeat(82));
+        catActivations.entrySet().stream()
+                .sorted(Map.Entry.<String,Long>comparingByValue().reversed())
+                .forEach(e -> {
+                    String cat = e.getKey();
+                    long acts  = e.getValue();
+                    long rules = catRuleCount.getOrDefault(cat, 0L);
+                    long fired = catFiredRules.getOrDefault(cat, 0L);
+                    double prob = totalEvts > 0 ? (double) acts / totalEvts : 0;
+                    double pct  = totalActs > 0 ? 100.0 * acts / totalActs : 0;
+                    System.out.printf("  %-35s  %6d  %8d  %10s  %8.4f  %7.2f%%%n",
+                            cat, rules, fired,
+                            String.format("%,d", acts), prob, pct);
+                });
+
+        // ── Section F: Chain-depth firing probabilities ─────────────────────
+        // Uses ForwardChainFinder BFS from MarketEvent (the external entry fact).
+        // Depth 0 = rules directly consuming MarketEvent (alpha filters).
+        // Depth 1 = rules consuming facts PRODUCED by depth-0 rules, etc.
+        // P(depth-d fires | event) = sum(activations at depth d) / total_events
+        System.out.println();
+        System.out.println("── [F] Forward Chain Depth Firing Probabilities ─────────");
+        System.out.println("  Entry point: MarketEvent (externally inserted by Java replay loop)");
+        System.out.println("  P(depth-d fires | event) = activations_at_depth_d / total_events");
+        System.out.println();
+
+        ForwardChainFinder fcf = new ForwardChainFinder(ruleMetas);
+        ForwardChainFinder.ForwardChainResult fcResult = fcf.findForwardChain("MarketEvent");
+
+        // Build depth → [rules] map
+        Map<Integer, List<String>> byDepth = new TreeMap<>(fcResult.getChainsByDepth());
+
+        // Rules NOT in the chain (BOOTSTRAP, CLEANUP, rules reading only singleton facts)
+        Set<String> uncaptured = new LinkedHashSet<>(fcResult.getUncapturedRules());
+
+        System.out.printf("  %-8s  %-6s  %-8s  %-12s  %-8s  %-8s%n",
+                "Depth", "Rules", "Fired", "Activations", "P(fire)", "Cond prob");
+        System.out.println("  " + "-".repeat(60));
+
+        long depth0Acts = 0; // to compute conditional probability P(d+1 fires | d fired)
+        for (Map.Entry<Integer, List<String>> depthEntry : byDepth.entrySet()) {
+            int depth = depthEntry.getKey();
+            List<String> rulesAtDepth = depthEntry.getValue();
+            long depthActs  = rulesAtDepth.stream()
+                    .mapToLong(r -> agendaM.fireCounts.containsKey(r)
+                            ? agendaM.fireCounts.get(r).get() : 0L)
+                    .sum();
+            long firedCount = rulesAtDepth.stream()
+                    .filter(agendaM.fireCounts::containsKey).count();
+            double prob = totalEvts > 0 ? (double) depthActs / totalEvts : 0;
+            double condProb = depth == 0 ? 1.0
+                    : (depth0Acts > 0 ? (double) depthActs / depth0Acts : 0);
+            if (depth == 0) depth0Acts = depthActs;
+            System.out.printf("  Depth %-2d  %6d  %8d  %12s  %8.4f  %8.4f%n",
+                    depth, rulesAtDepth.size(), firedCount,
+                    String.format("%,d", depthActs), prob, condProb);
+        }
+
+        // Print uncaptured (not reachable from MarketEvent) summary
+        long uncapturedActs = uncaptured.stream()
+                .mapToLong(r -> agendaM.fireCounts.containsKey(r)
+                        ? agendaM.fireCounts.get(r).get() : 0L)
+                .sum();
+        System.out.printf("  %-8s  %6d  %8d  %12s  %8.4f  %8s%n",
+                "Other", uncaptured.size(),
+                uncaptured.stream().filter(agendaM.fireCounts::containsKey).count(),
+                String.format("%,d", uncapturedActs),
+                totalEvts > 0 ? (double) uncapturedActs / totalEvts : 0, "N/A");
+
+        System.out.println();
+        System.out.println("  Depth-level rule membership:");
+        for (Map.Entry<Integer, List<String>> e : byDepth.entrySet()) {
+            System.out.printf("  Depth %d: %s%n", e.getKey(),
+                    e.getValue().stream().sorted().collect(Collectors.joining(", ")));
+        }
     }
 
     /** Count regex pattern occurrences in text */

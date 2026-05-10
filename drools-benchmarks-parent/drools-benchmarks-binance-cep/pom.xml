@@ -110,17 +110,12 @@
                 <configuration>
                     <source>11</source>
                     <target>11</target>
-                    <!-- Exclude parallel classes that depend on external orchestrators
-                         not included in this module (ClusterParallelOrchestratorV3,
-                         PartitionPlan). These are research-only and not part of the
-                         core CEP benchmark. -->
                     <excludes>
                         <exclude>**/parallel/BinanceClusterBenchmarkV3.java</exclude>
                         <exclude>**/parallel/ParallelRuleOrchestrator.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
-
 
             <!-- Maven Shade Plugin for Uber JAR -->
             <plugin>
