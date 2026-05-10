@@ -26,3 +26,13 @@ hs_err_pid*
 
 # directory for Jenkinsfiles
 !.ci
+
+drools-benchmarks-parent/drools-benchmarks-cep-wikimedia/
+drools-benchmarks-parent/drools-benchmarks-opensky-airTrafficking/
+drools-benchmarks-parent/drools-dataset-builder/
+drools-benchmarks-parent/output/
+drools-benchmarks-parent/research_papers/
+drools-benchmarks-parent/run_all_heap_experiments.sh
+drools-benchmarks-parent/run_overnight.sh
+drools-benchmarks-parent/opensky_peak_heap_summary_new.csv
+drools-benchmarks-parent/peak_heap_summary.csv
