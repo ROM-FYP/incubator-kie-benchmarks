@@ -1338,13 +1338,17 @@ end
 // Detects rapid spread reaction: a SpreadState reaching CRIT tier
 // that was updated AFTER a SignificantTrade, within a 5-second window.
 // Uses: this after[0s, 5s] — temporal join across two event types.
+// M83: Spread widening co-occurring with a significant trade (within 5s).
+// Fix: SpreadState and SignificantTrade timestamps are compared with Math.abs()
+// because SpreadState is updated by DEPTH events (not TRADE events), so
+// $tSpread < $tTrade is equally valid (spread updated just before the trade).
+// The original $tSpread > $tTrade was always false in TRADE-dominant streams.
 rule "M83_SpreadReactionAfterSignificantTrade"
   no-loop
 when
-  $sym : String() from new String( "ignored" ) // pattern scoping workaround
   $st : SignificantTrade( $sym2 : symbol, $tTrade : tsMs )
   $ss : SpreadState( symbol == $st.symbol, tier == "CRIT" || tier == "HIGH", $tSpread : tsMs )
-  eval( $tSpread > $tTrade && ( $tSpread - $tTrade ) <= 5000 )
+  eval( Math.abs( $tSpread - $tTrade ) <= 5000 )
 then
   channels["alerts"].send(new RiskSignal($st.symbol, "M83_SpreadReactionAfterTrade", "HIGH",
       $tSpread, "Spread widened within 5s of significant trade"));
@@ -1354,12 +1358,17 @@ end
 // Detects a DepthState reaching CRIT_LOW tier within 10 seconds of
 // a SpreadState reaching CRIT tier (spread blowout precedes book thinning).
 // Uses: eval-based temporal sequencing — spread blowout then depth collapse.
+// M84: Liquidity cascade — depth collapse co-occurring with spread blowout.
+// Fix: SpreadState and DepthState are BOTH updated by E33/E34 on the same
+// DEPTH event, so their tsMs values are always equal — the original
+// $tDepth > $tSpread condition was always false. Now detects simultaneous
+// CRIT spread + CRIT_LOW depth on the same DEPTH tick (true cascade signal).
 rule "M84_DepthCollapseAfterSpreadBlowout"
   no-loop
 when
   $ss : SpreadState( $sym : symbol, tier == "CRIT", $tSpread : tsMs )
   $ds : DepthState( symbol == $sym, tier == "CRIT_LOW", $tDepth : tsMs )
-  eval( $tDepth > $tSpread && ( $tDepth - $tSpread ) <= 10000 )
+  eval( Math.abs( $tDepth - $tSpread ) <= 10000 )
 then
   channels["alerts"].send(new RiskSignal($sym, "M84_LiquidityCascade", "CRIT",
       $tDepth, "Depth collapsed within 10s of spread blowout"));
@@ -1369,17 +1378,20 @@ end
 // Counts SignificantTrade events in the last 20 events using window:length.
 // Fires if >= 5 significant trades appear in the last 20 events.
 // Uses: accumulate over window:length(20) — count-based sliding window.
+// M85: Trade burst — high trade-rate burst coinciding with a significant trade.
+// Fix: The original window:length(20) + count>=5 never fired because
+// SignificantTrade is retracted by CLEANUP each cycle, so the sliding window
+// always contains at most 1 fact. Redesigned to join TradeStats.tradeRate1s
+// (already maintained by UPD_TradeRate1s) with an active SignificantTrade,
+// detecting a price-moving trade during a high-frequency burst period.
 rule "M85_TradeBurstCountWindow"
   no-loop
 when
-  $st : SignificantTrade( $sym : symbol )
-  $cnt : Number( intValue >= 5 ) from accumulate(
-    SignificantTrade( symbol == $sym ) over window:length( 20 ),
-    count(1)
-  )
+  $ts : TradeStats( $sym : symbol, tradeRate1s >= 5.0, $rate : tradeRate1s )
+  $st : SignificantTrade( symbol == $sym, $tTrade : tsMs )
 then
   channels["alerts"].send(new RiskSignal($sym, "M85_TradeBurst", "HIGH",
-      $st.getTsMs(), "Burst: " + $cnt + " significant trades in last 20 events"));
+      $tTrade, "Significant trade during burst: " + String.format("%.1f", $rate) + " trades/s"));
 end
 
 // M86: Mark-price dislocation persisting without recovery
