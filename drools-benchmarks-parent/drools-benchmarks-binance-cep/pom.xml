@@ -110,10 +110,6 @@
                 <configuration>
                     <source>11</source>
                     <target>11</target>
-                    <excludes>
-                        <exclude>**/parallel/BinanceClusterBenchmarkV3.java</exclude>
-                        <exclude>**/parallel/ParallelRuleOrchestrator.java</exclude>
-                    </excludes>
                 </configuration>
             </plugin>
 
