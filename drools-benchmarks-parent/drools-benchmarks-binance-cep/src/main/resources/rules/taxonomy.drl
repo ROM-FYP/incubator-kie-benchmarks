@@ -1334,24 +1334,22 @@ end
 // All rules in this section are category: CEP
 // ==========================================================
 
-// M83: Spread widening AFTER a significant trade (temporal sequence)
-// Detects rapid spread reaction: a SpreadState reaching CRIT tier
-// that was updated AFTER a SignificantTrade, within a 5-second window.
-// Uses: this after[0s, 5s] — temporal join across two event types.
-// M83: Spread widening co-occurring with a significant trade (within 5s).
-// Fix: SpreadState and SignificantTrade timestamps are compared with Math.abs()
-// because SpreadState is updated by DEPTH events (not TRADE events), so
-// $tSpread < $tTrade is equally valid (spread updated just before the trade).
-// The original $tSpread > $tTrade was always false in TRADE-dominant streams.
-rule "M83_SpreadReactionAfterSignificantTrade"
+// M83: Significant trade co-occurring with high spread velocity.
+// Final fix: MarkIndexState tier stays LOW because BestBidAsk mid is
+// quantity-based (DEPTH p1/p2 = bid/ask quantities), making the bps()
+// mark-mid comparison meaningless. SpreadVelocityState.velocityBps IS
+// computed correctly by K76 from real mid-price changes between DEPTH ticks.
+// Semantic: a price-moving trade during a period of rapid spread change
+// signals a compound liquidity stress event.
+rule "M83_SignificantTradeDuringSpreadVelocity"
   no-loop
 when
-  $st : SignificantTrade( $sym2 : symbol, $tTrade : tsMs )
-  $ss : SpreadState( symbol == $st.symbol, tier == "CRIT" || tier == "HIGH", $tSpread : tsMs )
-  eval( Math.abs( $tSpread - $tTrade ) <= 5000 )
+  $st  : SignificantTrade( $sym : symbol, $tTrade : tsMs )
+  $svs : SpreadVelocityState( symbol == $sym, velocityBps >= 0.5 )
 then
-  channels["alerts"].send(new RiskSignal($st.symbol, "M83_SpreadReactionAfterTrade", "HIGH",
-      $tSpread, "Spread widened within 5s of significant trade"));
+  channels["alerts"].send(new RiskSignal($sym, "M83_TradeInHighVelocitySpread", "HIGH",
+      $tTrade, "Significant trade during spread velocity " +
+      String.format("%.2f", $svs.getVelocityBps()) + " bps/tick"));
 end
 
 // M84: Liquidity cascade — depth collapse AFTER spread blowout

@@ -117,10 +117,12 @@ public class RiskConfig {
         this.volMed  = 0.5;   // 0.5 bps spread change => elevated vol
         this.volHigh = 2.0;   // 2.0 bps change       => high vol
         this.volCrit = 5.0;   // 5.0 bps change       => critical vol
-        this.dislocMedBps = 10;
-        this.dislocHighBps = 50;
-        this.dislocCritBps = 200;
-        this.dislocPersistMs = 5000;
+        // Mark-mid dislocation: on liquid Binance perpetuals mark price is
+        // typically within 1-5 bps of mid. Thresholds calibrated to dataset.
+        this.dislocMedBps  = 1.0;   // 1 bps mark-mid gap  => moderate disloc
+        this.dislocHighBps = 3.0;   // 3 bps mark-mid gap  => high dislocation
+        this.dislocCritBps = 10.0;  // 10 bps mark-mid gap => critical disloc
+        this.dislocPersistMs = 100; // 100ms persistence check (event cadence)
         this.liqMed = 5;
         this.liqHigh = 20;
         this.liqCrit = 100;
