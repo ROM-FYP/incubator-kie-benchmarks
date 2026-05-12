@@ -1,0 +1,11 @@
+Manifest-Version: 1.0
+Created-By: Maven JAR Plugin 3.3.0
+Build-Jdk-Spec: 21
+Specification-Title: Drools CEP Wikimedia Benchmark
+Specification-Version: 1.0
+Specification-Vendor: The Apache Software Foundation
+Implementation-Title: Drools CEP Wikimedia Benchmark
+Implementation-Version: 1.0-SNAPSHOT
+Implementation-Vendor: The Apache Software Foundation
+Main-Class: org.kie.benchmark.cep.wikimedia.WikimediaCepBenchmark
+

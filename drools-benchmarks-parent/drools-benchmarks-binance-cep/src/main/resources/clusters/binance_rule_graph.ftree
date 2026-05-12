@@ -1,0 +1,128 @@
+# v2.6.1
+# ./Infomap binance_rule_graph_new.net . --clu --ftree
+# started at 2026-04-03 23:32:16
+# completed in 0.121 s
+# partitioned into 4 levels with 6 top modules
+# codelength 1.96254 bits
+# relative codelength savings 45.3481%
+# flow model undirected
+# path flow name node_id
+1:1:1 0.277081 "B12_TradeActiveBookSilent" 1
+1:1:2 0.177757 "UPD_LastSeen_Trade" 47
+1:1:3 0.088879 "D32_TradesWhileBookStale" 18
+1:2:1 0.0417753 "UPD_LastSeen_Depth" 45
+1:2:2 0.0208867 "B13_BookActiveTradeSilent" 2
+1:2:3 0.0104436 "C25_BookAgeStale" 13
+1:3:1 0.0033327 "B14_StaleMark" 3
+1:3:2 0.0022218 "UPD_LastSeen_Mark" 46
+1:3:3 0.0011109 "G59_MarkStaleButMarketActive" 30
+2:1:1 0.030745 "K76_Beta_SpreadVelocity" 37
+2:1:2 0.0269648 "DERIVE_BestBidAsk_Update" 20
+2:1:3 0.0204962 "K75_Alpha_DepthUpdate" 36
+2:1:4 0.0102481 "CLEANUP_RetractDepthUpdateTick" 14
+2:1:5 0.00535704 "C21_TopJumpNoTrades" 12
+2:2:1 0.040995 "K77_Beta_AssessMicroVolRisk" 38
+2:2:2 0.0204969 "K78_Beta_EmitMicroVolSignal" 39
+2:2:3 0.0202 "E34_DepthTiering" 23
+2:2:4 1.2454e-06 "BOOTSTRAP_SpreadVelocityState" 9
+2:2:5 6.22702e-07 "BOOTSTRAP_MicroVolatilityRisk" 8
+2:2:6 6.22702e-07 "E35_DepthCollapse" 24
+2:3:1 0.029076 "E33_SpreadComputeAndTier_Update" 22
+2:3:2 0.0198999 "E41_LiquidityStressCombine" 27
+2:3:3 0.00887842 "E36_SpreadBlowout" 25
+2:4:1:1 0.00444609 "L81_Beta_AssessDislocation" 42
+2:4:1:2 0.00222242 "L82_Beta_EmitDislocationSignal" 43
+2:4:1:3 0.00111152 "F43_VolTiering" 28
+2:4:1:4 6.22702e-07 "BOOTSTRAP_DislocationEscalation" 5
+2:4:2:1 0.00333332 "L80_Beta_MarkDivergence" 41
+2:4:2:2 0.0022218 "L79_Alpha_MarkPriceUpdate" 40
+2:4:2:3 0.0011109 "CLEANUP_RetractMarkPriceTick" 15
+2:4:2:4 1.2454e-06 "BOOTSTRAP_MarkDivergencePulsar" 7
+2:4:3:1 1.86811e-06 "BOOTSTRAP_VolState" 11
+2:4:3:2 6.22702e-07 "F52_RegimeNormalizationEligibility" 29
+2:5:1 1.86811e-06 "BOOTSTRAP_DepthState" 4
+2:5:2 6.22702e-07 "E37_PersistentThinLiquidity" 26
+3:1 0.0643427 "CLEANUP_RetractSignificantTrade" 16
+3:2 0.0643427 "J71_Alpha_SignificantTrade" 35
+4:1 2.98897e-06 "E33_SpreadComputeAndTier_New" 21
+4:2 1.93038e-06 "I68_EnterThrottled_OnDegraded" 33
+4:3 1.86811e-06 "I69_EnterSafe_OnLiquidityStress" 34
+4:4 1.36994e-06 "RECOVERY_ExitThrottledToNormal" 44
+4:5 1.2454e-06 "DERIVE_BestBidAsk_New" 19
+5:1 1.2454e-06 "BOOTSTRAP_LiquidationStats" 6
+5:2 6.22702e-07 "H61_LiqTiering" 31
+5:3 6.22702e-07 "H67_CascadeCooldownEligibility" 32
+6:1 6.22702e-07 "BOOTSTRAP_TradeStats" 10
+6:2 6.22702e-07 "D30_TradeRateTiering" 17
+*Links undirected
+#*Links path enterFlow exitFlow numEdges numChildren
+*Links root 0 0 3 6
+1 4 2.61535e-06
+2 4 1.36994e-06
+4 2 4.85708e-06
+*Links 1 1.30767e-06 1.30767e-06 4 3
+1 2 1.2454e-06
+2 1 0.0208873
+2 3 0.0022218
+3 2 0.0022218
+*Links 1:1 0.0104449 0.0104449 3 3
+1 2 0.177757
+1 3 0.177758
+2 1 0.177758
+*Links 1:2 0.0126668 0.0126668 3 3
+1 2 0.0208873
+1 3 0.0208873
+2 1 0.0186642
+*Links 1:3 0.0022218 0.0022218 2 3
+1 3 0.0022218
+2 1 0.0022218
+*Links 2 3.11351e-06 3.11351e-06 6 5
+1 2 0.0204962
+1 3 0.0204962
+1 4 0.0022218
+2 1 1.2454e-06
+2 3 0.0198999
+5 2 2.49081e-06
+*Links 2:1 0.0216084 0.0216084 4 5
+2 1 0.0204962
+2 5 0.0107141
+3 1 0.0204962
+3 4 0.0204962
+*Links 2:2 0.0202006 0.0202006 6 6
+1 2 0.0204975
+2 1 0.0204962
+3 1 0.0204962
+3 6 1.2454e-06
+4 1 1.2454e-06
+5 1 1.2454e-06
+*Links 2:3 0.0202 0.0202 2 3
+1 2 0.0198987
+1 3 0.0177557
+*Links 2:4 0.0011109 0.0011109 2 3
+2 1 0.00222305
+3 1 2.49081e-06
+*Links 2:4:1 0.00111277 0.00111277 4 4
+1 2 0.00222305
+2 1 0.0022218
+3 1 0.0022218
+4 1 1.2454e-06
+*Links 2:4:2 0.00222242 0.00222242 3 4
+2 1 0.0022218
+2 3 0.0022218
+4 1 1.2454e-06
+*Links 2:4:3 1.2454e-06 1.2454e-06 1 2
+1 2 1.2454e-06
+*Links 2:5 1.2454e-06 1.2454e-06 1 2
+1 2 1.2454e-06
+*Links 3 0 0 1 2
+2 1 0.128685
+*Links 4 4.42118e-06 4.42118e-06 4 5
+1 3 1.12086e-06
+2 3 1.2454e-06
+2 4 1.36994e-06
+5 1 1.2454e-06
+*Links 5 2.11758e-22 2.11758e-22 2 3
+1 2 1.2454e-06
+1 3 1.2454e-06
+*Links 6 0 0 1 2
+1 2 1.2454e-06

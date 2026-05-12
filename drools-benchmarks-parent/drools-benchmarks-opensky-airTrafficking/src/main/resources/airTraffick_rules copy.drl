@@ -1,0 +1,1026 @@
+package ats.surveillance.stca.prototype
+
+import java.lang.Math;
+import java.util.ArrayList;
+
+import bench.opensky.model.OpenSkyStateVector;
+import bench.opensky.model.TrackQuality;
+import bench.opensky.model.KinematicDelta;
+import bench.opensky.model.GridCell;
+import bench.opensky.model.PairCandidate;
+import bench.opensky.model.ConflictCandidate;
+import bench.opensky.model.CpaMetrics;
+import bench.opensky.model.PairRiskState;
+import bench.opensky.model.Alert;
+import bench.opensky.model.AlertAck;
+import bench.opensky.model.AlertInhibit;
+import bench.opensky.model.AuditEvent;
+import bench.opensky.model.Params;
+import bench.opensky.model.Status;
+
+import static bench.opensky.util.RuleMathUtil.nm;
+import static bench.opensky.util.RuleMathUtil.metersFromNm;
+import static bench.opensky.util.RuleMathUtil.haversineMeters;
+import static bench.opensky.util.RuleMathUtil.timeToCpaSec;
+
+import org.kie.api.time.SessionPseudoClock;
+
+dialect "java"
+
+/* -----------------------------
+   PSEUDO CLOCK GLOBAL
+   ----------------------------- */
+
+global SessionPseudoClock clock;
+
+
+/* ==========================================================
+   FACT LIFECYCLE — defined via Java annotations on POJOs:
+   @Role(Role.Type.EVENT) + @Expires("duration")
+   Requires KieBase in STREAM event-processing mode.
+   ========================================================== */
+
+
+/* ============================================================
+   PARAMETERS — R000
+   ============================================================ */
+
+rule "R000_LoadDefaultParams"
+salience 1000
+when
+    not Params()
+then
+    Params p = new Params();
+    p.setGridDeg(0.25);
+    p.setStalePosSec(20L);
+    p.setStaleAnySec(30L);
+    p.setNearDistNm(10.0);
+    p.setWarnDistNm(5.0);
+    p.setAlertDistNm(3.0);
+    p.setVertMinFt(1000.0);
+    p.setWarnTtcSec(90.0);
+    p.setAlertTtcSec(45.0);
+    p.setPersistSec(15.0);
+    insert(p);
+end
+
+
+/* ============================================================
+   TRACK / DATA QUALITY RULES (R001–R020)
+   ============================================================ */
+
+rule "R001_MissingPositionFlag"
+when
+    $s : OpenSkyStateVector( lat == null || lon == null )
+then
+    insert(new TrackQuality($s.getIcao24(), false, false, true, false, false, "missing lat/lon"));
+end
+
+rule "R002_StalePositionFlag"
+when
+    $p : Params()
+    $s : OpenSkyStateVector( timePosition != null, timePosition < (clock.getCurrentTime() / 1000 - $p.stalePosSec) )
+then
+    insert(new TrackQuality($s.getIcao24(), true, false, false, false, false, "stale position"));
+end
+
+rule "R003_StaleContactFlag"
+when
+    $p : Params()
+    $s : OpenSkyStateVector( lastContact == null || (clock.getCurrentTime() / 1000 - lastContact) > $p.staleAnySec )
+then
+    insert(new TrackQuality($s.getIcao24(), false, true, false, false, false, "stale last_contact"));
+end
+
+rule "R004_BadAltitudeFlag"
+when
+    $s : OpenSkyStateVector( (baroAltitudeM != null && baroAltitudeM < -200) || (geoAltitudeM != null && geoAltitudeM < -200) )
+then
+    insert(new TrackQuality($s.getIcao24(), false, false, false, true, false, "negative altitude"));
+end
+
+rule "R005_BadVelocityFlag"
+when
+    $s : OpenSkyStateVector( velocityMps != null && velocityMps < 0 )
+then
+    insert(new TrackQuality($s.getIcao24(), false, false, false, false, true, "negative velocity"));
+end
+
+rule "R006_OnGroundButHighSpeed"
+when
+    $s : OpenSkyStateVector( onGround == true, velocityMps != null && velocityMps > 120 )
+then
+    insert(new AuditEvent("DATA_ANOMALY", $s.getIcao24(), clock.getCurrentTime() / 1000, "onGround true but high speed"));
+end
+
+rule "R007_MissingCallsignAudit"
+when
+    $s : OpenSkyStateVector( callsign == null )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "callsign missing"));
+end
+
+rule "R008_SquawkSpecialPurposeAudit"
+when
+    $s : OpenSkyStateVector( squawk != null, spi == true )
+then
+    insert(new AuditEvent("SURVEILLANCE", $s.getIcao24(), clock.getCurrentTime() / 1000, "SPI set with squawk=" + $s.getSquawk()));
+end
+
+rule "R009_FilterTracksMissingPositionFromPairing"
+when
+    $s : OpenSkyStateVector()
+    TrackQuality( icao24 == $s.icao24, missingPos == true )
+then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: missing position"));
+end
+
+rule "R010_FilterStalePositionFromPairing"
+when
+    $s : OpenSkyStateVector()
+    TrackQuality( icao24 == $s.icao24, stalePos == true )
+then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: stale position"));
+end
+
+rule "R011_FilterBadVelocityFromPairing"
+when
+    $s : OpenSkyStateVector()
+    TrackQuality( icao24 == $s.icao24, badVel == true )
+then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: bad velocity"));
+end
+
+rule "R012_FilterBadAltitudeFromPairing"
+when
+    $s : OpenSkyStateVector()
+    TrackQuality( icao24 == $s.icao24, badAlt == true )
+then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: bad altitude"));
+end
+
+rule "R013_FilterStaleContactFromPairing"
+when
+    $s : OpenSkyStateVector()
+    TrackQuality( icao24 == $s.icao24, staleAny == true )
+then
+    insert(new AuditEvent("FILTER", $s.getIcao24(), clock.getCurrentTime() / 1000, "excluded from pairing: stale contact"));
+end
+
+rule "R014_StalePosClearsOldAlerts"
+when
+    $q : TrackQuality( stalePos == true )
+    $a : Alert( (a == $q.icao24 || b == $q.icao24) )
+then
+    retract($a);
+end
+
+rule "R015_StaleContactClearsOldAlerts"
+when
+    $q : TrackQuality( staleAny == true )
+    $a : Alert( (a == $q.icao24 || b == $q.icao24) )
+then
+    retract($a);
+end
+
+rule "R016_CategoryUnknownAudit"
+when
+    $s : OpenSkyStateVector( category == null || category == 0 )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "category unknown"));
+end
+
+rule "R017_NonAdsbPositionSourceAudit"
+when
+    $s : OpenSkyStateVector( positionSource != null && positionSource != 0 )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000,
+           "non-ADS-B position source=" + $s.getPositionSource()));
+end
+
+rule "R018_TooFastForAltitudeBandAudit"
+when
+    $s : OpenSkyStateVector( geoAltitudeM != null && geoAltitudeM < 300, velocityMps != null && velocityMps > 250 )
+then
+    insert(new AuditEvent("DATA_ANOMALY", $s.getIcao24(), clock.getCurrentTime() / 1000, "low altitude but very high speed"));
+end
+
+rule "R019_NullAltitudesAudit"
+when
+    $s : OpenSkyStateVector( baroAltitudeM == null && geoAltitudeM == null )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "both altitudes null"));
+end
+
+rule "R020_TrackDegRangeAudit"
+when
+    $s : OpenSkyStateVector( trueTrackDeg != null && (trueTrackDeg < 0 || trueTrackDeg >= 360) )
+then
+    insert(new AuditEvent("DATA_ANOMALY", $s.getIcao24(), clock.getCurrentTime() / 1000, "track out of range"));
+end
+
+
+/* ============================================================
+   KINEMATICS / ANOMALY RULES (R021–R040)
+   ============================================================ */
+
+rule "R021_DeltaVelocityOver10s"
+when
+    $s1 : OpenSkyStateVector( $id:icao24, velocityMps != null, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, velocityMps != null,
+                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
+then
+    double dt = ($t1 - $t0);
+    insert(new KinematicDelta($id, $s1.getVelocityMps()-$s0.getVelocityMps(), 0.0, 0.0, dt));
+end
+
+rule "R022_SuddenSpeedJumpAudit"
+when
+    KinematicDelta( $id:icao24, dVel != null && Math.abs(dVel) > 80 )
+then
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "sudden speed jump"));
+end
+
+rule "R023_SuddenVerticalRateAudit"
+when
+    $s : OpenSkyStateVector( verticalRateMps != null && Math.abs(verticalRateMps) > 40 )
+then
+    insert(new AuditEvent("KINEMATICS", $s.getIcao24(), clock.getCurrentTime() / 1000, "extreme vertical rate"));
+end
+
+rule "R024_SuddenTurnRateApproxAudit"
+when
+    $s1 : OpenSkyStateVector( $id:icao24, $trk1:trueTrackDeg != null, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, $trk0:trueTrackDeg != null,
+                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
+    eval( Math.min(Math.abs($trk1 - $trk0), 360 - Math.abs($trk1 - $trk0)) / ($t1 - $t0) > 10 )
+then
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "high turn rate approx"));
+end
+
+rule "R025_AltitudeJumpAudit"
+when
+    $s1 : OpenSkyStateVector( $id:icao24, $alt1:geoAltitudeM != null, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, geoAltitudeM != null,
+                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15,
+                              Math.abs(geoAltitudeM - $alt1) > 1200 )
+then
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "altitude jump"));
+end
+
+rule "R026_OnGroundStateFlipAudit"
+when
+    $s1 : OpenSkyStateVector( $id:icao24, $g1:onGround, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, $g0:onGround, $t0:lastContact, $t0 < $t1 )
+    eval($g0 != $g1 && ($t1-$t0) <= 15)
+then
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "onGround flip"));
+end
+
+rule "R027_UnknownVelButMovingAudit"
+when
+    $s : OpenSkyStateVector( velocityMps == null, onGround == false )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "airborne but velocity null"));
+end
+
+rule "R028_UnknownTrackButMovingAudit"
+when
+    $s : OpenSkyStateVector( trueTrackDeg == null, velocityMps != null && velocityMps > 30 )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "moving but track null"));
+end
+
+rule "R029_ClimbWhileOnGroundAudit"
+when
+    $s : OpenSkyStateVector( onGround == true, verticalRateMps != null && Math.abs(verticalRateMps) > 3 )
+then
+    insert(new AuditEvent("DATA_ANOMALY", $s.getIcao24(), clock.getCurrentTime() / 1000, "vertical rate while on ground"));
+end
+
+rule "R030_BaroGeoDisagreeAudit"
+when
+    $s : OpenSkyStateVector( baroAltitudeM != null, geoAltitudeM != null, Math.abs(baroAltitudeM - geoAltitudeM) > 600 )
+then
+    insert(new AuditEvent("DATA_ANOMALY", $s.getIcao24(), clock.getCurrentTime() / 1000, "baro vs geo altitude disagree"));
+end
+
+rule "R031_SlowHoveringRotorcraftAudit"
+when
+    $s : OpenSkyStateVector( category == 8, velocityMps != null && velocityMps < 10, onGround == false )
+then
+    insert(new AuditEvent("OPS_PATTERN", $s.getIcao24(), clock.getCurrentTime() / 1000, "rotorcraft low speed airborne"));
+end
+
+rule "R032_UAVAudit"
+when
+    $s : OpenSkyStateVector( category == 14 )
+then
+    insert(new AuditEvent("OPS_PATTERN", $s.getIcao24(), clock.getCurrentTime() / 1000, "UAV category"));
+end
+
+rule "R033_GliderAudit"
+when
+    $s : OpenSkyStateVector( category == 9 )
+then
+    insert(new AuditEvent("OPS_PATTERN", $s.getIcao24(), clock.getCurrentTime() / 1000, "glider category"));
+end
+
+rule "R034_EmergencyVehicleAudit"
+when
+    $s : OpenSkyStateVector( category == 16 )
+then
+    insert(new AuditEvent("OPS_PATTERN", $s.getIcao24(), clock.getCurrentTime() / 1000, "surface emergency vehicle category"));
+end
+
+rule "R035_PointObstacleAudit"
+when
+    $s : OpenSkyStateVector( category == 18 )
+then
+    insert(new AuditEvent("OPS_PATTERN", $s.getIcao24(), clock.getCurrentTime() / 1000, "point obstacle category"));
+end
+
+rule "R036_SquawkChangedAudit"
+when
+    $s1 : OpenSkyStateVector( $id:icao24, squawk != null, $sq1:squawk, $t1:lastContact )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, squawk != null, $sq0:squawk, $t0:lastContact, $t0 < $t1 )
+    eval(!$sq0.equals($sq1) && ($t1-$t0)<=60)
+then
+    insert(new AuditEvent("SURVEILLANCE", $id, clock.getCurrentTime() / 1000, "squawk changed "+$sq0+"->"+$sq1));
+end
+
+rule "R037_SpiSetAudit"
+when
+    $s : OpenSkyStateVector( spi == true )
+then
+    insert(new AuditEvent("SURVEILLANCE", $s.getIcao24(), clock.getCurrentTime() / 1000, "SPI set"));
+end
+
+rule "R038_CallsignWhitespaceAudit"
+when
+    $s : OpenSkyStateVector( callsign != null && callsign.trim().length() == 0 )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000, "callsign blank"));
+end
+
+rule "R039_OriginCountryMissingAudit"
+when
+    $s : OpenSkyStateVector( originCountry == null )
+then
+    insert(new AuditEvent("DATA_QUALITY", $s.getIcao24(), clock.getCurrentTime() / 1000,
+           "origin country null"));
+end
+
+
+/* ============================================================
+   GRID / PAIR CANDIDATES (R041–R055)
+   ============================================================ */
+
+rule "R041_AssignGridCell"
+when
+    $p : Params()
+    $s : OpenSkyStateVector( lat != null, lon != null, onGround == false, velocityMps != null, velocityMps > 10 )
+then
+    int gx = (int)Math.floor($s.getLat() / $p.getGridDeg());
+    int gy = (int)Math.floor($s.getLon() / $p.getGridDeg());
+    insert(new GridCell(gx+"_"+gy, $s.getIcao24()));
+end
+
+rule "R042_PairWithinCell"
+when
+    $c1 : GridCell( $cell:cellId, $a:icao24 )
+    $c2 : GridCell( cellId == $cell, $b:icao24, this != $c1 )
+    eval($a.compareTo($b) < 0)
+then
+    insert(new PairCandidate($a, $b, $cell));
+end
+
+rule "R043_NoPairIfSameAircraft"
+when
+    $pc : PairCandidate( a == b )
+then
+    retract($pc);
+end
+
+rule "R044_PairInhibitByCell"
+when
+    $pc : PairCandidate( $cell:cellId )
+    AlertInhibit( kind == "AIRSPACE", key == $cell, enabled == true )
+then
+    retract($pc);
+end
+
+rule "R045_PairInhibitByFlight"
+when
+    $pc : PairCandidate( $a:a )
+    AlertInhibit( kind == "FLIGHT", key == $a, enabled == true )
+then
+    retract($pc);
+end
+
+rule "R046_PairInhibitByFlightB"
+when
+    $pc : PairCandidate( $b:b )
+    AlertInhibit( kind == "FLIGHT", key == $b, enabled == true )
+then
+    retract($pc);
+end
+
+rule "R047_PairInhibitByPairKey"
+when
+    $pc : PairCandidate( $a:a, $b:b )
+    AlertInhibit( kind == "FLIGHTPAIR", key == ($a+"|"+$b), enabled == true )
+then
+    retract($pc);
+end
+
+rule "R048_SkipOnGroundPairs"
+when
+    $pc : PairCandidate( $a:a, $b:b )
+    OpenSkyStateVector( icao24 == $a, onGround == true )
+    OpenSkyStateVector( icao24 == $b, onGround == true )
+then
+    retract($pc);
+end
+
+rule "R049_SkipIfAnyTrackQualityBad"
+when
+    $pc : PairCandidate( $a:a, $b:b )
+    ( TrackQuality( icao24 == $a, (missingPos==true || stalePos==true || badAlt==true || badVel==true) )
+      or
+      TrackQuality( icao24 == $b, (missingPos==true || stalePos==true || badAlt==true || badVel==true) ) )
+then
+    retract($pc);
+end
+
+rule "R049b_RetractConflictIfTrackQualityBad"
+    salience 100
+when
+    $c : ConflictCandidate( $a:a, $b:b )
+    ( TrackQuality( icao24 == $a, (missingPos==true || stalePos==true || badAlt==true || badVel==true) )
+      or
+      TrackQuality( icao24 == $b, (missingPos==true || stalePos==true || badAlt==true || badVel==true) ) )
+then
+    retract($c);
+end
+
+
+rule "R051_PairDedupGuard"
+when
+    $pc : PairCandidate( $k: (a+"|"+b) )
+    PairCandidate( this != $pc, (a+"|"+b) == $k )
+then
+    retract($pc);
+end
+
+rule "R052_FinalPairReadyForConflictCheck"
+when
+    $pc : PairCandidate()
+then
+    insert(new AuditEvent("PAIR_READY", $pc.getA()+"|"+$pc.getB(),
+           clock.getCurrentTime() / 1000,
+           "pair passed all filters, entering conflict check cell=" + $pc.getCellId()));
+end
+
+rule "R053_BusyAirspaceCellAudit"
+when
+    $g : GridCell( $cell:cellId )
+    Number( intValue >= 5 ) from accumulate(
+        GridCell( cellId == $cell ), count(1) )
+then
+    insert(new AuditEvent("OPS_PATTERN", $cell, clock.getCurrentTime() / 1000,
+           "busy cell with 5+ aircraft"));
+end
+
+rule "R055_HighAccelerationAudit"
+when
+    KinematicDelta( $id:icao24, $dVel:dVel != null, $dt:dtSec != null, dtSec > 0,
+                   Math.abs(dVel) / dtSec > 5 )
+then
+    insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000,
+           "high linear acceleration " + String.format("%.1f", Math.abs($dVel)/$dt) + " m/s2"));
+end
+
+
+/* ============================================================
+   CONFLICT DETECTION (R056–R080)
+   ============================================================ */
+
+rule "R056_BuildConflictCandidateBasic"
+when
+    $p : Params()
+    $pc : PairCandidate( $a:a, $b:b )
+    $sa : OpenSkyStateVector( icao24 == $a, lat != null, lon != null, velocityMps != null, trueTrackDeg != null,
+                       $alat:lat, $alon:lon, $avel:velocityMps, $atrk:trueTrackDeg,
+                       $aa: (geoAltitudeM != null ? geoAltitudeM : baroAltitudeM) )
+    $sb : OpenSkyStateVector( icao24 == $b, lat != null, lon != null, velocityMps != null, trueTrackDeg != null,
+                       $blat:lat, $blon:lon, $bvel:velocityMps, $btrk:trueTrackDeg,
+                       $ba: (geoAltitudeM != null ? geoAltitudeM : baroAltitudeM) )
+then
+    double d = haversineMeters($alat,$alon,$blat,$blon);
+    double vert = ( ($aa!=null && $ba!=null) ? Math.abs($aa-$ba) : Double.NaN );
+
+    boolean closing = d < metersFromNm($p.getNearDistNm());
+
+    double rel = Math.abs($avel - $bvel);
+    double ttc = (rel > 1.0) ? (d / rel) : Double.POSITIVE_INFINITY;
+
+    // Severity is always seeded as "INFO" here.
+    // Classification to WARN / ALERT is fully delegated to R057-R062 via modify().
+    insert(new ConflictCandidate($a,$b,d,vert,closing,ttc,"INFO"));
+end
+
+rule "R057_DowngradeIfVerticalSeparationLarge"
+when
+    $p : Params()
+    // Only downgrade when:
+    //   1. currently far apart (>= 3nm) — R058/R059/R060 won't fire
+    //   2. vertically well-separated
+    //   3. TTC is also safe (>= warnTtcSec) — mutual exclusion with R061/R062
+    $c : ConflictCandidate( distM >= metersFromNm(3.0),
+                            vertSepM == vertSepM, vertSepM > ( ($p.vertMinFt*0.3048) * 2.0 ),
+                            ttcSec >= $p.warnTtcSec,
+                            severity != "INFO" )
+    //   4. CPA is also safe — mutual exclusion with R071/R072
+    not CpaMetrics( a == $c.a, b == $c.b, 
+                    ( dCpaM <= metersFromNm($p.getWarnDistNm()) || tCpaSec <= $p.getWarnTtcSec() ) )
+then
+    modify($c){ setSeverity("INFO"); }
+end
+
+rule "R058_UpgradeIfVeryClose"
+when
+    $p : Params()
+    $c : ConflictCandidate( distM < metersFromNm(1.5), severity != "ALERT" )
+then
+    modify($c){ setSeverity("ALERT"); }
+end
+
+rule "R059_WarnIfBelowPrototypeRadarMinima"
+when
+    $c : ConflictCandidate( distM < metersFromNm(3.0), severity == "INFO" )
+then
+    modify($c){ setSeverity("WARN"); }
+end
+
+rule "R060_AlertIfBelowPrototypeRadarMinima"
+when
+    $c : ConflictCandidate( distM < metersFromNm(3.0), severity == "WARN" )
+then
+    modify($c){ setSeverity("ALERT"); }
+end
+
+rule "R061_WarnIfTTCWithinWarningTime"
+when
+    $p : Params()
+    $c : ConflictCandidate( ttcSec < $p.warnTtcSec, severity == "INFO" )
+then
+    modify($c){ setSeverity("WARN"); }
+end
+
+rule "R062_AlertIfTTCWithinAlertTime"
+when
+    $p : Params()
+    $c : ConflictCandidate( ttcSec < $p.alertTtcSec, severity != "ALERT" )
+then
+    modify($c){ setSeverity("ALERT"); }
+end
+
+rule "R063_SuppressIfNotClosingAndFar"
+when
+    $p : Params()
+    $c : ConflictCandidate( closing == false, distM > metersFromNm($p.nearDistNm) )
+then
+    retract($c);
+end
+
+rule "R064_SuppressIfAnyOnGround"
+when
+    $c : ConflictCandidate( $a:a, $b:b )
+    ( OpenSkyStateVector( icao24 == $a, onGround == true ) or OpenSkyStateVector( icao24 == $b, onGround == true ) )
+then
+    retract($c);
+end
+
+rule "R065_ConflictCandidateAudit_WARN"
+    no-loop true
+when
+    $c : ConflictCandidate( severity == "WARN" )
+then
+    insert(new AuditEvent("CONFLICT_WARN", $c.getA()+"|"+$c.getB(), clock.getCurrentTime() / 1000, "distNm="+nm($c.getDistM())+" ttc="+$c.getTtcSec()));
+end
+
+rule "R066_ConflictCandidateAudit_ALERT"
+    no-loop true
+when
+    $c : ConflictCandidate( severity == "ALERT" )
+then
+    insert(new AuditEvent("CONFLICT_ALERT", $c.getA()+"|"+$c.getB(), clock.getCurrentTime() / 1000, "distNm="+nm($c.getDistM())+" ttc="+$c.getTtcSec()));
+end
+
+rule "R067a_DedupeConflictCandidates_KeepALERT"
+when
+    $c1 : ConflictCandidate( $k:(a+"|"+b), severity != "ALERT" )
+    $c2 : ConflictCandidate( this != $c1, (a+"|"+b) == $k, severity == "ALERT" )
+then
+    retract($c1);
+end
+
+rule "R067b_DedupeConflictCandidates_KeepFirst"
+when
+    $c1 : ConflictCandidate( $k:(a+"|"+b) )
+    $c2 : ConflictCandidate( this != $c1, (a+"|"+b) == $k, severity != "ALERT" )
+then
+    retract($c2);
+end
+
+rule "R068_ClearOldConflictCandidates"
+    salience -100
+when
+    $c : ConflictCandidate()
+then
+    retract($c);
+end
+
+
+/* ============================================================
+   R068b: Compute CPA metrics from PairCandidates
+   (bridges PairCandidate → CpaMetrics → R069–R072 pipeline)
+   ============================================================ */
+
+rule "R068b_ComputeCpaMetrics"
+when
+    $pc : PairCandidate( $a:a, $b:b )
+    $sa : OpenSkyStateVector( icao24 == $a, lat != null, lon != null,
+                              velocityMps != null, trueTrackDeg != null,
+                              $alat:lat, $alon:lon, $avel:velocityMps, $atrk:trueTrackDeg )
+    $sb : OpenSkyStateVector( icao24 == $b, lat != null, lon != null,
+                              velocityMps != null, trueTrackDeg != null,
+                              $blat:lat, $blon:lon, $bvel:velocityMps, $btrk:trueTrackDeg )
+    not CpaMetrics( a == $a, b == $b )
+then
+    // ── Flat-earth relative position (East=x, North=y) in metres ──
+    double latMidRad = Math.toRadians(($alat + $blat) / 2.0);
+    double mPerLonDeg = Math.cos(latMidRad) * 111320.0;
+    double dx = ($blon - $alon) * mPerLonDeg;           // B east of A
+    double dy = ($blat - $alat) * 111320.0;             // B north of A
+
+    // ── Heading → velocity vector components (m/s) ──
+    double vax = $avel * Math.sin(Math.toRadians($atrk));  // A east vel
+    double vay = $avel * Math.cos(Math.toRadians($atrk));  // A north vel
+    double vbx = $bvel * Math.sin(Math.toRadians($btrk));  // B east vel
+    double vby = $bvel * Math.cos(Math.toRadians($btrk));  // B north vel
+
+    // ── Relative velocity of B w.r.t. A ──
+    double dvx = vbx - vax;
+    double dvy = vby - vay;
+
+    // ── Time to CPA (seconds); positive = future, negative = past ──
+    double tCpa = timeToCpaSec(dx, dy, dvx, dvy);
+    boolean closing = tCpa > 0 && tCpa < Double.POSITIVE_INFINITY;
+
+    // ── Distance at CPA ──
+    double dCpaM = Math.sqrt(Math.pow(dx + tCpa * dvx, 2) + Math.pow(dy + tCpa * dvy, 2));
+
+    // ── Vertical separation at CPA (null-safe) ──
+    Double vertAtCpa = null;
+    Double aa = ($sa.getGeoAltitudeM() != null ? $sa.getGeoAltitudeM() : $sa.getBaroAltitudeM());
+    Double ba = ($sb.getGeoAltitudeM() != null ? $sb.getGeoAltitudeM() : $sb.getBaroAltitudeM());
+    if (aa != null && ba != null) {
+        double dva = ($sa.getVerticalRateMps() != null ? $sa.getVerticalRateMps() : 0.0);
+        double dvb = ($sb.getVerticalRateMps() != null ? $sb.getVerticalRateMps() : 0.0);
+        vertAtCpa = Math.abs((aa + dva * tCpa) - (ba + dvb * tCpa));
+    }
+
+    insert(new CpaMetrics($a, $b, (double)(clock.getCurrentTime() / 1000),
+                          tCpa, dCpaM, vertAtCpa, closing));
+end
+
+
+/* ============================================================
+   R069–R072: CPA-based conflict candidates
+   ============================================================ */
+
+rule "R069_CreateConflictFromCpaMetrics"
+when
+    $p : Params()
+    $m : CpaMetrics( $a:a, $b:b, closing == true, tCpaSec > 0 )
+then
+    insert(new ConflictCandidate($a, $b, $m.getDCpaM(), $m.getVertAtCpaM(), true, $m.getTCpaSec(), "INFO"));
+end
+
+rule "R070_SuppressIfNotClosingOrPastCPA"
+when
+    $c : ConflictCandidate( $a:a, $b:b )
+    CpaMetrics( a == $a, b == $b, (closing == false || tCpaSec <= 0) )
+then
+    retract($c);
+end
+
+rule "R071_UpgradeToWARN_UsingCPA"
+when
+    $p : Params()
+    $c : ConflictCandidate( severity == "INFO", $a:a, $b:b )
+    CpaMetrics( a == $a, b == $b,
+                ( dCpaM <= metersFromNm($p.getWarnDistNm()) || tCpaSec <= $p.getWarnTtcSec() ) )
+then
+    modify($c){ setSeverity("WARN"); }
+end
+
+rule "R072_UpgradeToALERT_UsingCPA"
+when
+    $p : Params()
+    $c : ConflictCandidate( severity != "ALERT", $a:a, $b:b )
+    CpaMetrics( a == $a, b == $b,
+                ( dCpaM <= metersFromNm($p.getAlertDistNm()) || tCpaSec <= $p.getAlertTtcSec() ) )
+then
+    modify($c){ setSeverity("ALERT"); }
+end
+
+
+/* ============================================================
+   R073–R076: Nuisance reduction via persistence + hysteresis
+   ============================================================ */
+
+rule "R073_InitPairRiskState"
+when
+    $c : ConflictCandidate( $k:(a+"|"+b) )
+    not PairRiskState( key == $k )
+then
+    insert(new PairRiskState($k, (double)(clock.getCurrentTime() / 1000), 0, 0, 0));
+end
+
+rule "R074a_UpdateStreaks_ALERT"
+    no-loop true
+when
+    $c : ConflictCandidate( $k:(a+"|"+b), severity == "ALERT" )
+    $s : PairRiskState( key == $k )
+then
+    modify($s){
+        setLastAtSec((double)(clock.getCurrentTime() / 1000)),
+        setWarnStreak(0),
+        setAlertStreak($s.getAlertStreak() + 1),
+        setSafeStreak(0)
+    }
+end
+
+rule "R074b_UpdateStreaks_WARN"
+    no-loop true
+when
+    $c : ConflictCandidate( $k:(a+"|"+b), severity == "WARN" )
+    $s : PairRiskState( key == $k )
+then
+    modify($s){
+        setLastAtSec((double)(clock.getCurrentTime() / 1000)),
+        setWarnStreak($s.getWarnStreak() + 1),
+        setAlertStreak(0),
+        setSafeStreak(0)
+    }
+end
+
+rule "R074c_UpdateStreaks_INFO"
+    no-loop true
+when
+    $c : ConflictCandidate( $k:(a+"|"+b), severity == "INFO" )
+    $s : PairRiskState( key == $k )
+then
+    modify($s){
+        setLastAtSec((double)(clock.getCurrentTime() / 1000)),
+        setWarnStreak(0),
+        setAlertStreak(0),
+        setSafeStreak($s.getSafeStreak() + 1)
+    }
+end
+
+rule "R075_RaiseAlertsOnlyAfterPersistence"
+when
+    $c : ConflictCandidate( $a:a, $b:b, $k:(a+"|"+b) )
+    $s : PairRiskState( key == $k, alertStreak >= 2 )
+    not Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
+then
+    insert(new Alert($a,$b,"SAFETY_ALERT","ALERT",(double)(clock.getCurrentTime() / 1000),"CPA-based persistent ALERT"));
+end
+
+rule "R076_Hysteresis_ClearOnlyAfterSafePersistence"
+when
+    $al : Alert( $a:a, $b:b, type == "SAFETY_ALERT" )
+    $s  : PairRiskState( key == ($a+"|"+$b), safeStreak >= 3 )
+then
+    retract($al);
+end
+
+
+/* ============================================================
+   R077–R078: Inhibition
+   ============================================================ */
+
+rule "R077_InhibitSafetyAlertsByPair"
+when
+    $al : Alert( $a:a, $b:b, type == "SAFETY_ALERT" )
+    AlertInhibit( kind == "FLIGHTPAIR", key == ($a+"|"+$b), enabled == true )
+then
+    retract($al);
+    insert(new AuditEvent("INHIBIT_EFFECT", $a+"|"+$b, clock.getCurrentTime() / 1000, "suppressed SAFETY_ALERT by pair inhibition"));
+end
+
+rule "R078_InhibitMustBeKnown_Audit"
+    no-loop true
+when
+    $i : AlertInhibit( enabled == true )
+then
+    insert(new AuditEvent("INHIBIT_SET", $i.getKind()+":"+ $i.getKey(), clock.getCurrentTime() / 1000, "inhibit enabled/visible"));
+end
+
+
+/* ============================================================
+   R079–R080: Join-heavy escalation + logging
+   ============================================================ */
+
+rule "R079_MultiConflictHotspotEscalation"
+    no-loop true
+when
+    $c1 : ConflictCandidate( severity == "ALERT", $x:a )
+    $c2 : ConflictCandidate( severity == "ALERT", a == $x, this != $c1 )
+    $c3 : ConflictCandidate( severity == "ALERT", a == $x, this != $c1, this != $c2 )
+then
+    insert(new AuditEvent("HOTSPOT", $x, clock.getCurrentTime() / 1000, "aircraft involved in multiple ALERT conflicts"));
+end
+
+rule "R080_RecordCPAForAnalysis"
+    no-loop true
+when
+    $m : CpaMetrics()
+then
+    insert(new AuditEvent("CPA_METRICS", $m.getA()+"|"+$m.getB(), clock.getCurrentTime() / 1000,
+        "tCPA="+$m.getTCpaSec()+" dCPA_m="+$m.getDCpaM()+" vertAtCPA_m="+$m.getVertAtCpaM()));
+end
+
+
+/* ============================================================
+   ALERTING POLICY + INHIBITION (R081–R095)
+   ============================================================ */
+
+rule "R081_RaiseTrafficAdvisoryOnWARN"
+when
+    $c : ConflictCandidate( severity == "WARN", $a:a, $b:b )
+    not Alert( a == $a, b == $b, type == "TRAFFIC_ADVISORY" )
+    not Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
+then
+    insert(new Alert($a,$b,"TRAFFIC_ADVISORY","WARN",(double)(clock.getCurrentTime() / 1000),"WARN conflict candidate"));
+end
+
+rule "R082_RaiseSafetyAlertOnALERT"
+when
+    $c : ConflictCandidate( severity == "ALERT", $a:a, $b:b )
+    not Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
+then
+    insert(new Alert($a,$b,"SAFETY_ALERT","ALERT",(double)(clock.getCurrentTime() / 1000),"ALERT conflict candidate"));
+end
+
+rule "R083_AlertPersistsWhileConditionExists"
+when
+    $p : Params()
+    $a : Alert( $key:(a+"|"+b+"|"+type), createdAt <= (clock.getCurrentTime() / 1000 - $p.persistSec) )
+    not AlertAck( key == $key )
+then
+    // keep alert (no retract) - persistence intent
+end
+
+rule "R084_AckSilencesAudibleEquivalent"
+when
+    $al : Alert( $key:(a+"|"+b+"|"+type) )
+    AlertAck( key == $key )
+then
+    modify($al){ setSeverity("ACK"); }
+end
+
+rule "R085_ClearAlertAfterAckAndNoNewConflicts"
+when
+    $al : Alert( $key:(a+"|"+b+"|"+type), severity == "ACK" )
+    AlertAck( key == $key, $t:at )
+    eval(clock.getCurrentTime() / 1000 - $t > 30)
+then
+    retract($al);
+end
+
+rule "R086_InhibitAlertsByFlight"
+when
+    $al : Alert( $a:a, $b:b )
+    ( AlertInhibit( kind == "FLIGHT", key == $a, enabled == true )
+      or
+      AlertInhibit( kind == "FLIGHT", key == $b, enabled == true ) )
+then
+    retract($al);
+end
+
+rule "R087_InhibitAlertsByPair"
+when
+    $al : Alert( $a:a, $b:b )
+    AlertInhibit( kind == "FLIGHTPAIR", key == ($a+"|"+$b), enabled == true )
+then
+    retract($al);
+end
+
+rule "R088_InhibitionMustBeKnown_Audit"
+    no-loop true
+when
+    $i : AlertInhibit( enabled == true )
+then
+    insert(new AuditEvent("INHIBIT_SET", $i.getKind()+":"+ $i.getKey(), clock.getCurrentTime() / 1000, "inhibit enabled"));
+end
+
+rule "R089_StatusWhenNotAvailable"
+    no-loop true
+when
+    Status( stcaAvailable == false )
+then
+    insert(new AuditEvent("STATUS", "STCA_UNAVAILABLE", clock.getCurrentTime() / 1000, "Status info per STCA-17"));
+end
+
+rule "R090_SafetyAlertPriorityAudit"
+when
+    $al : Alert( type == "SAFETY_ALERT" )
+    not AuditEvent( kind == "PRIORITY", key == ($al.getA()+"|"+$al.getB()) )
+then
+    insert(new AuditEvent("PRIORITY", $al.getA()+"|"+$al.getB(), clock.getCurrentTime() / 1000, "safety alert priority concept"));
+end
+
+rule "R091_TrafficAdvisoryAudit"
+when
+    $al : Alert( type == "TRAFFIC_ADVISORY" )
+    not AuditEvent( kind == "ADVISORY", key == ($al.getA()+"|"+$al.getB()) )
+then
+    insert(new AuditEvent("ADVISORY", $al.getA()+"|"+$al.getB(), clock.getCurrentTime() / 1000, "traffic advisory issued"));
+end
+
+rule "R092_DoNotSpamNuisanceAlerts"
+when
+    $al : Alert( $a:a, $b:b, $t:createdAt, $type:type )
+    Alert( this != $al, a == $a, b == $b, type == $type, (clock.getCurrentTime() / 1000 - $t) < 10 )
+then
+    retract($al);
+end
+
+rule "R093_EscalateFromAdvisoryToSafetyAlert"
+when
+    $ta : Alert( $a:a, $b:b, type == "TRAFFIC_ADVISORY" )
+    Alert( a == $a, b == $b, type == "SAFETY_ALERT" )
+then
+    retract($ta);
+end
+
+rule "R094_ClearOldAdvisories"
+when
+    $ta : Alert( type == "TRAFFIC_ADVISORY", $t:createdAt )
+    eval(clock.getCurrentTime() / 1000 - $t > 120)
+then
+    retract($ta);
+end
+
+rule "R095_ClearOldAcks"
+when
+    $ack : AlertAck( $t:at )
+    eval(clock.getCurrentTime() / 1000 - $t > 600)
+then
+    retract($ack);
+end
+
+
+/* ============================================================
+   RECORDING / PERFORMANCE ANALYSIS HOOKS (R096–R100)
+   ============================================================ */
+
+rule "R096_RecordEverySafetyAlert"
+    no-loop true
+when
+    $al : Alert( type == "SAFETY_ALERT" )
+then
+    insert(new AuditEvent("RECORD_ALERT", $al.getA()+"|"+$al.getB(), clock.getCurrentTime() / 1000, "record safety alert"));
+end
+
+rule "R097_RecordEveryTrafficAdvisory"
+    no-loop true
+when
+    $al : Alert( type == "TRAFFIC_ADVISORY" )
+then
+    insert(new AuditEvent("RECORD_ADVISORY", $al.getA()+"|"+$al.getB(), clock.getCurrentTime() / 1000, "record traffic advisory"));
+end
+
+rule "R098_PerformanceCountersPlaceholder"
+when
+    $e : AuditEvent()
+then
+    // host can aggregate counts
+end
+
+rule "R099_IgnoreNonJustifiedAlertPlaceholder"
+when
+    $e : AuditEvent( kind == "CONFLICT_WARN" )
+then
+end
+
+rule "R100_EndOfCycleMarker"
+when
+then
+    // no-op: cycle marker placeholder
+end

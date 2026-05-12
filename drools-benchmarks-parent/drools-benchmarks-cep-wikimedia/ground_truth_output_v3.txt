@@ -1,0 +1,6 @@
+﻿Ground Truth Analysis (Refined) for: test_events_merged.json
+----------------------------------------
+Refined Bot Alerts (>10/min): 662
+Refined Content Major Alerts: 435
+Refined Total Expected Alerts: 1097
+----------------------------------------

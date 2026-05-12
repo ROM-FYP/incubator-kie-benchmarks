@@ -1,0 +1,51 @@
+{
+  "dataset_id": "run_20260216_0632_10sym",
+  "start_time": "2026-02-16T06:32:36Z",
+  "end_time": "2026-02-16T06:37:42Z",
+  "duration_seconds": 306.109339134,
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "ADAUSDT",
+    "AVAXUSDT",
+    "LINKUSDT",
+    "ARBUSDT"
+  ],
+  "streams": [
+    "trade",
+    "book",
+    "mark",
+    "index",
+    "liquidation"
+  ],
+  "depth_interval": "100ms",
+  "num_symbols": 10,
+  "total_messages": 67027,
+  "messages_per_stream": {
+    "book": 24652,
+    "index": 0,
+    "liquidation": 14,
+    "mark": 2820,
+    "trade": 39541
+  },
+  "host_info": {
+    "hostname": "fedora",
+    "os": "linux",
+    "arch": "amd64",
+    "cpu_count": 12,
+    "memory_gb": 15.395206451416016
+  },
+  "ntp_offset_ms_start": 0,
+  "ntp_offset_ms_end": 0,
+  "software_version": "1.0.0",
+  "clock_precision": "microseconds",
+  "websocket_endpoint": "wss://fstream.binance.com/stream?streams=btcusdt@trade/btcusdt@depth@100ms/btcusdt@markPrice@1s/btcusdt@indexPrice@1s/btcusdt@forceOrder/ethusdt@trade/ethusdt@depth@100ms/ethusdt@markPrice@1s/ethusdt@indexPrice@1s/ethusdt@forceOrder/solusdt@trade/solusdt@depth@100ms/solusdt@markPrice@1s/solusdt@indexPrice@1s/solusdt@forceOrder/bnbusdt@trade/bnbusdt@depth@100ms/bnbusdt@markPrice@1s/bnbusdt@indexPrice@1s/bnbusdt@forceOrder/xrpusdt@trade/xrpusdt@depth@100ms/xrpusdt@markPrice@1s/xrpusdt@indexPrice@1s/xrpusdt@forceOrder/dogeusdt@trade/dogeusdt@depth@100ms/dogeusdt@markPrice@1s/dogeusdt@indexPrice@1s/dogeusdt@forceOrder/adausdt@trade/adausdt@depth@100ms/adausdt@markPrice@1s/adausdt@indexPrice@1s/adausdt@forceOrder/avaxusdt@trade/avaxusdt@depth@100ms/avaxusdt@markPrice@1s/avaxusdt@indexPrice@1s/avaxusdt@forceOrder/linkusdt@trade/linkusdt@depth@100ms/linkusdt@markPrice@1s/linkusdt@indexPrice@1s/linkusdt@forceOrder/arbusdt@trade/arbusdt@depth@100ms/arbusdt@markPrice@1s/arbusdt@indexPrice@1s/arbusdt@forceOrder",
+  "compression": "gzip",
+  "rotation_strategy": "time:1m0s,size:250MB",
+  "reconnect_count": 0,
+  "notes": ""
+}

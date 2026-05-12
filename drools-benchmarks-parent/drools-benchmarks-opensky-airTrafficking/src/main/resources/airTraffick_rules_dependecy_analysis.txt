@@ -1,0 +1,299 @@
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║   ██████╗ ██████╗ ██╗         █████╗ ███╗   ██╗ █████╗ ██╗  ██╗   ██╗███████╗ ║
+║   ██╔══██╗██╔══██╗██║        ██╔══██╗████╗  ██║██╔══██╗██║  ╚██╗ ██╔╝╚══███╔╝ ║
+║   ██║  ██║██████╔╝██║        ███████║██╔██╗ ██║███████║██║   ╚████╔╝   ███╔╝  ║
+║   ██║  ██║██╔══██╗██║        ██╔══██║██║╚██╗██║██╔══██║██║    ╚██╔╝   ███╔╝   ║
+║   ██████╔╝██║  ██║███████╗   ██║  ██║██║ ╚████║██║  ██║███████╗██║   ███████╗ ║
+║   ╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝   ╚══════╝ ║
+║                                                                              ║
+║   Rule Dependency Graph & Phase Stratification Tool                         ║
+║   Static analysis for Drools Rule Language (DRL) files                      ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  📂 LOADING DRL FILE                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  File Path: D://projects//incubator-kie-benchmarks//drools-benchmarks-parent//drools-benchmarks-opensky-airTrafficking//src//main//resources//airTraffick_rules.drl
+  File Name: airTraffick_rules.drl
+  Size: 35.8 KB
+  Lines: 1063
+  ✓ File loaded successfully!
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🔍 PARSING RULES                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+
+  ✓ Parsed 103 rules successfully!
+
+  Total Rules: 103
+  Unique Input Types: 15
+  Unique Output Types: 10
+
+  Input Types:  Status, CpaMetrics, TrackQuality, ConflictCandidate, Params, PairCandidate, AlertAck, GridCell, AlertInhibit, Number, OpenSkyStateVector, Alert, AuditEvent, KinematicDelta, PairRiskState
+  Output Types: CpaMetrics, TrackQuality, ConflictCandidate, AuditEvent, Alert, KinematicDelta, PairRiskState, PairCandidate, AlertAck, GridCell
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🔗 BUILDING DEPENDENCY GRAPH                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Vertices (Rules): 103
+  Edges (Dependencies): 1093
+  Isolated Rules: 2
+
+  ⚠ Isolated rules (no dependencies):
+    • R000_LoadDefaultParams
+    • R100_EndOfCycleMarker
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  📊 STRATIFYING RULES INTO PHASES                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  ⚠ Cycles detected in dependency graph!
+    Rules in cycles are grouped in the same phase.
+
+  Total Phases: 11
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 1 (37 rules)                                                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R008_SquawkSpecialPurposeAudit                                        │
+  │  • R006_OnGroundButHighSpeed                                             │
+  │  • R078_InhibitMustBeKnown_Audit                                         │
+  │  • R000_LoadDefaultParams                                                │
+  │  • R037_SpiSetAudit                                                      │
+  │  • R026_OnGroundStateFlipAudit                                           │
+  │  • R029_ClimbWhileOnGroundAudit                                          │
+  │  • R041_AssignGridCell                                                   │
+  │  • R028_UnknownTrackButMovingAudit                                       │
+  │  • R002_StalePositionFlag                                                │
+  │  • R019_NullAltitudesAudit                                               │
+  │  • R005_BadVelocityFlag                                                  │
+  │  • R031_SlowHoveringRotorcraftAudit                                      │
+  │  • R030_BaroGeoDisagreeAudit                                             │
+  │  • R038_CallsignWhitespaceAudit                                          │
+  │  • R035_PointObstacleAudit                                               │
+  │  • R089_StatusWhenNotAvailable                                           │
+  │  • R100_EndOfCycleMarker                                                 │
+  │  • R039_OriginCountryMissingAudit                                        │
+  │  • R004_BadAltitudeFlag                                                  │
+  │  • R036_SquawkChangedAudit                                               │
+  │  • R033_GliderAudit                                                      │
+  │  • R034_EmergencyVehicleAudit                                            │
+  │  • R021_DeltaVelocityOver10s                                             │
+  │  • R020_TrackDegRangeAudit                                               │
+  │  • R003_StaleContactFlag                                                 │
+  │  • R023_SuddenVerticalRateAudit                                          │
+  │  • R007_MissingCallsignAudit                                             │
+  │  • R027_UnknownVelButMovingAudit                                         │
+  │  • R095_ClearOldAcks                                                     │
+  │  • R016_CategoryUnknownAudit                                             │
+  │  • R017_NonAdsbPositionSourceAudit                                       │
+  │  • R001_MissingPositionFlag                                              │
+  │  • R024_SuddenTurnRateApproxAudit                                        │
+  │  • R025_AltitudeJumpAudit                                                │
+  │  • R032_UAVAudit                                                         │
+  │  • R018_TooFastForAltitudeBandAudit                                      │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 2 (4 rules)                                                          │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R042_PairWithinCell                                                   │
+  │  • R053_BusyAirspaceCellAudit                                            │
+  │  • R055_HighAccelerationAudit                                            │
+  │  • R022_SuddenSpeedJumpAudit                                             │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 3 (14 rules)                                                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R009_FilterTracksMissingPositionFromPairing                           │
+  │  • R011_FilterBadVelocityFromPairing                                     │
+  │  • R013_FilterStaleContactFromPairing                                    │
+  │  • R049_SkipIfAnyTrackQualityBad                                         │
+  │  • R047_PairInhibitByPairKey                                             │
+  │  • R043_NoPairIfSameAircraft                                             │
+  │  • R051_PairDedupGuard                                                   │
+  │  • R050_SkipIfVerticalSeparationSufficient                               │
+  │  • R048_SkipOnGroundPairs                                                │
+  │  • R044_PairInhibitByCell                                                │
+  │  • R046_PairInhibitByFlightB                                             │
+  │  • R045_PairInhibitByFlight                                              │
+  │  • R010_FilterStalePositionFromPairing                                   │
+  │  • R012_FilterBadAltitudeFromPairing                                     │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 4 (3 rules)                                                          │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R052_FinalPairReadyForConflictCheck                                   │
+  │  • R056_BuildConflictCandidateBasic                                      │
+  │  • R068b_ComputeCpaMetrics                                               │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 5 (2 rules)                                                          │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R069_CreateConflictFromCpaMetrics                                     │
+  │  • R080_RecordCPAForAnalysis                                             │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 6 (15 rules)                                                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R070_SuppressIfNotClosingOrPastCPA                                    │
+  │  • R058_UpgradeIfVeryClose                                               │
+  │  • R067b_DedupeConflictCandidates_KeepFirst                              │
+  │  • R060_AlertIfBelowPrototypeRadarMinima                                 │
+  │  • R061_WarnIfTTCWithinWarningTime                                       │
+  │  • R057_DowngradeIfVerticalSeparationLarge                               │
+  │  • R071_UpgradeToWARN_UsingCPA                                           │
+  │  • R064_SuppressIfAnyOnGround                                            │
+  │  • R059_WarnIfBelowPrototypeRadarMinima                                  │
+  │  • R049b_RetractConflictIfTrackQualityBad                                │
+  │  • R072_UpgradeToALERT_UsingCPA                                          │
+  │  • R062_AlertIfTTCWithinAlertTime                                        │
+  │  • R068_ClearOldConflictCandidates                                       │
+  │  • R067a_DedupeConflictCandidates_KeepALERT                              │
+  │  • R063_SuppressIfNotClosingAndFar                                       │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 7 (7 rules)                                                          │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R065_ConflictCandidateAudit_WARN                                      │
+  │  • R066_ConflictCandidateAudit_ALERT                                     │
+  │  • R074a_UpdateStreaks_ALERT                                             │
+  │  • R074b_UpdateStreaks_WARN                                              │
+  │  • R073_InitPairRiskState                                                │
+  │  • R074c_UpdateStreaks_INFO                                              │
+  │  • R079_MultiConflictHotspotEscalation                                   │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 8 (14 rules)                                                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R085_ClearAlertAfterAckAndNoNewConflicts                              │
+  │  • R015_StaleContactClearsOldAlerts                                      │
+  │  • R087_InhibitAlertsByPair                                              │
+  │  • R092_DoNotSpamNuisanceAlerts                                          │
+  │  • R086_InhibitAlertsByFlight                                            │
+  │  • R077_InhibitSafetyAlertsByPair                                        │
+  │  • R093_EscalateFromAdvisoryToSafetyAlert                                │
+  │  • R094_ClearOldAdvisories                                               │
+  │  • R082_RaiseSafetyAlertOnALERT                                          │
+  │  • R075_RaiseAlertsOnlyAfterPersistence                                  │
+  │  • R081_RaiseTrafficAdvisoryOnWARN                                       │
+  │  • R014_StalePosClearsOldAlerts                                          │
+  │  • R084_AckSilencesAudibleEquivalent                                     │
+  │  • R076_Hysteresis_ClearOnlyAfterSafePersistence                         │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 9 (2 rules)                                                          │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R096_RecordEverySafetyAlert                                           │
+  │  • R097_RecordEveryTrafficAdvisory                                       │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 10 (3 rules)                                                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R090_SafetyAlertPriorityAudit                                         │
+  │  • R083_AlertPersistsWhileConditionExists                                │
+  │  • R091_TrafficAdvisoryAudit                                             │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ╭─────────────────────────────────────────────────────────────────────────╮
+  │  PHASE 11 (2 rules)                                                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  • R098_PerformanceCountersPlaceholder                                   │
+  │  • R099_IgnoreNonJustifiedAlertPlaceholder                               │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+
+  ℹ Phase Dependency: Phase N can only execute after Phases 1..(N-1) complete.
+  ℹ Rules within the same phase can potentially execute in parallel.
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  📋 DETAILED RULE METADATA                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Showing first 10 rules (use --verbose for all):
+
+  1. R000_LoadDefaultParams
+     Inputs:  Params
+     Outputs: (none)
+
+  2. R001_MissingPositionFlag
+     Inputs:  OpenSkyStateVector
+     Outputs: TrackQuality
+
+  3. R002_StalePositionFlag
+     Inputs:  OpenSkyStateVector, Params
+     Outputs: TrackQuality
+
+  4. R003_StaleContactFlag
+     Inputs:  OpenSkyStateVector, Params
+     Outputs: TrackQuality
+
+  5. R004_BadAltitudeFlag
+     Inputs:  OpenSkyStateVector
+     Outputs: TrackQuality
+
+  6. R005_BadVelocityFlag
+     Inputs:  OpenSkyStateVector
+     Outputs: TrackQuality
+
+  7. R006_OnGroundButHighSpeed
+     Inputs:  OpenSkyStateVector
+     Outputs: AuditEvent
+
+  8. R007_MissingCallsignAudit
+     Inputs:  OpenSkyStateVector
+     Outputs: AuditEvent
+
+  9. R008_SquawkSpecialPurposeAudit
+     Inputs:  OpenSkyStateVector
+     Outputs: AuditEvent
+
+  10. R009_FilterTracksMissingPositionFromPairing
+     Inputs:  TrackQuality, OpenSkyStateVector
+     Outputs: AuditEvent
+
+  ... and 93 more rules
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                              ANALYSIS COMPLETE                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  📊 Summary:
+     • Total rules parsed:      103
+     • Dependency edges:        1093
+     • Execution phases:        11
+     • Contains cycles:         Yes
+
+  📈 Phase Breakdown:
+     Phase 1: ████████████████████████████████████████ 37 rules
+     Phase 2: ████████ 4 rules
+     Phase 3: ████████████████████████████ 14 rules
+     Phase 4: ██████ 3 rules
+     Phase 5: ████ 2 rules
+     Phase 6: ██████████████████████████████ 15 rules
+     Phase 7: ██████████████ 7 rules
+     Phase 8: ████████████████████████████ 14 rules
+     Phase 9: ████ 2 rules
+     Phase 10: ██████ 3 rules
+     Phase 11: ████ 2 rules
+
+  ⚡ Parallelization Potential:
+     • Max rules per phase:     37
+     • Sequential phases:       11
+

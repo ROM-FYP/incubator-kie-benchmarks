@@ -1,0 +1,365 @@
+@startuml
+
+!theme plain
+top to bottom direction
+skinparam linetype ortho
+
+class Alert {
+  - createdAt: Double
+  - reason: String
+  - type: String
+  - severity: String
+  - a: String
+  - b: String
+  + setType(String): void
+  + getCreatedAt(): Double
+  + getA(): String
+  + setSeverity(String): void
+  + setCreatedAt(Double): void
+  + getType(): String
+  + setReason(String): void
+  + getReason(): String
+  + getSeverity(): String
+  + toString(): String
+  + getB(): String
+  + setB(String): void
+  + setA(String): void
+}
+class AlertAck {
+  - at: Double
+  - key: String
+  + setKey(String): void
+  + getAt(): Double
+  + toString(): String
+  + getKey(): String
+  + setAt(Double): void
+}
+class AlertInhibit {
+  - kind: String
+  - key: String
+  - enabled: Boolean
+  + getKind(): String
+  + setKind(String): void
+  + getEnabled(): Boolean
+  + getKey(): String
+  + setKey(String): void
+  + toString(): String
+  + setEnabled(Boolean): void
+}
+class AuditEvent {
+  - details: String
+  - key: String
+  - kind: String
+  - at: double
+  + setKey(String): void
+  + setKind(String): void
+  + getKey(): String
+  + toString(): String
+  + getKind(): String
+  + getDetails(): String
+  + setAt(double): void
+  + getAt(): double
+  + setDetails(String): void
+}
+class ConflictCandidate {
+  - closing: Boolean
+  - ttcSec: Double
+  - a: String
+  - vertSepM: Double
+  - distM: Double
+  - b: String
+  - severity: String
+  + getDistM(): Double
+  + setClosing(Boolean): void
+  + getSeverity(): String
+  + getTtcSec(): Double
+  + setVertSepM(Double): void
+  + getA(): String
+  + getClosing(): Boolean
+  + setA(String): void
+  + setSeverity(String): void
+  + setTtcSec(Double): void
+  + getB(): String
+  + setDistM(Double): void
+  + getVertSepM(): Double
+  + setB(String): void
+  + toString(): String
+}
+class CpaMetrics {
+  - a: String
+  - computedAtSec: Double
+  - closing: Boolean
+  - dCpaM: Double
+  - b: String
+  - tCpaSec: Double
+  - vertAtCpaM: Double
+  + setA(String): void
+  + setVertAtCpaM(Double): void
+  + getClosing(): Boolean
+  + toString(): String
+  + setDCpaM(Double): void
+  + getTCpaSec(): Double
+  + setClosing(Boolean): void
+  + setB(String): void
+  + getA(): String
+  + getVertAtCpaM(): Double
+  + getComputedAtSec(): Double
+  + setTCpaSec(Double): void
+  + getB(): String
+  + setComputedAtSec(Double): void
+  + getDCpaM(): Double
+}
+class GridCell {
+  - icao24: String
+  - cellId: String
+  + toString(): String
+  + setIcao24(String): void
+  + setCellId(String): void
+  + getIcao24(): String
+  + getCellId(): String
+}
+class KinematicDelta {
+  - dVrt: Double
+  - dTrack: Double
+  - dVel: Double
+  - dtSec: Double
+  - icao24: String
+  + getDVel(): Double
+  + setDTrack(Double): void
+  + setDVel(Double): void
+  + setDVrt(Double): void
+  + getDtSec(): Double
+  + toString(): String
+  + setIcao24(String): void
+  + setDtSec(Double): void
+  + getDTrack(): Double
+  + getIcao24(): String
+  + getDVrt(): Double
+}
+class OpenSkyFlatRecord {
+  - collectedAtUtc: String
+  - state: State
+  - snapshotTime: long
+  - requestIndex: int
+  - bbox: BBox
+  + setRequestIndex(int): void
+  + setState(State): void
+  + getCollectedAtUtc(): String
+  + setCollectedAtUtc(String): void
+  + getState(): State
+  + toString(): String
+  + getSnapshotTime(): long
+  + getBbox(): BBox
+  + getRequestIndex(): int
+  + setBbox(BBox): void
+  + setSnapshotTime(long): void
+}
+class OpenSkyJsonlLoader {
+  - mapper: ObjectMapper
+  - LOG: Logger
+  + load(String, Mode): List<List<OpenSkyStateVector>>
+}
+class OpenSkyReplayDroolsBenchmark {
+  - engine: OpenSkyReplayEngine
+  - dataset: String
+  - updateStrategy: String
+  - clock: String
+  - batchSize: int
+  - mode: String
+  - snapshots: List<List<OpenSkyStateVector>>
+  - snapshotIndex: int
+  - cleanupStrategy: String
+  - fireStrategy: String
+  + tearDown(): void
+  + setup(): void
+  + main(String[]): void
+  + replayOneSnapshot(): int
+}
+class OpenSkyReplayEngine {
+  - handlesByIcao24: Map<String, FactHandle>
+  - updateStrategy: UpdateStrategy
+  - kieBase: KieBase
+  - LOG: Logger
+  - pseudoClock: SessionPseudoClock
+  - fireStrategy: FireStrategy
+  - lastSnapshotTimeSec: long
+  - cleanupStrategy: CleanupStrategy
+  - previousSnapshotHandles: List<FactHandle>
+  - session: KieSession
+  + setUpdateStrategy(UpdateStrategy): void
+  + init(): void
+  - loadDrl(String): String
+  + setCleanupStrategy(CleanupStrategy): void
+  + setFireStrategy(FireStrategy): void
+  + getSession(): KieSession
+  + replaySnapshot(List<OpenSkyStateVector>): int
+  + dispose(): void
+  + getPseudoClock(): SessionPseudoClock
+}
+class OpenSkyStateVector {
+  - lat: Double
+  - snapshotTime: long
+  - velocityMps: Double
+  - onGround: Boolean
+  - lon: Double
+  - baroAltitudeM: Double
+  - trueTrackDeg: Double
+  - timePosition: Long
+  - spi: Boolean
+  - squawk: String
+  - icao24: String
+  - category: Integer
+  - callsign: String
+  - originCountry: String
+  - geoAltitudeM: Double
+  - lastContact: Long
+  - positionSource: Integer
+  - verticalRateMps: Double
+  + getSquawk(): String
+  + getBaroAltitudeM(): Double
+  + getLon(): Double
+  + fromFlatRecord(OpenSkyFlatRecord): OpenSkyStateVector
+  + setOriginCountry(String): void
+  + setLon(Double): void
+  + getSnapshotTime(): long
+  + setIcao24(String): void
+  + setVerticalRateMps(Double): void
+  + setGeoAltitudeM(Double): void
+  + getCategory(): Integer
+  + getIcao24(): String
+  + setTimePosition(Long): void
+  + setLat(Double): void
+  + toString(): String
+  + getLat(): Double
+  + getVelocityMps(): Double
+  + getSpi(): Boolean
+  + setTrueTrackDeg(Double): void
+  + setVelocityMps(Double): void
+  + setLastContact(Long): void
+  + getOnGround(): Boolean
+  + setSnapshotTime(long): void
+  + setBaroAltitudeM(Double): void
+  + getTrueTrackDeg(): Double
+  + setSquawk(String): void
+  + getCallsign(): String
+  + setPositionSource(Integer): void
+  + getPositionSource(): Integer
+  + getLastContact(): Long
+  + getVerticalRateMps(): Double
+  + setCategory(Integer): void
+  + setCallsign(String): void
+  + getTimePosition(): Long
+  + setOnGround(Boolean): void
+  + getGeoAltitudeM(): Double
+  + getOriginCountry(): String
+  + setSpi(Boolean): void
+}
+class PairCandidate {
+  - b: String
+  - cellId: String
+  - a: String
+  + toString(): String
+  + setB(String): void
+  + getA(): String
+  + setA(String): void
+  + setCellId(String): void
+  + getB(): String
+  + getCellId(): String
+}
+class PairRiskState {
+  - lastAtSec: Double
+  - safeStreak: int
+  - key: String
+  - alertStreak: int
+  - warnStreak: int
+  + getWarnStreak(): int
+  + setWarnStreak(int): void
+  + setSafeStreak(int): void
+  + getAlertStreak(): int
+  + toString(): String
+  + setAlertStreak(int): void
+  + setLastAtSec(Double): void
+  + getSafeStreak(): int
+  + getKey(): String
+  + getLastAtSec(): Double
+  + setKey(String): void
+}
+class Params {
+  - stalePosSec: Long
+  - alertDistNm: Double
+  - persistSec: Double
+  - nearDistNm: Double
+  - gridDeg: Double
+  - alertTtcSec: Double
+  - staleAnySec: Long
+  - warnDistNm: Double
+  - vertMinFt: Double
+  - warnTtcSec: Double
+  + getVertMinFt(): Double
+  + setPersistSec(Double): void
+  + getGridDeg(): Double
+  + setNearDistNm(Double): void
+  + setAlertTtcSec(Double): void
+  + setAlertDistNm(Double): void
+  + getWarnTtcSec(): Double
+  + setWarnTtcSec(Double): void
+  + getNearDistNm(): Double
+  + toString(): String
+  + getAlertDistNm(): Double
+  + setVertMinFt(Double): void
+  + setGridDeg(Double): void
+  + setStalePosSec(Long): void
+  + getStaleAnySec(): Long
+  + setWarnDistNm(Double): void
+  + getStalePosSec(): Long
+  + getAlertTtcSec(): Double
+  + getWarnDistNm(): Double
+  + setStaleAnySec(Long): void
+  + getPersistSec(): Double
+}
+class RuleMathUtil {
+  - EARTH_RADIUS_M: double
+  - METERS_PER_NM: double
+  + nm(double): double
+  + metersFromNm(double): double
+  + haversineMeters(double, double, double, double): double
+  + timeToCpaSec(double, double, double, double): double
+}
+class Status {
+  - at: Double
+  - stcaAvailable: Boolean
+  + getStcaAvailable(): Boolean
+  + setStcaAvailable(Boolean): void
+  + toString(): String
+  + getAt(): Double
+  + setAt(Double): void
+}
+class TrackQuality {
+  - missingPos: Boolean
+  - badAlt: Boolean
+  - reason: String
+  - staleAny: Boolean
+  - icao24: String
+  - stalePos: Boolean
+  - badVel: Boolean
+  + setMissingPos(Boolean): void
+  + getIcao24(): String
+  + getBadAlt(): Boolean
+  + getStaleAny(): Boolean
+  + setBadAlt(Boolean): void
+  + getBadVel(): Boolean
+  + setReason(String): void
+  + setStalePos(Boolean): void
+  + toString(): String
+  + getMissingPos(): Boolean
+  + setIcao24(String): void
+  + setBadVel(Boolean): void
+  + setStaleAny(Boolean): void
+  + getStalePos(): Boolean
+  + getReason(): String
+}
+
+OpenSkyReplayDroolsBenchmark  -[#595959,dashed]->  OpenSkyJsonlLoader           : "«create»"
+OpenSkyReplayDroolsBenchmark "1" *-[#595959,plain]-> "engine\n1" OpenSkyReplayEngine          
+OpenSkyReplayDroolsBenchmark  -[#595959,dashed]->  OpenSkyReplayEngine          : "«create»"
+@enduml

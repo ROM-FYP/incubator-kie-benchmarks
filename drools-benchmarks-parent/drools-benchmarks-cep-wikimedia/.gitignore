@@ -1,0 +1,62 @@
+<<<<<<< HEAD
+target/
+/local
+/bin
+
+*.class
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.ear
+*.jsonl
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+# Eclipse, Netbeans and IntelliJ files
+/.*
+!.gitignore
+/nbproject
+/*.ipr
+/*.iws
+/*.iml
+=======
+# Maven
+target/
+dependency-reduced-pom.xml
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# JMH
+jmh-result.json
+*.jfr
+
+# Results
+docs/results/*.csv
+docs/results/*.html
+docs/results/*.jfr
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*~
+>>>>>>> routing_experiment_opeskyAirTrafficking
