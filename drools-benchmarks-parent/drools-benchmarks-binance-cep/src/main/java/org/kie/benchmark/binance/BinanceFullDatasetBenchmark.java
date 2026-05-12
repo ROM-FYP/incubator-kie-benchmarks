@@ -19,12 +19,16 @@
 
 package org.kie.benchmark.binance;
 
+import org.kie.api.conf.MultithreadEvaluationOption;
 import org.kie.api.runtime.KieSession;
 import org.kie.benchmark.binance.model.*;
 import org.kie.benchmark.binance.provider.BinanceEventProvider;
 import org.kie.benchmark.binance.provider.BinanceRulesProvider;
 import org.kie.benchmark.binance.util.EventReplayController;
 import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.util.List;
 import java.util.Set;
@@ -34,6 +38,15 @@ import java.util.stream.Collectors;
 /**
  * Full-dataset CEP benchmark for Binance market risk control system.
  * Replays ALL events (all symbols, all stream types) in a single invocation.
+ *
+ * <p><strong>Architectures (mode param):</strong>
+ * <ul>
+ *   <li>{@code baseline}            — single-session sequential evaluation</li>
+ *   <li>{@code PARALLEL_EVALUATION} — Drools built-in parallel LHS evaluation</li>
+ *   <li>{@code FULLY_PARALLEL}      — Drools built-in fully parallel (LHS + RHS)</li>
+ * </ul>
+ *
+ * <p>Symmetric with {@code WikimediaJmhBenchmark} and {@code OpenSkyFullReplayBenchmark}.
  *
  * Benchmark Configuration:
  * - Rules: 108 (taxonomy.drl)
@@ -51,6 +64,17 @@ import java.util.stream.Collectors;
 @Fork(value = 1, jvmArgs = { "-Xms4g", "-Xmx4g" })
 public class BinanceFullDatasetBenchmark {
 
+
+    /**
+     * Execution mode.
+     * <ul>
+     *   <li>{@code baseline}            — sequential single-session</li>
+     *   <li>{@code PARALLEL_EVALUATION} — parallel LHS evaluation only</li>
+     *   <li>{@code FULLY_PARALLEL}      — parallel LHS + RHS</li>
+     * </ul>
+     */
+    @Param({"baseline", "PARALLEL_EVALUATION", "FULLY_PARALLEL"})
+    private String mode;
 
     private BinanceRulesProvider rulesProvider;
     private BinanceEventProvider eventProvider;
@@ -74,8 +98,8 @@ public class BinanceFullDatasetBenchmark {
      */
     @Setup(Level.Trial)
     public void setupTrial() {
-        // Load rules (compile DRL)
-        rulesProvider = new BinanceRulesProvider();
+        // Load rules (compile DRL) with requested parallel mode
+        rulesProvider = new BinanceRulesProvider(mode);
 
         // Load ALL events from dataset (no symbol filtering)
         eventProvider = new BinanceEventProvider();
@@ -92,7 +116,7 @@ public class BinanceFullDatasetBenchmark {
         totalTimeElapsed = 0;
         invocationCount = 0;
 
-        System.out.println("=== Full Dataset Benchmark Setup ===");
+        System.out.printf("=== Full Dataset Benchmark Setup [mode=%s] ===%n", mode);
         System.out.println("Total events per invocation: " + allEvents.size());
         System.out.println("Symbols: " + symbols);
         System.out.println("Dataset: " + eventProvider.getDatasetId());

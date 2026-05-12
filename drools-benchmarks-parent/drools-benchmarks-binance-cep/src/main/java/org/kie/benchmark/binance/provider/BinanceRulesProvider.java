@@ -23,6 +23,7 @@ import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
 import org.kie.api.builder.Message;
+import org.kie.api.conf.MultithreadEvaluationOption;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.conf.ClockTypeOption;
@@ -41,18 +42,24 @@ public class BinanceRulesProvider {
     private final String rulesPath;
     private final KieContainer kieContainer;
 
-    /**
-     * Initialize and build KieBase from rules file.
-     * Uses system property 'binance.rules.file' or defaults to demo.drl.
-     */
+    /** Sequential (baseline) session factory. */
     public BinanceRulesProvider() {
-        this(System.getProperty("binance.rules.file", DEFAULT_RULES_PATH));
+        this(System.getProperty("binance.rules.file", DEFAULT_RULES_PATH), "baseline");
     }
 
     /**
-     * Initialize with specific rules file path.
+     * Session factory configured for the given execution mode.
+     *
+     * @param mode one of {@code "baseline"}, {@code "PARALLEL_EVALUATION"}, {@code "FULLY_PARALLEL"}
      */
-    public BinanceRulesProvider(String rulesPath) {
+    public BinanceRulesProvider(String mode) {
+        this(System.getProperty("binance.rules.file", DEFAULT_RULES_PATH), mode);
+    }
+
+    /**
+     * Initialize with specific rules file path and execution mode.
+     */
+    public BinanceRulesProvider(String rulesPath, String mode) {
         this.rulesPath = rulesPath;
         KieServices kieServices = KieServices.Factory.get();
         KieFileSystem kfs = kieServices.newKieFileSystem();
@@ -71,9 +78,14 @@ public class BinanceRulesProvider {
         }
 
         // Configure STREAM mode so @expires annotations work
+        // Parallel mode is handled at KieBase level via MultithreadEvaluationOption
+        String multithreadAttr = ("PARALLEL_EVALUATION".equals(mode) || "FULLY_PARALLEL".equals(mode))
+                ? " multithread=\"true\"" : "";
+        if ("FULLY_PARALLEL".equals(mode)) System.setProperty("drools.parallelAgenda", "true");
         String kmoduleXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<kmodule xmlns=\"http://www.drools.org/xsd/kmodule\">\n"
-                + "  <kbase name=\"binanceBase\" eventProcessingMode=\"stream\">\n"
+                + "  <kbase name=\"binanceBase\" eventProcessingMode=\"stream\""
+                + multithreadAttr + ">\n"
                 + "    <ksession name=\"binanceSession\"/>\n"
                 + "  </kbase>\n"
                 + "</kmodule>";
@@ -91,7 +103,7 @@ public class BinanceRulesProvider {
         this.kieContainer = kieServices.newKieContainer(
                 kieServices.getRepository().getDefaultReleaseId());
 
-        System.out.println("Loaded rules from: " + this.rulesPath);
+        System.out.printf("Loaded rules from: %s [mode=%s]%n", this.rulesPath, mode);
     }
 
     /**
