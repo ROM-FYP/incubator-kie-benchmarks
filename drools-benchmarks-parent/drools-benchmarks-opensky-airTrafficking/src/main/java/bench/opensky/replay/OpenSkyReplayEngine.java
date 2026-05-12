@@ -1,25 +1,40 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package bench.opensky.replay;
 
 import bench.opensky.model.*;
-import bench.opensky.router.Router;
-import bench.opensky.router.SessionManager;
 import org.drools.compiler.kie.builder.impl.DrlProject;
 import org.kie.api.KieBase;
 import org.kie.api.KieServices;
 import org.kie.api.builder.*;
+import org.kie.api.conf.EventProcessingOption;
+import org.kie.api.conf.MultithreadEvaluationOption;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.KieSessionConfiguration;
 import org.kie.api.runtime.conf.ClockTypeOption;
-import org.kie.api.conf.EventProcessingOption;
-import org.kie.api.runtime.rule.FactHandle;
 import org.kie.api.time.SessionPseudoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -28,6 +43,13 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Fact lifecycle is handled entirely by {@code @Expires} annotations on
  * the model POJOs — no manual retraction is needed.</p>
+ *
+ * <p>Supports three execution modes via {@link #init(String)}:
+ * <ul>
+ *   <li>{@code baseline}            — sequential single-session</li>
+ *   <li>{@code PARALLEL_EVALUATION} — Drools built-in parallel LHS evaluation</li>
+ *   <li>{@code FULLY_PARALLEL}      — Drools built-in fully parallel (LHS + RHS)</li>
+ * </ul>
  */
 public class OpenSkyReplayEngine {
 
@@ -36,9 +58,6 @@ public class OpenSkyReplayEngine {
     private KieBase kieBase;
     private KieSession session;
     private SessionPseudoClock pseudoClock;
-    private CsvLoggingRuleListener csvLogger;
-    private ProfilingRuleListener profilingLogger;
-    private CausalTraceListener causalTraceListener;
 
     /** Timestamp (ms) of the last event ingested; used to advance the clock monotonically. */
     private long lastEventTimeMs = -1L;
@@ -50,11 +69,20 @@ public class OpenSkyReplayEngine {
     // -------------------------------------------------------------------------
 
     /**
-     * Build the KieBase from the classpath DRL and create a pseudo-clock KieSession.
-     * Inserts a singleton {@link Params} fact so rules that depend on it are ready.
+     * Initialise with sequential (baseline) execution mode.
      */
     public void init() {
-        LOG.info("Building KieBase from DRL...");
+        init("baseline");
+    }
+
+    /**
+     * Build the KieBase from the classpath DRL and create a pseudo-clock KieSession.
+     * Inserts a singleton {@link Params} fact so rules that depend on it are ready.
+     *
+     * @param mode one of {@code "baseline"}, {@code "PARALLEL_EVALUATION"}, {@code "FULLY_PARALLEL"}
+     */
+    public void init(String mode) {
+        LOG.info("Building KieBase from DRL [mode={}]...", mode);
 
         String drl = loadDrl("airTraffick_rules.drl");
 
@@ -70,21 +98,28 @@ public class OpenSkyReplayEngine {
             }
             throw new RuntimeException("DRL build failed with errors. See logs.");
         }
-        if (results.hasMessages(Message.Level.WARNING)) {
-            for (Message msg : results.getMessages(Message.Level.WARNING)) {
-                LOG.warn("DRL build warning: {}", msg);
-            }
-        }
 
         KieModule km = kb.getKieModule();
         KieContainer kc = ks.newKieContainer(km.getReleaseId());
 
-        // STREAM mode — required for @Expires / temporal reasoning
         org.kie.api.KieBaseConfiguration kbConfig = ks.newKieBaseConfiguration();
         kbConfig.setOption(EventProcessingOption.STREAM);
+
+        switch (mode) {
+            case "PARALLEL_EVALUATION":
+                kbConfig.setOption(MultithreadEvaluationOption.YES);
+                break;
+            case "FULLY_PARALLEL":
+                kbConfig.setOption(MultithreadEvaluationOption.YES);
+                // FULLY_PARALLEL enables parallel RHS firing in addition to LHS
+                System.setProperty("drools.parallelAgenda", "true");
+                break;
+            default: // baseline
+                break;
+        }
+
         kieBase = kc.newKieBase(kbConfig);
 
-        // Pseudo clock — we drive time ourselves
         KieSessionConfiguration config = ks.newKieSessionConfiguration();
         config.setOption(ClockTypeOption.PSEUDO);
         session = kieBase.newKieSession(config, null);
@@ -92,8 +127,12 @@ public class OpenSkyReplayEngine {
         pseudoClock = session.getSessionClock();
         session.setGlobal("clock", pseudoClock);
 
-        LOG.info("KieSession ready (pseudo clock at {}ms)", pseudoClock.getCurrentTime());
+        LOG.info("KieSession ready [mode={}] (pseudo clock at {}ms)", mode, pseudoClock.getCurrentTime());
     }
+
+    // -------------------------------------------------------------------------
+    // Event ingestion
+    // -------------------------------------------------------------------------
 
     /**
      * Ingest a single state-vector event into the CEP engine.
@@ -110,7 +149,6 @@ public class OpenSkyReplayEngine {
      * @return number of rule activations fired
      */
     public int ingestEvent(OpenSkyStateVector sv) {
-        // Advance clock monotonically
         long targetMs = sv.getSnapshotTime() * 1000L;
         if (targetMs > lastEventTimeMs) {
             long nowMs = pseudoClock.getCurrentTime();
@@ -120,112 +158,13 @@ public class OpenSkyReplayEngine {
             lastEventTimeMs = targetMs;
         }
 
-        // Insert — lifecycle managed by @Expires
         session.insert(sv);
-
-        // Fire — capped to prevent runaway activations on dense timestamps
         return session.fireAllRules(5000);
     }
 
-    public int ingestEventRouted(OpenSkyStateVector sv, Router router, SessionManager sessionMgr) {
-        long targetMs = sv.getSnapshotTime() * 1000L;
-        if (targetMs > lastEventTimeMs) {
-            sessionMgr.advanceAllClocks(targetMs);
-            lastEventTimeMs = targetMs;
-        }
-
-        Set<String> clusters = router.route(sv);
-        int total = 0;
-
-        for (String clusterId : clusters) {
-            KieSession clusterSession = sessionMgr.getSession(clusterId);
-            if (clusterSession != null) {
-                clusterSession.insert(sv);
-                total += clusterSession.fireAllRules(5000);
-            }
-        }
-
-        return total;
-    }
-
-    /**
-     * Broadcasts a single state-vector event to ALL cluster sessions in parallel.
-     * This is used for empirical testing of the 89/13 rule split without routing.
-     */
-    public int ingestEventBroadcastParallel(OpenSkyStateVector sv, SessionManager sessionMgr) {
-        long targetMs = sv.getSnapshotTime() * 1000L;
-        if (targetMs > lastEventTimeMs) {
-            sessionMgr.advanceAllClocks(targetMs);
-            lastEventTimeMs = targetMs;
-        }
-
-        return sessionMgr.getActiveClusterIds().parallelStream()
-            .mapToInt(clusterId -> {
-                KieSession clusterSession = sessionMgr.getSession(clusterId);
-                if (clusterSession != null) {
-                    clusterSession.insert(sv);
-                    return clusterSession.fireAllRules(5000);
-                }
-                return 0;
-            })
-            .sum();
-    }
-
-    /**
-     * Broadcasts using the AlphaRouter to filter events BEFORE inserting them into sessions.
-     */
-    public int ingestEventAlphaRoutedParallel(OpenSkyStateVector sv, SessionManager sessionMgr, bench.opensky.router.AlphaRouter alphaRouter) {
-        long targetMs = sv.getSnapshotTime() * 1000L;
-        if (targetMs > lastEventTimeMs) {
-            sessionMgr.advanceAllClocks(targetMs);
-            lastEventTimeMs = targetMs;
-        }
-
-        Set<String> clusters = alphaRouter.route(sv);
-
-        return clusters.parallelStream()
-            .mapToInt(clusterId -> {
-                KieSession clusterSession = sessionMgr.getSession(clusterId);
-                if (clusterSession != null) {
-                    clusterSession.insert(sv);
-                    return clusterSession.fireAllRules(5000);
-                }
-                return 0;
-            })
-            .sum();
-    }
-
-    /**
-     * Two-session clustered parallel ingest.
-     *
-     * <p>Broadcasts the {@link OpenSkyStateVector} to BOTH Session A (conflict/alert core)
-     * and Session B (audit/quality) concurrently via Java parallel streams.
-     * Each session advances its pseudo-clock independently to the event timestamp.
-     * Sessions are long-lived (not recreated per iteration).</p>
-     *
-     * @param sv         the incoming state vector event
-     * @param sessionMgr the SessionManager holding "session_a" and "session_b" KieSessions
-     * @return total rule firings across both sessions
-     */
-    public int ingestEventTwoSessionParallel(OpenSkyStateVector sv, SessionManager sessionMgr) {
-        long targetMs = (long)(sv.getLastContact() * 1000L);
-
-        // Advance both clocks (synchronized on each session to avoid concurrent clock conflicts)
-        sessionMgr.advanceAllClocks(targetMs);
-
-        // Broadcast OSV to both sessions in parallel
-        return java.util.stream.Stream.of("session_a", "session_b")
-            .parallel()
-            .mapToInt(sessionId -> {
-                KieSession s = sessionMgr.getSession(sessionId);
-                if (s == null) return 0;
-                synchronized (s) {
-                    s.insert(sv);
-                    return s.fireAllRules();
-                }
-            })
-            .sum();
-    }
+    // -------------------------------------------------------------------------
+    // Lifecycle — dispose
+    // -------------------------------------------------------------------------
 
     /** Dispose the KieSession, releasing all resources. */
     public void dispose() {
@@ -233,76 +172,15 @@ public class OpenSkyReplayEngine {
             session.dispose();
             session = null;
         }
-        if (csvLogger != null) {
-            csvLogger.close();
-            csvLogger = null;
-        }
-        if (causalTraceListener != null) {
-            causalTraceListener.close();
-            causalTraceListener = null;
-        }
         lastEventTimeMs = -1L;
-    }
-
-    /**
-     * Optional: Enable CSV tracing of rule firings and Alerts. 
-     * Must be called AFTER init() so the SessionPseudoClock is available, 
-     * but BEFORE ingestEvent().
-     */
-    public void enableCsvLogging(String alertsFile, String rulesFile) {
-        if (session == null || pseudoClock == null) {
-            throw new IllegalStateException("Engine must be init() before enabling CSV logging");
-        }
-        this.csvLogger = new CsvLoggingRuleListener(alertsFile, rulesFile, pseudoClock);
-        session.addEventListener(csvLogger.getRuleRuntimeEventListener());
-        session.addEventListener(csvLogger.getAgendaEventListener());
-        LOG.info("CSV Logging enabled: alerts={} rules={}", alertsFile, rulesFile);
-    }
-
-    /**
-     * Optional: Enable CPU profiling of individual rule actions.
-     */
-    public void enableProfiling() {
-        if (session == null) {
-            throw new IllegalStateException("Engine must be init() before enabling profiling");
-        }
-        this.profilingLogger = new ProfilingRuleListener();
-        session.addEventListener(profilingLogger);
-        LOG.info("CPU Profiling enabled.");
-    }
-
-    public ProfilingRuleListener getProfilingLogger() {
-        return profilingLogger;
-    }
-
-    /**
-     * Optional: Enable causal trace logging to a JSON-lines file.
-     * Each line is a structured event (FACT_INSERT, FACT_UPDATE, FACT_DELETE,
-     * ACTIVATION_CREATED, ACTIVATION_FIRED) that captures full fact provenance.
-     *
-     * Must be called AFTER init() and BEFORE ingestEvent().
-     *
-     * @param outputFile path to the trace output file (will be overwritten)
-     */
-    public void enableCausalTracing(String outputFile) {
-        if (session == null) {
-            throw new IllegalStateException("Engine must be init() before enabling causal tracing");
-        }
-        this.causalTraceListener = new CausalTraceListener(outputFile);
-        session.addEventListener(causalTraceListener.agendaListener());
-        session.addEventListener(causalTraceListener.runtimeListener());
-        LOG.info("Causal trace logging enabled → {}", outputFile);
-    }
-
-    public CausalTraceListener getCausalTraceListener() {
-        return causalTraceListener;
+        System.clearProperty("drools.parallelAgenda");
     }
 
     // -------------------------------------------------------------------------
-    // Accessors (used by tests / profiling)
+    // Accessors
     // -------------------------------------------------------------------------
 
-    public KieSession getSession()          { return session; }
+    public KieSession getSession()             { return session; }
     public SessionPseudoClock getPseudoClock() { return pseudoClock; }
 
     // -------------------------------------------------------------------------
