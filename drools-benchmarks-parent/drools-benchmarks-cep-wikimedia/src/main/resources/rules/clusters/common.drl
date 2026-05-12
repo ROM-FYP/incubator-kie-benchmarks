@@ -1,7 +1,0 @@
-package rules;
-
-import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
-import org.kie.benchmark.cep.wikimedia.model.DrlFacts.*;
-
-// Metadata handled by Java annotations in DrlFacts
-// Metadata handled by Java annotations in WikiEvent class

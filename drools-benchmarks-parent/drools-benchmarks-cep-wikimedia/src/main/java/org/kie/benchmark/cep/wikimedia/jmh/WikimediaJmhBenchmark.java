@@ -32,10 +32,24 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmark for the single-session Wikimedia CEP baseline.
+ * Unified JMH benchmark for Wikimedia CEP — baseline and built-in parallel modes.
  *
- * <p>Replays all events through a single KieSession with a pseudo clock,
- * firing rules after each event insertion (micro-transaction model).
+ * <p>Covers three execution modes via the {@code mode} parameter:
+ * <ul>
+ *   <li>{@code baseline}            — single-session sequential evaluation</li>
+ *   <li>{@code PARALLEL_EVALUATION} — Drools built-in parallel LHS evaluation</li>
+ *   <li>{@code FULLY_PARALLEL}      — Drools built-in fully parallel (LHS + RHS)</li>
+ * </ul>
+ *
+ * <p>Symmetric with {@code BinanceFullDatasetBenchmark} and
+ * {@code OpenSkyFullReplayBenchmark} across the three CEP benchmark domains.
+ *
+ * <p>Benchmark Configuration:
+ * <ul>
+ *   <li>Rules: wikimedia_content_moderation_join_heavy.drl</li>
+ *   <li>Dataset: split_400k / 800k / 1200k / 1600k (JSONL)</li>
+ *   <li>Mode: Event-time replay with SessionPseudoClock</li>
+ * </ul>
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
@@ -43,14 +57,24 @@ import java.util.concurrent.TimeUnit;
 @Warmup(iterations = 3, batchSize = 1)
 @Measurement(iterations = 5, batchSize = 1)
 @Fork(value = 1, jvmArgs = {"-Xms4g", "-Xmx4g"})
-public class WikimediaBaselineJmhBenchmark {
+public class WikimediaJmhBenchmark {
 
     private static final String DRL_PATH = "rules/wikimedia_content_moderation_join_heavy.drl";
-    private static final String DEFAULT_DATA_FILE =
-            "src/main/resources/data/wikimedia_stream_20260421_104232.jsonl";
 
-    @Param({DEFAULT_DATA_FILE})
+    /** Classpath-relative path to the JSONL dataset file. */
+    @Param({"src/main/resources/data/data/split_400k.jsonl"})
     private String dataFile;
+
+    /**
+     * Execution mode.
+     * <ul>
+     *   <li>{@code baseline}            — sequential single-session</li>
+     *   <li>{@code PARALLEL_EVALUATION} — parallel LHS evaluation only</li>
+     *   <li>{@code FULLY_PARALLEL}      — parallel LHS + RHS</li>
+     * </ul>
+     */
+    @Param({"baseline", "PARALLEL_EVALUATION", "FULLY_PARALLEL"})
+    private String mode;
 
     private CepSessionFactory factory;
     private List<WikiEvent> events;
@@ -67,17 +91,21 @@ public class WikimediaBaselineJmhBenchmark {
 
     @Setup(Level.Trial)
     public void setupTrial() throws Exception {
-        System.out.println("\n=== Wikimedia Baseline JMH Setup ===");
+        System.out.printf("%n=== Wikimedia JMH Setup [mode=%s] ===%n", mode);
         events = WikimediaBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
-        factory = new CepSessionFactory(DRL_PATH);
 
-        totalRulesFired = 0;
+        factory = "baseline".equals(mode)
+                ? new CepSessionFactory(DRL_PATH)
+                : new CepSessionFactory(DRL_PATH, mode);
+
+        totalRulesFired  = 0;
         totalTimeElapsed = 0;
-        invocationCount = 0;
+        invocationCount  = 0;
 
         System.out.println("Events per invocation: " + events.size());
-        System.out.println("DRL: " + DRL_PATH);
-        System.out.println("====================================\n");
+        System.out.println("DRL:                   " + DRL_PATH);
+        System.out.println("Mode:                  " + mode);
+        System.out.println("=============================================\n");
     }
 
     @Setup(Level.Invocation)
@@ -87,12 +115,12 @@ public class WikimediaBaselineJmhBenchmark {
     }
 
     @Benchmark
-    public int baselineReplay() {
+    public int replay() {
         SessionPseudoClock clock = session.getSessionClock();
         int fired = 0;
 
         for (WikiEvent event : events) {
-            long eventTime = event.getTimestamp();
+            long eventTime   = event.getTimestamp();
             long currentTime = clock.getCurrentTime();
             if (eventTime > currentTime) {
                 clock.advanceTime(eventTime - currentTime, TimeUnit.MILLISECONDS);
@@ -107,15 +135,15 @@ public class WikimediaBaselineJmhBenchmark {
 
     @TearDown(Level.Invocation)
     public void teardownInvocation() {
-        long duration = System.currentTimeMillis() - invocationStartTime;
+        long   duration   = System.currentTimeMillis() - invocationStartTime;
         double throughput = (duration > 0) ? (events.size() * 1000.0) / duration : 0;
 
         invocationCount++;
-        totalRulesFired += lastRulesFired;
+        totalRulesFired  += lastRulesFired;
         totalTimeElapsed += duration;
 
-        System.out.printf("[Baseline Invocation %d] Events: %d | Rules fired: %,d | Duration: %d ms | Throughput: %.2f events/sec%n",
-                invocationCount, events.size(), lastRulesFired, duration, throughput);
+        System.out.printf("[%s Invocation %d] Events: %d | Rules fired: %,d | Duration: %d ms | Throughput: %.2f ev/s%n",
+                mode, invocationCount, events.size(), lastRulesFired, duration, throughput);
 
         if (session != null) {
             session.dispose();
@@ -128,18 +156,18 @@ public class WikimediaBaselineJmhBenchmark {
         double avgThroughput = (totalTimeElapsed > 0)
                 ? (invocationCount * events.size() * 1000.0) / totalTimeElapsed : 0;
 
-        System.out.println("\n=== Baseline Trial Summary ===");
-        System.out.println("Total invocations:      " + invocationCount);
-        System.out.println("Events per invocation:  " + events.size());
-        System.out.printf("Total rules fired:      %,d%n", totalRulesFired);
-        System.out.println("Total time elapsed:     " + totalTimeElapsed + " ms");
-        System.out.printf("Avg throughput:         %.2f events/sec%n", avgThroughput);
-        System.out.println("==============================\n");
+        System.out.printf("%n=== Wikimedia Trial Summary [%s] ===%n", mode);
+        System.out.println("Total invocations:     " + invocationCount);
+        System.out.println("Events per invocation: " + events.size());
+        System.out.printf("Total rules fired:     %,d%n", totalRulesFired);
+        System.out.println("Total time elapsed:    " + totalTimeElapsed + " ms");
+        System.out.printf("Avg throughput:        %.2f events/sec%n", avgThroughput);
+        System.out.println("==========================================\n");
     }
 
     public static void main(String[] args) throws Exception {
         Options opt = new OptionsBuilder()
-                .include(WikimediaBaselineJmhBenchmark.class.getSimpleName())
+                .include(WikimediaJmhBenchmark.class.getSimpleName())
                 .build();
         new Runner(opt).run();
     }
