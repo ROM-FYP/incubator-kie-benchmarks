@@ -19,7 +19,6 @@
 
 package org.kie.benchmark.binance;
 
-import org.kie.api.conf.MultithreadEvaluationOption;
 import org.kie.api.runtime.KieSession;
 import org.kie.benchmark.binance.model.*;
 import org.kie.benchmark.binance.provider.BinanceEventProvider;

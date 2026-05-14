@@ -18,16 +18,19 @@
  */
 package org.kie.benchmark.cep.wikimedia.jmh;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.time.SessionPseudoClock;
 import org.kie.benchmark.cep.wikimedia.CepSessionFactory;
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
-import org.kie.benchmark.cep.wikimedia.runner.WikimediaBaselineBenchmark;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -92,7 +95,7 @@ public class WikimediaJmhBenchmark {
     @Setup(Level.Trial)
     public void setupTrial() throws Exception {
         System.out.printf("%n=== Wikimedia JMH Setup [mode=%s] ===%n", mode);
-        events = WikimediaBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
+        events = loadEvents(dataFile, Integer.MAX_VALUE);
 
         factory = "baseline".equals(mode)
                 ? new CepSessionFactory(DRL_PATH)
@@ -170,5 +173,18 @@ public class WikimediaJmhBenchmark {
                 .include(WikimediaJmhBenchmark.class.getSimpleName())
                 .build();
         new Runner(opt).run();
+    }
+
+    // ── local loader (replaces the removed WikimediaBaselineBenchmark dependency) ─
+    static List<WikiEvent> loadEvents(String path, int max) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        List<WikiEvent> list = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+            String line;
+            while ((line = br.readLine()) != null && list.size() < max) {
+                if (!line.isBlank()) list.add(mapper.readValue(line, WikiEvent.class));
+            }
+        }
+        return list;
     }
 }

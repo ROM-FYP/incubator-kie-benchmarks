@@ -24,7 +24,6 @@ import org.kie.api.KieBase;
 import org.kie.api.KieServices;
 import org.kie.api.builder.*;
 import org.kie.api.conf.EventProcessingOption;
-import org.kie.api.conf.MultithreadEvaluationOption;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.KieSessionConfiguration;
@@ -107,18 +106,21 @@ public class OpenSkyReplayEngine {
 
         switch (mode) {
             case "PARALLEL_EVALUATION":
-                kbConfig.setOption(MultithreadEvaluationOption.YES);
+                System.setProperty("drools.multithreadEvaluation", "true");
+                kieBase = kc.newKieBase(kbConfig);
+                System.clearProperty("drools.multithreadEvaluation");
                 break;
             case "FULLY_PARALLEL":
-                kbConfig.setOption(MultithreadEvaluationOption.YES);
-                // FULLY_PARALLEL enables parallel RHS firing in addition to LHS
+                System.setProperty("drools.multithreadEvaluation", "true");
                 System.setProperty("drools.parallelAgenda", "true");
+                kieBase = kc.newKieBase(kbConfig);
+                System.clearProperty("drools.multithreadEvaluation");
+                System.clearProperty("drools.parallelAgenda");
                 break;
             default: // baseline
+                kieBase = kc.newKieBase(kbConfig);
                 break;
         }
-
-        kieBase = kc.newKieBase(kbConfig);
 
         KieSessionConfiguration config = ks.newKieSessionConfiguration();
         config.setOption(ClockTypeOption.PSEUDO);

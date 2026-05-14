@@ -18,11 +18,13 @@
  */
 package org.kie.benchmark.cep.wikimedia;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.time.SessionPseudoClock;
 import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
-import org.kie.benchmark.cep.wikimedia.runner.WikimediaBaselineBenchmark;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.nio.file.Files;
@@ -89,7 +91,7 @@ public class WikimediaHeapProfileMain {
         String jvm     = System.getProperty("java.version") + " (" + System.getProperty("java.vm.name") + ")";
 
         System.out.printf("[WikimediaHeapProfile] Loading dataset: %s%n", dataset);
-        List<WikiEvent> events = WikimediaBaselineBenchmark.loadEvents(dataset, maxEvents);
+        List<WikiEvent> events = loadEvents(dataset, maxEvents);
         System.out.printf("[WikimediaHeapProfile] Loaded %,d events | mode=%s | threads=%d | trials=%d%n",
                 events.size(), mode, threads, trials);
 
@@ -210,5 +212,18 @@ public class WikimediaHeapProfileMain {
         sb.append("}\n");
         Files.createDirectories(Paths.get(out).getParent());
         Files.write(Paths.get(out), sb.toString().getBytes());
+    }
+
+    // ── local loader (replaces the removed WikimediaBaselineBenchmark dependency) ─
+    static List<WikiEvent> loadEvents(String path, int max) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        List<WikiEvent> list = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+            String line;
+            while ((line = br.readLine()) != null && list.size() < max) {
+                if (!line.isBlank()) list.add(mapper.readValue(line, WikiEvent.class));
+            }
+        }
+        return list;
     }
 }

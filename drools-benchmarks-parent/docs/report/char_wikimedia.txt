@@ -1,0 +1,16 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -------------< org.drools:drools-benchmarks-cep-wikimedia >-------------
+[INFO] Building Drools CEP Wikimedia Benchmark 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.6.3:java (default-cli) @ drools-benchmarks-cep-wikimedia ---
+
+╔══════════════════════════════════════════════════════════════╗
+║   Wikimedia CEP Benchmark — Characterization Collector       ║
+╚══════════════════════════════════════════════════════════════╝
+
+[A] Loading events from: src/main/resources/data/data/split_400k.jsonl
+[A] Loaded 400,000 events
+Loaded rules from: rules/wikimedia_content_moderation_join_heavy.drl [parallelMode=SEQUENTIAL]

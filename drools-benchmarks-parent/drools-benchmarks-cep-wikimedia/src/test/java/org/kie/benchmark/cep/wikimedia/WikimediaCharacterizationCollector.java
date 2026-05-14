@@ -230,17 +230,17 @@ public class WikimediaCharacterizationCollector {
         // B — Structure
         System.out.printf("B1  Rules covered at runtime         %8d / %d (%.1f%%)%n", coveredRules, registeredRuleCount, coverage);
         // C — Dynamic
-        System.out.printf("C1  Total rules fired                %8,d%n", totalFired);
+        System.out.printf("C1  Total rules fired                %,8d%n", totalFired);
         System.out.printf("C2  Firings per event                %8.4f%n", firingRate);
         System.out.printf("C3  Avg conflict-set size            %8.4f%n", agenda.avgCS());
         System.out.printf("C4  Peak conflict-set size           %8d%n", agenda.peakCS);
         System.out.printf("C5  Event selectivity                %8.2f%%%n", selectivity);
-        System.out.printf("C6  Total WM insertions              %8,d%n", wm.insertions.get());
-        System.out.printf("C7  Total WM retractions             %8,d%n", wm.retractions.get());
-        System.out.printf("C8  Total WM updates                 %8,d%n", wm.updates.get());
-        System.out.printf("C9  Peak WM fact count               %8,d%n", wm.peakFacts);
+        System.out.printf("C6  Total WM insertions              %,8d%n", wm.insertions.get());
+        System.out.printf("C7  Total WM retractions             %,8d%n", wm.retractions.get());
+        System.out.printf("C8  Total WM updates                 %,8d%n", wm.updates.get());
+        System.out.printf("C9  Peak WM fact count               %,8d%n", wm.peakFacts);
         // D — Data
-        System.out.printf("D1  Total events replayed            %8,d%n", events.size());
+        System.out.printf("D1  Total events replayed            %,8d%n", events.size());
         System.out.printf("D2  Event timestamp span             %8.1f s%n", spanSec);
         System.out.printf("D3  Replay throughput                %8.0f ev/s%n", eventsPerSec);
         System.out.printf("D4  Wall-clock replay time           %8d ms%n", elapsed);
@@ -269,7 +269,12 @@ public class WikimediaCharacterizationCollector {
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line;
             while ((line = br.readLine()) != null && list.size() < maxEvents) {
-                if (!line.isBlank()) list.add(mapper.readValue(line, WikiEvent.class));
+                if (!line.isBlank()) {
+                    WikiEvent ev = mapper.readValue(line, WikiEvent.class);
+                    // Convert seconds from dataset to milliseconds for Drools
+                    ev.setTimestamp(ev.getTimestamp() * 1000L);
+                    list.add(ev);
+                }
             }
         }
         return list;

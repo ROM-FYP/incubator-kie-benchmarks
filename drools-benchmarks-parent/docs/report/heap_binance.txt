@@ -1,0 +1,60 @@
+[INFO] Scanning for projects...
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for org.drools:drools-benchmarks-module:kjar:1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for org.kie:kie-maven-plugin is missing. @ line 46, column 15
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] 
+[INFO] --------------< org.drools:drools-benchmarks-binance-cep >--------------
+[INFO] Building Drools :: Benchmarks :: Binance CEP 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.6.3:java (default-cli) @ drools-benchmarks-binance-cep ---
+Loaded 1613159 events from dataset: run_20260311_1340_10sym
+[BinanceHeapProfile] 1,613,159 events | mode=baseline
+In an eval expression [$li > 0 && ( System.currentTimeMillis() - $li ) > $is] : '$is' comes from previous pattern 'RiskConfig'. '$li' comes from previous pattern 'FeedHealth'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$qty > 1e9] : '$qty' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lb > 0 && ( System.currentTimeMillis() - $lt ) > $tradeStale] : '$lb' comes from previous pattern 'FeedHealth'. '$lt' comes from previous pattern 'FeedHealth'. '$tradeStale' comes from previous pattern 'RiskConfig'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [( $oldBid + $oldAsk ) > 0 && Math.abs( bps( ( $bid2 + $ask2 ) / 2.0, ( $oldBid + $oldAsk ) / 2.0 ) ) > $maxJump] : '$ask2' comes from previous pattern 'MarketEvent'. '$bid2' comes from previous pattern 'MarketEvent'. '$maxJump' comes from previous pattern 'RiskConfig'. '$oldAsk' comes from previous pattern 'BestBidAsk'. '$oldBid' comes from previous pattern 'BestBidAsk'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [( $bd + $ad ) > 0] : '$ad' comes from previous pattern 'DepthState'. '$bd' comes from previous pattern 'DepthState'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [( System.currentTimeMillis() - $lc ) > $cd] : '$cd' comes from previous pattern 'RiskConfig'. '$lc' comes from previous pattern 'ModeState'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lt > 0 && $ts < $lt] : '$lt' comes from previous pattern 'FeedHealth'. '$ts' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [( System.currentTimeMillis() - $t ) > ( $p / 2 )] : '$p' comes from previous pattern 'RiskConfig'. '$t' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lb > 0 && ( System.currentTimeMillis() - $lb ) > $stale] : '$lb' comes from previous pattern 'FeedHealth'. '$stale' comes from previous pattern 'RiskConfig'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lm > 0 && ( System.currentTimeMillis() - $lm ) > $ms] : '$lm' comes from previous pattern 'FeedHealth'. '$ms' comes from previous pattern 'RiskConfig'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+More eval warnings will be suppressed...
+Loaded rules from: /rules/taxonomy.drl [mode=baseline]
+[Trial 1] peak=263.2 MB | post=263.2 MB | delta=-0.0 MB | fired=20,899,062
+[BinanceHeapProfile] median_peak=263.17 | median_delta=-0.00 MB
+[BinanceHeapProfile] -> target/heap_binance.json
+[WARNING] thread Thread[#38,ForkJoinPool-1-worker-2,5,org.kie.benchmark.binance.BinanceHeapProfileMain] was interrupted but is still alive after waiting at least 14999msecs
+[WARNING] thread Thread[#38,ForkJoinPool-1-worker-2,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#39,ForkJoinPool-1-worker-3,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#40,ForkJoinPool-1-worker-4,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#42,ForkJoinPool-1-worker-6,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#48,ForkJoinPool-1-worker-12,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#46,ForkJoinPool-1-worker-10,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#45,ForkJoinPool-1-worker-9,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#49,drools-worker-1,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#50,drools-worker-2,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#51,drools-worker-3,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#52,drools-worker-4,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#53,drools-worker-5,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#54,drools-worker-6,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#55,drools-worker-7,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#56,drools-worker-8,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#57,drools-worker-9,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#58,drools-worker-10,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#59,drools-worker-11,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#60,drools-worker-12,5,org.kie.benchmark.binance.BinanceHeapProfileMain] will linger despite being asked to die via interruption
+[WARNING] NOTE: 19 thread(s) did not finish despite being asked to via interruption. This is not a problem with exec:java, it is a problem with the running code. Although not serious, it should be remedied.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  06:51 min
+[INFO] Finished at: 2026-05-14T12:27:33+05:30
+[INFO] ------------------------------------------------------------------------

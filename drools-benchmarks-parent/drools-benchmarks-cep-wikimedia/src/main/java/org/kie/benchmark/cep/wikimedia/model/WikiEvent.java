@@ -19,6 +19,7 @@
 
 package org.kie.benchmark.cep.wikimedia.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.kie.api.definition.type.Role;
 import org.kie.api.definition.type.Expires;
 import org.kie.api.definition.type.Timestamp;
@@ -26,7 +27,13 @@ import org.kie.api.definition.type.Timestamp;
 /**
  * Represents a Wikipedia edit event from the Wikimedia stream.
  * This is the primary event type fed into the Drools CEP engine.
+ *
+ * <p>{@code @JsonIgnoreProperties(ignoreUnknown = true)} silently drops
+ * extra fields present in the live Wikimedia dataset (e.g. {@code $schema},
+ * {@code meta}, {@code type}, {@code namespace}) so only the CEP-relevant
+ * fields are mapped.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Role(Role.Type.EVENT)
 @Expires("90s")
 @Timestamp("timestamp")

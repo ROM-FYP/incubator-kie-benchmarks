@@ -1,0 +1,47 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] --------< org.drools:drools-benchmarks-opensky-airTrafficking >---------
+[INFO] Building Drools :: Benchmarks :: OpenSky Air Trafficking 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.6.3:java (default-cli) @ drools-benchmarks-opensky-airTrafficking ---
+[OpenSkyHeapProfile] Loading dataset: data/data/split_400k.jsonl
+12:35:54 [INFO ] b.opensky.replay.OpenSkyJsonlLoader -- Loading flat CEP stream from classpath: data/data/split_400k.jsonl
+12:36:08 [INFO ] b.opensky.replay.OpenSkyJsonlLoader -- Parsed 400000 records from 400000 lines (0 errors)
+12:36:09 [INFO ] b.opensky.replay.OpenSkyJsonlLoader -- Loaded 400000 events
+[OpenSkyHeapProfile] Loaded 400,000 events | mode=baseline | threads=1 | trials=1
+
+[Trial 1/1] ------------------------------------------
+[WARNING] 
+java.lang.Error: Unresolved compilation problems: 
+	MultithreadEvaluationOption cannot be resolved to a variable
+	MultithreadEvaluationOption cannot be resolved to a variable
+
+    at bench.opensky.replay.OpenSkyReplayEngine.init (OpenSkyReplayEngine.java:110)
+    at bench.opensky.benchmark.OpenSkyHeapProfileMain.runTrial (OpenSkyHeapProfileMain.java:129)
+    at bench.opensky.benchmark.OpenSkyHeapProfileMain.main (OpenSkyHeapProfileMain.java:99)
+    at jdk.internal.reflect.DirectMethodHandleAccessor.invoke (DirectMethodHandleAccessor.java:103)
+    at java.lang.reflect.Method.invoke (Method.java:580)
+    at org.codehaus.mojo.exec.AbstractExecJavaBase.executeMainMethod (AbstractExecJavaBase.java:402)
+    at org.codehaus.mojo.exec.ExecJavaMojo.executeMainMethod (ExecJavaMojo.java:142)
+    at org.codehaus.mojo.exec.AbstractExecJavaBase.doExecClassLoader (AbstractExecJavaBase.java:377)
+    at org.codehaus.mojo.exec.AbstractExecJavaBase.lambda$execute$0 (AbstractExecJavaBase.java:287)
+    at java.lang.Thread.run (Thread.java:1583)
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  24.482 s
+[INFO] Finished at: 2026-05-14T12:36:10+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.codehaus.mojo:exec-maven-plugin:3.6.3:java (default-cli) on project drools-benchmarks-opensky-airTrafficking: An exception occurred while executing the Java class. Unresolved compilation problems: 
+[ERROR] 	MultithreadEvaluationOption cannot be resolved to a variable
+[ERROR] 	MultithreadEvaluationOption cannot be resolved to a variable
+[ERROR] 
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

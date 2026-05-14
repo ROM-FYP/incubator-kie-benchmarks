@@ -456,8 +456,8 @@ public class CharacterizationCollector {
         // P(category fires | event arrives) = category_activations / total_events
         // Categories derived from rule name prefix (section letter A-N + INFRA).
         System.out.println();
-        System.out.println("── [E] Category Firing Probabilities ────────────────────");
-        System.out.println("  P(category fires | event) = category_activations / total_events");
+        System.out.println("── [E] Category Activations per Event ───────────────────");
+        System.out.println("  Acts/Evt = category_activations / total_events");
         System.out.println();
 
         // Category classifier based on rule name prefix
@@ -498,7 +498,7 @@ public class CharacterizationCollector {
         long totalEvts = allEvents.size();
         long totalActs = totalFired;
         System.out.printf("  %-35s  %6s  %8s  %10s  %8s  %8s%n",
-                "Category", "Rules", "Fired", "Activns", "P(fire)", "% of total");
+                "Category", "Rules", "Fired", "Activns", "Acts/Evt", "% of total");
         System.out.println("  " + "-".repeat(82));
         catActivations.entrySet().stream()
                 .sorted(Map.Entry.<String,Long>comparingByValue().reversed())
@@ -520,9 +520,9 @@ public class CharacterizationCollector {
         // Depth 1 = rules consuming facts PRODUCED by depth-0 rules, etc.
         // P(depth-d fires | event) = sum(activations at depth d) / total_events
         System.out.println();
-        System.out.println("── [F] Forward Chain Depth Firing Probabilities ─────────");
+        System.out.println("── [F] Forward Chain Depth Activations per Event ────────");
         System.out.println("  Entry point: MarketEvent (externally inserted by Java replay loop)");
-        System.out.println("  P(depth-d fires | event) = activations_at_depth_d / total_events");
+        System.out.println("  Acts/Evt = activations_at_depth_d / total_events");
         System.out.println();
 
         ForwardChainFinder fcf = new ForwardChainFinder(ruleMetas);
@@ -534,8 +534,8 @@ public class CharacterizationCollector {
         // Rules NOT in the chain (BOOTSTRAP, CLEANUP, rules reading only singleton facts)
         Set<String> uncaptured = new LinkedHashSet<>(fcResult.getUncapturedRules());
 
-        System.out.printf("  %-8s  %-6s  %-8s  %-12s  %-8s  %-8s%n",
-                "Depth", "Rules", "Fired", "Activations", "P(fire)", "Cond prob");
+        System.out.printf("  %-8s  %-6s  %-8s  %-12s  %-8s  %-9s%n",
+                "Depth", "Rules", "Fired", "Activations", "Acts/Evt", "Ratio(D0)");
         System.out.println("  " + "-".repeat(60));
 
         long depth0Acts = 0; // to compute conditional probability P(d+1 fires | d fired)
@@ -552,7 +552,7 @@ public class CharacterizationCollector {
             double condProb = depth == 0 ? 1.0
                     : (depth0Acts > 0 ? (double) depthActs / depth0Acts : 0);
             if (depth == 0) depth0Acts = depthActs;
-            System.out.printf("  Depth %-2d  %6d  %8d  %12s  %8.4f  %8.4f%n",
+            System.out.printf("  Depth %-2d  %6d  %8d  %12s  %8.4f  %9.4f%n",
                     depth, rulesAtDepth.size(), firedCount,
                     String.format("%,d", depthActs), prob, condProb);
         }
@@ -562,7 +562,7 @@ public class CharacterizationCollector {
                 .mapToLong(r -> agendaM.fireCounts.containsKey(r)
                         ? agendaM.fireCounts.get(r).get() : 0L)
                 .sum();
-        System.out.printf("  %-8s  %6d  %8d  %12s  %8.4f  %8s%n",
+        System.out.printf("  %-8s  %6d  %8d  %12s  %8.4f  %9s%n",
                 "Other", uncaptured.size(),
                 uncaptured.stream().filter(agendaM.fireCounts::containsKey).count(),
                 String.format("%,d", uncapturedActs),
