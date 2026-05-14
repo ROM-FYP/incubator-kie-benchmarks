@@ -226,11 +226,11 @@ end
 
 rule "R021_DeltaVelocityOver10s"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, velocityMps != null, $t1:lastContact )
+    $s1 : OpenSkyStateVector( $id:icao24, velocityMps != null )
     $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, velocityMps != null,
-                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
+                              this before[1ms, 15s] $s1 )
 then
-    double dt = ($t1 - $t0);
+    double dt = Math.max($s1.getSnapshotTime() - $s0.getSnapshotTime(), 1);
     insert(new KinematicDelta($id, $s1.getVelocityMps()-$s0.getVelocityMps(), 0.0, 0.0, dt));
 end
 
@@ -252,29 +252,30 @@ end
 
 rule "R024_SuddenTurnRateApproxAudit"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, $trk1:trueTrackDeg != null, $t1:lastContact )
+    $s1 : OpenSkyStateVector( $id:icao24, $trk1:trueTrackDeg != null )
     $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, $trk0:trueTrackDeg != null,
-                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15 )
-    eval( Math.min(Math.abs($trk1 - $trk0), 360 - Math.abs($trk1 - $trk0)) / ($t1 - $t0) > 10 )
+                              this before[1ms, 15s] $s1 )
+    eval( Math.min(Math.abs($trk1 - $trk0), 360 - Math.abs($trk1 - $trk0)) / Math.max($s1.getSnapshotTime() - $s0.getSnapshotTime(), 1) > 10 )
 then
     insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "high turn rate approx"));
 end
 
 rule "R025_AltitudeJumpAudit"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, $alt1:geoAltitudeM != null, $t1:lastContact )
+    $s1 : OpenSkyStateVector( $id:icao24, $alt1:geoAltitudeM != null )
     $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, geoAltitudeM != null,
-                              $t0:lastContact, $t0 < $t1, ($t1 - $t0) <= 15,
-                              Math.abs(geoAltitudeM - $alt1) > 1200 )
+                              Math.abs(geoAltitudeM - $alt1) > 1200,
+                              this before[1ms, 15s] $s1 )
 then
     insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "altitude jump"));
 end
 
 rule "R026_OnGroundStateFlipAudit"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, $g1:onGround, $t1:lastContact )
-    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, $g0:onGround, $t0:lastContact, $t0 < $t1 )
-    eval($g0 != $g1 && ($t1-$t0) <= 15)
+    $s1 : OpenSkyStateVector( $id:icao24, $g1:onGround )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, $g0:onGround,
+                              this before[1ms, 15s] $s1 )
+    eval($g0 != $g1)
 then
     insert(new AuditEvent("KINEMATICS", $id, clock.getCurrentTime() / 1000, "onGround flip"));
 end
@@ -344,9 +345,10 @@ end
 
 rule "R036_SquawkChangedAudit"
 when
-    $s1 : OpenSkyStateVector( $id:icao24, squawk != null, $sq1:squawk, $t1:lastContact )
-    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, squawk != null, $sq0:squawk, $t0:lastContact, $t0 < $t1 )
-    eval(!$sq0.equals($sq1) && ($t1-$t0)<=60)
+    $s1 : OpenSkyStateVector( $id:icao24, squawk != null, $sq1:squawk )
+    $s0 : OpenSkyStateVector( icao24 == $id, this != $s1, squawk != null, $sq0:squawk,
+                              this before[1ms, 60s] $s1 )
+    eval(!$sq0.equals($sq1))
 then
     insert(new AuditEvent("SURVEILLANCE", $id, clock.getCurrentTime() / 1000, "squawk changed "+$sq0+"->"+$sq1));
 end
@@ -991,10 +993,9 @@ rule "R092_DoNotSpamNuisanceAlerts"
 // GAP-7 FIX: always retract the OLDER alert (smaller createdAt), keeping the most recent one.
 // Previous version could non-deterministically retract either alert based on match order.
 when
-    $al : Alert( $a:a, $b:b, $t:createdAt, $type:type )
+    $al : Alert( $a:a, $b:b, $type:type )
     $al2 : Alert( this != $al, a == $a, b == $b, type == $type,
-                  createdAt > $t,
-                  (createdAt - $t) < 10 )
+                  this after[1ms, 10s] $al )
 then
     retract($al);
 end

@@ -9,7 +9,7 @@ import org.kie.api.definition.type.Expires;
  * This is the primary fact type that DRL rules operate on (replaces the DRL-declared StateVector).
  */
 @Role(Role.Type.EVENT)
-@Expires("10s")
+@Expires("65s")
 public class OpenSkyStateVector {
 
     private String icao24;
