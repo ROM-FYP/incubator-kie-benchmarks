@@ -1,13 +1,9 @@
 package bench.opensky.model;
 
-import org.kie.api.definition.type.Role;
-import org.kie.api.definition.type.Expires;
-
 /**
  * Conflict detection result between a pair of aircraft.
  */
-@Role(Role.Type.EVENT)
-@Expires("10s")
+// Event role + expiration declared in airTraffick_rules.drl
 public class ConflictCandidate {
 
     private String a;

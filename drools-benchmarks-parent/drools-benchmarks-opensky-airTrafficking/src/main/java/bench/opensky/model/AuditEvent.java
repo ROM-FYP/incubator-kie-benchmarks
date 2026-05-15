@@ -1,13 +1,9 @@
 package bench.opensky.model;
 
-import org.kie.api.definition.type.Role;
-import org.kie.api.definition.type.Expires;
-
 /**
  * Audit trail entry.
  */
-@Role(Role.Type.EVENT)
-@Expires("5s")
+// Event role + expiration declared in airTraffick_rules.drl
 public class AuditEvent {
 
     private String kind;

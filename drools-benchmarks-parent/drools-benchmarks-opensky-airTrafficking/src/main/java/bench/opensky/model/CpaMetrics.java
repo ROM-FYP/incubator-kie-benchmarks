@@ -1,13 +1,9 @@
 package bench.opensky.model;
 
-import org.kie.api.definition.type.Role;
-import org.kie.api.definition.type.Expires;
-
 /**
  * CPA (Closest Point of Approach) computation results.
  */
-@Role(Role.Type.EVENT)
-@Expires("10s")
+// Event role + expiration declared in airTraffick_rules.drl
 public class CpaMetrics {
 
     private String a;

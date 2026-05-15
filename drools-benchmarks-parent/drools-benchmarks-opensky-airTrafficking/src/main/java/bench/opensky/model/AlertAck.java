@@ -1,13 +1,9 @@
 package bench.opensky.model;
 
-import org.kie.api.definition.type.Role;
-import org.kie.api.definition.type.Expires;
-
 /**
  * Alert acknowledgement.
  */
-@Role(Role.Type.EVENT)
-@Expires("10m")
+// Event role + expiration declared in airTraffick_rules.drl
 public class AlertAck {
 
     private String key;   // "a|b|type"
