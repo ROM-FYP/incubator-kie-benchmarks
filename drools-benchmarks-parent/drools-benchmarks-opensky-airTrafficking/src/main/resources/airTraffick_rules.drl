@@ -41,7 +41,7 @@ global SessionPseudoClock clock;
 
 declare OpenSkyStateVector
     @role( event )
-    @expires( 65s )
+    @expires( 20s )
 end
 
 declare TrackQuality
