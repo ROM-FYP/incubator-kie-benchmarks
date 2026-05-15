@@ -2,8 +2,8 @@ package bench.opensky.model;
 
 /**
  * Raised alert.
+ * @role(event) and @expires declared in airTraffick_rules.drl
  */
-// Event role + expiration declared in airTraffick_rules.drl
 public class Alert {
 
     private String a;

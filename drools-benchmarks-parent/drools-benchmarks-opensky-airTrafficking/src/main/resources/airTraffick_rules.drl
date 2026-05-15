@@ -36,6 +36,8 @@ global SessionPseudoClock clock;
 
 /* ==========================================================
    FACT LIFECYCLE — event role + expiration declarations.
+   Follows Binance taxonomy.drl pattern: metadata in DRL only,
+   no @Role/@Expires annotations on Java POJOs.
    Requires KieBase in STREAM event-processing mode.
    ========================================================== */
 

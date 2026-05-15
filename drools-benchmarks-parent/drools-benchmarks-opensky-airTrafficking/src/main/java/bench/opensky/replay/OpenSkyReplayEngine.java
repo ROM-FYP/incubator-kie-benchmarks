@@ -19,11 +19,9 @@
 package bench.opensky.replay;
 
 import bench.opensky.model.*;
-import org.drools.compiler.kie.builder.impl.DrlProject;
 import org.kie.api.KieBase;
 import org.kie.api.KieServices;
 import org.kie.api.builder.*;
-import org.kie.api.conf.EventProcessingOption;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.KieSessionConfiguration;
@@ -89,7 +87,21 @@ public class OpenSkyReplayEngine {
         KieFileSystem kfs = ks.newKieFileSystem();
         kfs.write("src/main/resources/rules/airTraffick_rules.drl", drl);
 
-        KieBuilder kb = ks.newKieBuilder(kfs).buildAll(DrlProject.class);
+        // Programmatic kmodule.xml — same approach as Binance BinanceRulesProvider
+        String multithreadAttr = ("PARALLEL_EVALUATION".equals(mode) || "FULLY_PARALLEL".equals(mode))
+                ? " multithread=\"true\"" : "";
+        if ("FULLY_PARALLEL".equals(mode)) System.setProperty("drools.parallelAgenda", "true");
+        String kmoduleXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<kmodule xmlns=\"http://www.drools.org/xsd/kmodule\">\n"
+                + "  <kbase name=\"openSkyBase\" eventProcessingMode=\"stream\""
+                + multithreadAttr + ">\n"
+                + "    <ksession name=\"openSkySession\"/>\n"
+                + "  </kbase>\n"
+                + "</kmodule>";
+        kfs.write("src/main/resources/META-INF/kmodule.xml", kmoduleXml);
+
+        KieBuilder kb = ks.newKieBuilder(kfs);
+        kb.buildAll();
         Results results = kb.getResults();
         if (results.hasMessages(Message.Level.ERROR)) {
             for (Message msg : results.getMessages(Message.Level.ERROR)) {
@@ -101,26 +113,7 @@ public class OpenSkyReplayEngine {
         KieModule km = kb.getKieModule();
         KieContainer kc = ks.newKieContainer(km.getReleaseId());
 
-        org.kie.api.KieBaseConfiguration kbConfig = ks.newKieBaseConfiguration();
-        kbConfig.setOption(EventProcessingOption.STREAM);
-
-        switch (mode) {
-            case "PARALLEL_EVALUATION":
-                System.setProperty("drools.multithreadEvaluation", "true");
-                kieBase = kc.newKieBase(kbConfig);
-                System.clearProperty("drools.multithreadEvaluation");
-                break;
-            case "FULLY_PARALLEL":
-                System.setProperty("drools.multithreadEvaluation", "true");
-                System.setProperty("drools.parallelAgenda", "true");
-                kieBase = kc.newKieBase(kbConfig);
-                System.clearProperty("drools.multithreadEvaluation");
-                System.clearProperty("drools.parallelAgenda");
-                break;
-            default: // baseline
-                kieBase = kc.newKieBase(kbConfig);
-                break;
-        }
+        kieBase = kc.newKieBase("openSkyBase", ks.newKieBaseConfiguration());
 
         KieSessionConfiguration config = ks.newKieSessionConfiguration();
         config.setOption(ClockTypeOption.PSEUDO);
