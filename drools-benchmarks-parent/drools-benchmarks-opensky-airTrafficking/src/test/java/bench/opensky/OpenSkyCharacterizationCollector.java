@@ -18,6 +18,7 @@
  */
 package bench.opensky;
 
+import bench.opensky.analysis.*;
 import bench.opensky.model.OpenSkyStateVector;
 import bench.opensky.replay.OpenSkyJsonlLoader;
 import bench.opensky.replay.OpenSkyReplayEngine;
@@ -108,7 +109,8 @@ public class OpenSkyCharacterizationCollector {
                 else if (conds == 2) a.cond2++;
                 else if (conds == 3) a.cond3++;
                 else if (conds >= 4) a.cond4plus++;
-                if (when.contains("over window") || when.contains("@Expires") || when.contains("within")) a.temporalRules++;
+                Matcher tempMatcher = Pattern.compile("\\b(before|after|over window|within|meets|metby|overlaps|overlappedby|during|includes|starts|startedby|finishes|finishedby|coincides)\\b").matcher(when);
+                if (tempMatcher.find() || when.contains("@Expires")) a.temporalRules++;
                 a.windowCount += countOccurrences(when, "over window");
                 if (conds >= 2) a.joinRules++;
                 if (then.contains("insert(") || then.contains("insertLogical(")) a.chainingRules++;
@@ -145,6 +147,12 @@ public class OpenSkyCharacterizationCollector {
             drlContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
         DrlStaticAnalysis sta = DrlStaticAnalysis.analyse(drlContent);
+        
+        DrlRuleParser parser = new DrlRuleParser();
+        List<RuleMeta> ruleMetas = parser.parse(drlContent);
+        ForwardChainFinder fcf = new ForwardChainFinder(ruleMetas);
+        ForwardChainFinder.ForwardChainResult fcResult = fcf.findForwardChain("OpenSkyStateVector");
+        int maxChainDepth = fcResult.getMaxDepth();
 
         // Alpha-sharing ratio proxy: (total input occurrences - distinct types) / total input occurrences
         long totalInputOccurrences = sta.totalConds;
@@ -156,6 +164,7 @@ public class OpenSkyCharacterizationCollector {
         long windowTimeCount = countRegex(drlContent, "window:time");
         long windowLenCount  = countRegex(drlContent, "window:length");
         long afterCount      = countRegex(drlContent, "\\bafter\\b");
+        long beforeCount     = countRegex(drlContent, "\\bbefore\\b");
         long notCount        = countRegex(drlContent, "\\bnot\\b");
         long accumCount      = countRegex(drlContent, "\\baccumulate\\b");
         long evalCount       = countRegex(drlContent, "\\beval\\b");
@@ -174,7 +183,7 @@ public class OpenSkyCharacterizationCollector {
         System.out.printf("  A6  Distinct input fact types:    %d  → %s%n", sta.lhsTypes.size(), sta.lhsTypes);
         System.out.printf("  A7  Temporal windows (over):      %d%n", sta.windowCount);
         System.out.printf("  A7  window:time / window:length:  %d / %d%n", windowTimeCount, windowLenCount);
-        System.out.printf("  A8  'after' patterns:             %d%n", afterCount);
+        System.out.printf("  A8  'after' / 'before' patterns:  %d / %d%n", afterCount, beforeCount);
         System.out.printf("  A8  negation 'not' patterns:      %d%n", notCount);
         System.out.printf("  A8  'accumulate' patterns:        %d%n", accumCount);
         System.out.printf("  A8  'eval' temporal patterns:     %d%n", evalCount);
@@ -294,6 +303,7 @@ public class OpenSkyCharacterizationCollector {
                 coveredCount, allRuleNames.size(), coveragePct);
         System.out.printf("  B2  Zero-coverage rules:          %d%n",
                 allRuleNames.size() - coveredCount);
+        System.out.printf("  B4  Max chaining depth:           %d%n", maxChainDepth);
         System.out.println();
 
         // ── Paper-ready characterization table ────────────────────────────
@@ -310,7 +320,9 @@ public class OpenSkyCharacterizationCollector {
         System.out.printf("│ %-36s │ %-15d │%n", "A6  Distinct input fact types", sta.lhsTypes.size());
         System.out.printf("│ %-36s │ %-15.3f │%n", "A5  Alpha sharing ratio (proxy)", alphaSharingRatio);
         System.out.printf("│ %-36s │ %-15d │%n", "A7  Temporal windows (over)", sta.windowCount);
+        System.out.printf("│ %-36s │ %-15s │%n", "A8  'after'/'before' patterns", afterCount + "/" + beforeCount);
         System.out.printf("│ %-36s │ %-15d │%n", "A8  eval temporal patterns", (int) evalCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "B4  Max chaining depth", maxChainDepth);
         System.out.printf("│ %-36s │ %-15.0f │%n", "C1  Event arrival rate (ev/s)", arrivalRatePerSec);
         System.out.printf("│ %-36s │ %-15.3f │%n", "C2  IAT coeff of variation (CV)", cvIAT);
         System.out.printf("│ %-36s │ %-15s │%n", "C2  Velocity class", velocityClass);
@@ -393,6 +405,56 @@ public class OpenSkyCharacterizationCollector {
                     System.out.printf("  %-40s  %6d  %8d  %10s  %8.4f  %7.2f%%%n",
                             cat, rules, fired, String.format("%,d", acts), prob, pct);
                 });
+
+        // ── Section F: Chain-depth firing probabilities ─────────────────────
+        System.out.println();
+        System.out.println("── [F] Forward Chain Depth Activations per Event ────────");
+        System.out.println("  Entry point: OpenSkyStateVector (externally inserted by Java replay loop)");
+        System.out.println("  Acts/Evt = activations_at_depth_d / total_events");
+        System.out.println();
+
+        Map<Integer, java.util.List<String>> byDepth = new java.util.TreeMap<>(fcResult.getChainsByDepth());
+        java.util.Set<String> uncaptured = new java.util.LinkedHashSet<>(fcResult.getUncapturedRules());
+
+        System.out.printf("  %-8s  %-6s  %-8s  %-12s  %-8s  %-9s%n",
+                "Depth", "Rules", "Fired", "Activations", "Acts/Evt", "Ratio(D0)");
+        System.out.println("  " + "-".repeat(60));
+
+        long depth0Acts = 0;
+        for (Map.Entry<Integer, java.util.List<String>> depthEntry : byDepth.entrySet()) {
+            int depth = depthEntry.getKey();
+            java.util.List<String> rulesAtDepth = depthEntry.getValue();
+            long depthActs  = rulesAtDepth.stream()
+                    .mapToLong(r -> agenda.fireCounts.containsKey(r)
+                            ? agenda.fireCounts.get(r).get() : 0L)
+                    .sum();
+            long firedCount = rulesAtDepth.stream()
+                    .filter(agenda.fireCounts::containsKey).count();
+            double prob = totalEvts > 0 ? (double) depthActs / totalEvts : 0;
+            double condProb = depth == 0 ? 1.0
+                    : (depth0Acts > 0 ? (double) depthActs / depth0Acts : 0);
+            if (depth == 0) depth0Acts = depthActs;
+            System.out.printf("  Depth %-2d  %6d  %8d  %12s  %8.4f  %9.4f%n",
+                    depth, rulesAtDepth.size(), firedCount,
+                    String.format("%,d", depthActs), prob, condProb);
+        }
+
+        long uncapturedActs = uncaptured.stream()
+                .mapToLong(r -> agenda.fireCounts.containsKey(r)
+                        ? agenda.fireCounts.get(r).get() : 0L)
+                .sum();
+        System.out.printf("  %-8s  %6d  %8d  %12s  %8.4f  %9s%n",
+                "Other", uncaptured.size(),
+                uncaptured.stream().filter(agenda.fireCounts::containsKey).count(),
+                String.format("%,d", uncapturedActs),
+                totalEvts > 0 ? (double) uncapturedActs / totalEvts : 0, "N/A");
+
+        System.out.println();
+        System.out.println("  Depth-level rule membership:");
+        for (Map.Entry<Integer, java.util.List<String>> e : byDepth.entrySet()) {
+            System.out.printf("  Depth %d: %s%n", e.getKey(),
+                    e.getValue().stream().sorted().collect(Collectors.joining(", ")));
+        }
     }
 
     /** Count regex pattern occurrences in text */

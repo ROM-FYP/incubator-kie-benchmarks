@@ -81,6 +81,18 @@
             <artifactId>logback-classic</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Graph Algorithms (for dependency analysis / stratification) -->
+        <dependency>
+            <groupId>org.jgrapht</groupId>
+            <artifactId>jgrapht-core</artifactId>
+            <version>1.5.2</version>
+        </dependency>
+
+        <!-- DRL Parser (for rule metadata extraction) -->
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-drl-parser</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
