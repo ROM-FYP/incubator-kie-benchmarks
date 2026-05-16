@@ -1,9 +1,13 @@
 package bench.opensky.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+
 /**
  * Candidate pair of aircraft from the same grid cell.
  */
-// Event role + expiration declared in airTraffick_rules.drl
+@Role(Role.Type.EVENT)
+@Expires("10s")
 public class PairCandidate {
 
     private String a;

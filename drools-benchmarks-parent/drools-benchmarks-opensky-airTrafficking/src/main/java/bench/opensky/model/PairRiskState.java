@@ -1,9 +1,13 @@
 package bench.opensky.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+
 /**
  * Hysteresis / persistence tracking per aircraft pair.
  */
-// Event role + expiration declared in airTraffick_rules.drl
+@Role(Role.Type.EVENT)
+@Expires("10m")
 public class PairRiskState {
 
     private String key;         // "a|b"

@@ -1,9 +1,13 @@
 package bench.opensky.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+
 /**
  * Raised alert.
- * @role(event) and @expires declared in airTraffick_rules.drl
  */
+@Role(Role.Type.EVENT)
+@Expires("2m")
 public class Alert {
 
     private String a;

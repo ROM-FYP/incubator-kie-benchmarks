@@ -108,8 +108,8 @@ public class OpenSkyCharacterizationCollector {
                 else if (conds == 2) a.cond2++;
                 else if (conds == 3) a.cond3++;
                 else if (conds >= 4) a.cond4plus++;
-                if (when.contains("over window") || when.contains("@Expires") || when.contains("within")) a.temporalRules++;
-                a.windowCount += countOccurrences(when, "over window");
+                if (when.contains("over window") || when.contains("@Expires") || when.contains("within") || when.contains("before[") || when.contains("after[") || when.contains("accumulate")) a.temporalRules++;
+                a.windowCount += countOccurrences(when, "over window") + countOccurrences(when, "before[") + countOccurrences(when, "after[");
                 if (conds >= 2) a.joinRules++;
                 if (then.contains("insert(") || then.contains("insertLogical(")) a.chainingRules++;
                 collectTypes(when, a.lhsTypes);

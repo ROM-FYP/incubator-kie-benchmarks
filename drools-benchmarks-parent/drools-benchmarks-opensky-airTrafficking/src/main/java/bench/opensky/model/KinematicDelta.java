@@ -1,9 +1,13 @@
 package bench.opensky.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+
 /**
  * Kinematic delta between two consecutive state vectors for the same aircraft.
  */
-// Event role + expiration declared in airTraffick_rules.drl
+@Role(Role.Type.EVENT)
+@Expires("10s")
 public class KinematicDelta {
 
     private String icao24;

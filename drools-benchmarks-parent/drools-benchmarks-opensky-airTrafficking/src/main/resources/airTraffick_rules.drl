@@ -35,66 +35,10 @@ global SessionPseudoClock clock;
 
 
 /* ==========================================================
-   FACT LIFECYCLE — event role + expiration declarations.
-   Follows Binance taxonomy.drl pattern: metadata in DRL only,
-   no @Role/@Expires annotations on Java POJOs.
+   FACT LIFECYCLE — defined via Java annotations on POJOs:
+   @Role(Role.Type.EVENT) + @Expires("duration")
    Requires KieBase in STREAM event-processing mode.
    ========================================================== */
-
-declare OpenSkyStateVector
-    @role( event )
-    @expires( 20s )
-end
-
-declare TrackQuality
-    @role( event )
-    @expires( 10s )
-end
-
-declare KinematicDelta
-    @role( event )
-    @expires( 10s )
-end
-
-declare GridCell
-    @role( event )
-    @expires( 10s )
-end
-
-declare PairCandidate
-    @role( event )
-    @expires( 10s )
-end
-
-declare ConflictCandidate
-    @role( event )
-    @expires( 10s )
-end
-
-declare CpaMetrics
-    @role( event )
-    @expires( 10s )
-end
-
-declare PairRiskState
-    @role( event )
-    @expires( 10m )
-end
-
-declare Alert
-    @role( event )
-    @expires( 2m )
-end
-
-declare AlertAck
-    @role( event )
-    @expires( 10m )
-end
-
-declare AuditEvent
-    @role( event )
-    @expires( 5s )
-end
 
 
 /* ============================================================

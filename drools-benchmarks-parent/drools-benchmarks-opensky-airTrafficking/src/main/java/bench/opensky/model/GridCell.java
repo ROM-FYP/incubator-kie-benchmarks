@@ -1,9 +1,13 @@
 package bench.opensky.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+
 /**
  * Spatial grid cell assignment for join-reduction.
  */
-// Event role + expiration declared in airTraffick_rules.drl
+@Role(Role.Type.EVENT)
+@Expires("10s")
 public class GridCell {
 
     private String cellId;

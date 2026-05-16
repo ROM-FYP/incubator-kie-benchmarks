@@ -1,11 +1,15 @@
 package bench.opensky.model;
 
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Expires;
+
 /**
  * Flattened state vector fact inserted into KieSession.
  * Field names follow Java bean conventions (camelCase).
  * This is the primary fact type that DRL rules operate on (replaces the DRL-declared StateVector).
- * @role(event) and @expires declared in airTraffick_rules.drl
  */
+@Role(Role.Type.EVENT)
+@Expires("20s")
 public class OpenSkyStateVector {
 
     private String icao24;
