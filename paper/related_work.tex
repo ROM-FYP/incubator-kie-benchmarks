@@ -1,0 +1,53 @@
+% ============================================================
+% Related Work section — LNCS style
+% Drop this into your main .tex between \section and the next \section.
+% Requires: \usepackage{booktabs} for the table.
+% BibTeX entries are in the companion related_work_section.md artifact.
+% ============================================================
+
+\section{Related Work}\label{sec:related}
+
+\textbf{Rule-engine benchmarks} have historically focused on static reasoning over synthetic data.
+The classic Waltz and Miss Manners programs~\cite{brownston1985ops5}, originally developed for OPS5~\cite{forgy1982rete}, remain standard micro-benchmarks for Rete-based engines including Drools, but test only pattern-matching throughput on fixed, synthetic workloads.
+OpenRuleBench~\cite{liang2009openrulebench} evaluates production-rule, Datalog, and semantic-web engines across 11 workloads (LUBM, WordNet, DBLP), while RUBEN~\cite{angele2022ruben} updates and extends it as a reusable framework.
+Bobek and Misiak~\cite{bobek2017benchmarking} generate synthetic rule models parameterised by rule count and condition length.
+The Train Benchmark~\cite{szarnyas2018train} comes closest to continuous evaluation, testing incremental graph-pattern matching on synthetic railway models with Rete-derived engines---but targets model-transformation tools, not event streams.
+None of these incorporate streaming data, temporal CEP operators, or structural rule-base analysis.
+As Liang et al.\ note: \emph{``Rule engines do not enjoy the benefit of a carefully constructed set of performance benchmarks''}~\cite{liang2009openrulebench}.
+
+\textbf{CEP and stream processing benchmarks} focus on throughput and latency for data-flow systems.
+LinearRoad~\cite{arasu2004linearroad} and NEXMark~\cite{tucker2003nexmark} use synthetic streams with SQL/Beam queries; ESPBench~\cite{hesse2021espbench} extends this to enterprise IoT; Theodolite~\cite{henning2021theodolite} benchmarks cloud-native scalability in Kubernetes.
+Among CEP-specific work, Wahl and Hollunder~\cite{wahl2012cep} compare Esper, StreamInsight, and Drools-Fusion on a single SOAP-event pattern; FINCoS~\cite{mendes2013fincos} provides a load-generation framework without a standard workload.
+RDF streaming benchmarks (SRBench, CityBench~\cite{ali2015citybench}) incorporate time windows but evaluate SPARQL semantics, not general rules.
+None of these provide semantic rule sets, domain-derived event models, or rule-base structural characterisation.
+
+\textbf{The gap.} Authoritative surveys confirm the absence of comprehensive benchmarks at the intersection of rules and streaming.
+Cugola and Margara~\cite{cugola2012processing} unify DSMSs and CEP under an Information Flow Processing taxonomy but identify no benchmark exercising both rule semantics and streams.
+Dayarathna and Perera~\cite{dayarathna2018event} conclude that \emph{``there are few widely agreed-upon benchmarks for EP; most studies use microbenchmarks.''}
+Bizarro et al.~\cite{bizarro2011bicep} explicitly note \emph{``no agreed-upon benchmarks in the CEP community.''}
+Luckham~\cite{luckham2002power} defines CEP's conceptual foundations but no standardised evaluation workloads exist.
+Our work addresses this gap by combining real-world multi-domain streaming data, rule sets derived from domain standards, full temporal CEP constructs, and a 22-dimension structural characterisation framework grounded in workload analysis principles~\cite{jain1991art}.
+Table~\ref{tab:gap} summarises the positioning.
+
+\begin{table}[t]
+\centering
+\caption{Comparison of existing benchmarks with our proposed suite. (\checkmark = supported, --- = absent)}\label{tab:gap}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Benchmark} & \textbf{Rule Type} & \textbf{Data} & \textbf{Temporal} & \textbf{Structure} & \textbf{Year} \\
+\midrule
+Waltz / Miss Manners    & Production (OPS5)   & Synthetic       & ---             & ---              & 1985 \\
+OpenRuleBench           & Datalog/Prod.       & Static KB       & ---             & ---              & 2009 \\
+Train Benchmark         & Graph patterns      & Synthetic       & ---             & ---              & 2018 \\
+RUBEN                   & Datalog/OWL         & Static KB       & ---             & ---              & 2022 \\
+\midrule
+LinearRoad / NEXMark    & SQL / Beam          & Synth.\ streams & \checkmark      & ---              & 03--04 \\
+Wahl \& Hollunder       & CEP (Esper/Drools)  & Synth.\ SOAP    & \checkmark$^*$  & ---              & 2012 \\
+ESPBench / Theodolite   & Beam / Flink        & Synth.\ IoT     & \checkmark      & ---              & 2021 \\
+\midrule
+\textbf{Our Suite}      & \textbf{Drools CEP} & \textbf{Real-world} & \checkmark  & \checkmark       & 2026 \\
+\bottomrule
+\multicolumn{6}{@{}l}{\footnotesize $^*$Limited to a single 4-event pattern.}
+\end{tabular}
+\end{table}
