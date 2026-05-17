@@ -21,6 +21,8 @@ package org.kie.benchmark.binance.analysis;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.jgrapht.graph.DefaultEdge;
+
 /**
  * Finds all rules in the transitive forward chain starting from rules
  * that consume a given entry-point fact type.
@@ -72,13 +74,7 @@ public class ForwardChainFinder {
                 .filter(r -> r.getInputs().contains(entryFactType))
                 .collect(Collectors.toList());
 
-        // Step 2: BFS to find the sub-graph reachable from the seed rules.
-        // We first collect all reachable rules (ignoring depth), then compute
-        // longest path using Kahn's topological sort on that induced sub-graph.
-        // This is the research-standard method: longest acyclic path on the
-        // condensed DAG. Rules participating in cycles are naturally excluded
-        // from the topological sort (they never reach in-degree 0) and are
-        // reported separately as "cyclic / self-sustaining" rules.
+        // Step 2: BFS to find the sub-graph reachable from seed rules
         Set<RuleMeta> reachable = new LinkedHashSet<>();
         Deque<RuleMeta> bfsQueue = new ArrayDeque<>(seedRules);
         while (!bfsQueue.isEmpty()) {
@@ -88,15 +84,15 @@ public class ForwardChainFinder {
             }
         }
 
-        // Step 3: Compute in-degrees within the reachable sub-graph
-        Map<RuleMeta, Integer> inDegree = new LinkedHashMap<>();
-        for (RuleMeta r : reachable) inDegree.put(r, 0);
+        // Step 3: Build the induced sub-graph of reachable rules
+        org.jgrapht.graph.DefaultDirectedGraph<RuleMeta, DefaultEdge> subGraph =
+                new org.jgrapht.graph.DefaultDirectedGraph<>(DefaultEdge.class);
+        for (RuleMeta r : reachable) subGraph.addVertex(r);
         Map<String, Set<String>> connectingFacts = new LinkedHashMap<>();
         for (RuleMeta r : reachable) {
             for (RuleMeta suc : graphBuilder.getSuccessors(r)) {
                 if (reachable.contains(suc)) {
-                    inDegree.merge(suc, 1, Integer::sum);
-                    // Record connecting fact types
+                    subGraph.addEdge(r, suc);
                     Set<String> conn = new HashSet<>(r.getOutputs());
                     conn.retainAll(suc.getInputs());
                     connectingFacts.computeIfAbsent(
@@ -106,40 +102,85 @@ public class ForwardChainFinder {
             }
         }
 
-        // Step 4: Kahn's topological sort + longest-path relaxation.
-        // Seeds start at depth 0; every successor is updated to max(current, parent+1).
-        // Rules in a cycle never get in-degree 0 and are excluded automatically.
-        Map<String, Integer> capturedRuleDepths = new LinkedHashMap<>();
-        Deque<RuleMeta> topoQueue = new ArrayDeque<>();
-        for (RuleMeta seed : seedRules) {
-            if (reachable.contains(seed) && inDegree.getOrDefault(seed, 0) == 0) {
-                capturedRuleDepths.put(seed.getRuleName(), 0);
-                topoQueue.add(seed);
+        // Step 4: SCC condensation — the textbook method for longest path in
+        // directed graphs with cycles (Cormen et al., CLRS Ch. 22).
+        // - Kosaraju/Tarjan finds Strongly Connected Components
+        // - Each SCC collapses to a single depth level (mutually recursive rules
+        //   fire at the same inference level in the Rete network)
+        // - The condensation graph is a true DAG
+        // - Longest path on this DAG gives the correct chaining depth
+        org.jgrapht.alg.connectivity.KosarajuStrongConnectivityInspector<RuleMeta, DefaultEdge>
+                sccInspector = new org.jgrapht.alg.connectivity.KosarajuStrongConnectivityInspector<>(subGraph);
+        List<Set<RuleMeta>> sccs = sccInspector.stronglyConnectedSets();
+
+        // Map each rule to its SCC index
+        Map<RuleMeta, Integer> ruleToScc = new HashMap<>();
+        for (int i = 0; i < sccs.size(); i++) {
+            for (RuleMeta r : sccs.get(i)) ruleToScc.put(r, i);
+        }
+
+        // Build condensation DAG: nodes = SCC indices, edges = cross-SCC edges
+        int sccCount = sccs.size();
+        Map<Integer, Set<Integer>> condensationAdj = new HashMap<>();
+        Map<Integer, Integer> sccInDegree = new HashMap<>();
+        for (int i = 0; i < sccCount; i++) {
+            condensationAdj.put(i, new LinkedHashSet<>());
+            sccInDegree.put(i, 0);
+        }
+        for (RuleMeta r : reachable) {
+            int srcScc = ruleToScc.get(r);
+            for (RuleMeta suc : graphBuilder.getSuccessors(r)) {
+                if (!reachable.contains(suc)) continue;
+                int dstScc = ruleToScc.get(suc);
+                if (srcScc != dstScc && condensationAdj.get(srcScc).add(dstScc)) {
+                    sccInDegree.merge(dstScc, 1, Integer::sum);
+                }
+            }
+        }
+
+        // Step 5: Kahn's topological sort + longest-path on the condensation DAG
+        Map<Integer, Integer> sccDepth = new HashMap<>();
+        Deque<Integer> topoQueue = new ArrayDeque<>();
+
+        Set<Integer> seedSccIds = seedRules.stream()
+                .filter(reachable::contains)
+                .map(ruleToScc::get)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        for (int sccId = 0; sccId < sccCount; sccId++) {
+            if (sccInDegree.get(sccId) == 0) {
+                sccDepth.put(sccId, 0);
+                topoQueue.add(sccId);
             }
         }
 
         while (!topoQueue.isEmpty()) {
-            RuleMeta cur = topoQueue.poll();
-            int curDepth = capturedRuleDepths.getOrDefault(cur.getRuleName(), 0);
-            for (RuleMeta suc : graphBuilder.getSuccessors(cur)) {
-                if (!reachable.contains(suc)) continue;
-                // Relax longest path
-                int newDepth = curDepth + 1;
-                capturedRuleDepths.merge(suc.getRuleName(), newDepth, Math::max);
-                // Kahn's: decrement in-degree; enqueue when all predecessors processed
-                int remaining = inDegree.merge(suc, -1, Integer::sum);
-                if (remaining == 0) topoQueue.add(suc);
+            int curScc = topoQueue.poll();
+            int curDepth = sccDepth.getOrDefault(curScc, 0);
+            for (int sucScc : condensationAdj.get(curScc)) {
+                sccDepth.merge(sucScc, curDepth + 1, Math::max);
+                int remaining = sccInDegree.merge(sucScc, -1, Integer::sum);
+                if (remaining == 0) topoQueue.add(sucScc);
             }
         }
 
+        // Step 6: Map SCC depths back to individual rules
+        Map<String, Integer> capturedRuleDepths = new LinkedHashMap<>();
+        for (RuleMeta r : reachable) {
+            Integer sccId = ruleToScc.get(r);
+            Integer depth = sccDepth.get(sccId);
+            if (depth != null) {
+                capturedRuleDepths.put(r.getRuleName(), depth);
+            }
+        }
 
-        // Step 3: Group rules by depth
+        // Group rules by depth
         Map<Integer, List<String>> chainsByDepth = new TreeMap<>();
         for (Map.Entry<String, Integer> entry : capturedRuleDepths.entrySet()) {
             chainsByDepth.computeIfAbsent(entry.getValue(), k -> new ArrayList<>()).add(entry.getKey());
         }
 
-        // Step 4: Compute uncaptured rules
+        // Compute uncaptured rules (not reachable from seeds at all)
         Set<String> allRuleNames = allRules.stream()
                 .map(RuleMeta::getRuleName)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -149,6 +190,7 @@ public class ForwardChainFinder {
         return new ForwardChainResult(entryFactType, seedRules.size(),
                 capturedRuleDepths, chainsByDepth, uncapturedRules, connectingFacts);
     }
+
 
     // =========================================================================
     // Inner classes
