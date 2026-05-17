@@ -72,48 +72,58 @@ public class ForwardChainFinder {
                 .filter(r -> r.getInputs().contains(entryFactType))
                 .collect(Collectors.toList());
 
-        // Step 2: BFS from each seed rule
+        // Step 2: Longest-path relaxation on the dependency DAG.
+        // Classic BFS (shortest-path) underestimates depth for rules that join
+        // both shallow facts (e.g., the raw entry event) AND deep derived facts:
+        // BFS locks the rule at depth 0 because it sees the short path first.
+        // We instead use a Bellman-Ford-style iterative relaxation that keeps
+        // updating a rule's depth upward whenever a longer derivation path is found.
         Map<String, Integer> capturedRuleDepths = new LinkedHashMap<>();
         Map<String, Set<String>> connectingFacts = new LinkedHashMap<>();
-        Set<String> visited = new HashSet<>();
 
-        // Queue holds: (rule, depth)
+        // Queue holds: (rule, depth) — re-enqueued whenever depth increases
         Deque<RuleDepthEntry> queue = new ArrayDeque<>();
 
         // Initialize seeds at depth 0
         for (RuleMeta seed : seedRules) {
             String name = seed.getRuleName();
-            if (!visited.contains(name)) {
-                visited.add(name);
+            if (!capturedRuleDepths.containsKey(name)) {
                 capturedRuleDepths.put(name, 0);
                 queue.add(new RuleDepthEntry(seed, 0));
             }
         }
 
-        // BFS traversal
+        // Longest-path traversal: re-enqueue a successor whenever we find
+        // a longer derivation path to it (depth relaxation).
         while (!queue.isEmpty()) {
             RuleDepthEntry current = queue.poll();
             RuleMeta currentRule = current.rule;
             int currentDepth = current.depth;
 
+            // Skip stale queue entries (we already found a longer path)
+            if (capturedRuleDepths.getOrDefault(currentRule.getRuleName(), -1) > currentDepth) {
+                continue;
+            }
+
             Set<RuleMeta> successors = graphBuilder.getSuccessors(currentRule);
             for (RuleMeta successor : successors) {
-                // Compute the connecting fact types (intersection of outputs → inputs)
+                // Record connecting fact types (outputs of current → inputs of successor)
                 Set<String> connection = new HashSet<>(currentRule.getOutputs());
                 connection.retainAll(successor.getInputs());
-
                 String edgeKey = currentRule.getRuleName() + " → " + successor.getRuleName();
                 connectingFacts.computeIfAbsent(edgeKey, k -> new LinkedHashSet<>()).addAll(connection);
 
                 String successorName = successor.getRuleName();
-                if (!visited.contains(successorName)) {
-                    visited.add(successorName);
-                    int newDepth = currentDepth + 1;
+                int newDepth = currentDepth + 1;
+                // Relax: update depth if this path is longer than any previously found
+                if (!capturedRuleDepths.containsKey(successorName)
+                        || capturedRuleDepths.get(successorName) < newDepth) {
                     capturedRuleDepths.put(successorName, newDepth);
                     queue.add(new RuleDepthEntry(successor, newDepth));
                 }
             }
         }
+
 
         // Step 3: Group rules by depth
         Map<Integer, List<String>> chainsByDepth = new TreeMap<>();

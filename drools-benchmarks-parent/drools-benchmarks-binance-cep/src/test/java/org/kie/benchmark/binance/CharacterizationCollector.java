@@ -245,16 +245,12 @@ public class CharacterizationCollector {
             int lccSize = components.stream().mapToInt(Set::size).max().orElse(0);
             lccPct = V > 0 ? 100.0 * lccSize / V : 0;
 
-            // B4: chaining depth — longest shortest path in the DAG (proxy)
-            for (RuleMeta src : g.vertexSet()) {
-                for (RuleMeta dst : g.vertexSet()) {
-                    if (src == dst) continue;
-                    var path = DijkstraShortestPath.findPathBetween(g, src, dst);
-                    if (path != null && path.getLength() > maxChainDepth)
-                        maxChainDepth = path.getLength();
-                }
-            }
+            // B4: longest derivation chain depth — computed via DAG longest-path
+            // relaxation in ForwardChainFinder (not Dijkstra shortest-path).
+            ForwardChainFinder fcfB4 = new ForwardChainFinder(dgb, ruleMetas);
+            maxChainDepth = fcfB4.findForwardChain("MarketEvent").getMaxDepth();
         }
+
         System.out.printf("  B1  Dependency graph density:     %.4f%n", graphDensity);
         System.out.printf("  B2  Largest connected component:  %.1f%%%n", lccPct);
         System.out.printf("  B3  Connected components:         %d%n", numComponents);

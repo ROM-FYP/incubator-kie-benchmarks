@@ -489,45 +489,56 @@ public class WikimediaCharacterizationCollector {
     private static Map<Integer, List<String>> computeChainDepths(List<RuleMeta> metas, String entryFact) {
         Map<String, Integer> factDepth = new HashMap<>();
         factDepth.put(entryFact, 0);
-        
+
         Map<String, Integer> ruleDepth = new HashMap<>();
+
+        // Longest-path relaxation: iterate until no depth increases.
+        // Classic BFS locks a rule at the FIRST (shortest) path found.
+        // Here we allow any rule's depth to be updated upward if a longer
+        // derivation path is discovered, then re-propagate its outputs.
         boolean changed = true;
         while (changed) {
             changed = false;
             for (RuleMeta rm : metas) {
-                if (ruleDepth.containsKey(rm.name)) continue;
                 if (rm.inputs.isEmpty()) continue;
-                
+
                 boolean allInputsKnown = true;
                 int maxInputDepth = 0;
                 for (String in : rm.inputs) {
-                    if (in.equals("Number") || in.equals("String")) continue; // ignore built-ins
+                    if (in.equals("Number") || in.equals("String")) continue;
                     if (!factDepth.containsKey(in)) {
                         allInputsKnown = false;
                         break;
                     }
                     maxInputDepth = Math.max(maxInputDepth, factDepth.get(in));
                 }
-                
+
                 if (allInputsKnown) {
-                    ruleDepth.put(rm.name, maxInputDepth);
-                    for (String out : rm.outputs) {
-                        if (!factDepth.containsKey(out) || factDepth.get(out) > maxInputDepth + 1) {
-                            factDepth.put(out, maxInputDepth + 1);
-                            changed = true;
+                    // Relax: only update if this gives a deeper (longer) derivation
+                    Integer existing = ruleDepth.get(rm.name);
+                    if (existing == null || existing < maxInputDepth) {
+                        ruleDepth.put(rm.name, maxInputDepth);
+                        // Propagate: outputs of this rule are now reachable at depth+1
+                        for (String out : rm.outputs) {
+                            Integer existingFactDepth = factDepth.get(out);
+                            if (existingFactDepth == null || existingFactDepth < maxInputDepth + 1) {
+                                factDepth.put(out, maxInputDepth + 1);
+                                changed = true;
+                            }
                         }
+                        changed = true;
                     }
-                    changed = true;
                 }
             }
         }
-        
+
         Map<Integer, List<String>> byDepth = new TreeMap<>();
         for (Map.Entry<String, Integer> e : ruleDepth.entrySet()) {
             byDepth.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
         }
         return byDepth;
     }
+
 
     public static List<WikiEvent> loadEvents(String path, int maxEvents) throws Exception {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
