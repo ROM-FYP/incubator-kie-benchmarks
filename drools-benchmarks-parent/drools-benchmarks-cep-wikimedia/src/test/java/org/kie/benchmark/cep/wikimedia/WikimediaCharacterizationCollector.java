@@ -241,21 +241,33 @@ public class WikimediaCharacterizationCollector {
         long distinctUsers = users.size();
         long distinctEventTypes = 1; // WikiEvent
 
-        long[] timestamps = allEvents.stream().mapToLong(WikiEvent::getTimestamp).toArray();
-        Arrays.sort(timestamps);
-        long spanMs = timestamps.length > 0 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
-        double arrivalRatePerSec = spanMs > 0 ? allEvents.size() * 1000.0 / spanMs : 0;
+        // Timestamps in the JSONL are Unix epoch seconds — keep them as seconds here
+        // for all dataset-level statistics (span, IAT). We only convert to ms when
+        // advancing the pseudo-clock during replay (see below).
+        // NOTE: a small number of events have timestamp==0 (JSON null parsed as long default);
+        //       exclude them from span/IAT stats so they don't distort the min to 0.
+        long[] timestamps = allEvents.stream()
+                .mapToLong(WikiEvent::getTimestamp)
+                .filter(t -> t > 0)
+                .sorted()
+                .toArray();
+        long spanSec = timestamps.length > 1 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
+        long spanMs  = spanSec * 1000L; // for display
+        double arrivalRatePerSec = spanSec > 0 ? (double) allEvents.size() / spanSec : 0;
 
+        // IAT in milliseconds (converting from seconds); skip events with ts==0
         List<Double> allIATs = new ArrayList<>();
         Map<String, List<Long>> perUserTs = new LinkedHashMap<>();
         for (WikiEvent ev : allEvents) {
+            if (ev.getTimestamp() == 0) continue; // skip null-timestamp events
             String user = ev.getUser() != null ? ev.getUser() : "UNKNOWN";
             perUserTs.computeIfAbsent(user, k -> new ArrayList<>()).add(ev.getTimestamp());
         }
         for (List<Long> tsList : perUserTs.values()) {
             Collections.sort(tsList);
             for (int i = 1; i < tsList.size(); i++) {
-                allIATs.add((double)(tsList.get(i) - tsList.get(i-1)));
+                // convert second-difference to ms for IAT
+                allIATs.add((double)(tsList.get(i) - tsList.get(i-1)) * 1000.0);
             }
         }
         Collections.sort(allIATs);
@@ -300,15 +312,20 @@ public class WikimediaCharacterizationCollector {
         long t0 = System.currentTimeMillis();
         long totalFired = 0;
         SessionPseudoClock clock = session.getSessionClock();
-        long prevTs = allEvents.isEmpty() ? 0L : allEvents.get(0).getTimestamp();
-        
+        // timestamps are in raw seconds; convert to ms for:
+        //   1) the pseudo-clock delta (so window:time rules fire correctly)
+        //   2) the @Timestamp field on WikiEvent (Drools reads it as ms for expiry)
+        long prevTsSec = allEvents.isEmpty() ? 0L : allEvents.get(0).getTimestamp();
+
         for (WikiEvent ev : allEvents) {
-            long evTs = ev.getTimestamp();
-            if (evTs > prevTs) {
-                clock.advanceTime(evTs - prevTs, java.util.concurrent.TimeUnit.MILLISECONDS);
+            long evTsSec = ev.getTimestamp();
+            if (evTsSec > prevTsSec) {
+                clock.advanceTime((evTsSec - prevTsSec) * 1000L, java.util.concurrent.TimeUnit.MILLISECONDS);
             }
-            prevTs = evTs;
-            agendaM.currentEventTs = evTs;
+            prevTsSec = evTsSec;
+            agendaM.currentEventTs = evTsSec;
+            // Set timestamp to ms so @Timestamp("timestamp") gives Drools the correct epoch-ms value
+            ev.setTimestamp(evTsSec * 1000L);
             session.insert(ev);
             totalFired += session.fireAllRules();
         }
@@ -520,7 +537,8 @@ public class WikimediaCharacterizationCollector {
             while ((line = br.readLine()) != null && list.size() < maxEvents) {
                 if (!line.isBlank()) {
                     WikiEvent ev = mapper.readValue(line, WikiEvent.class);
-                    ev.setTimestamp(ev.getTimestamp() * 1000L);
+                    // Keep timestamp in raw seconds — conversion to ms happens
+                    // only when advancing the pseudo-clock during replay.
                     list.add(ev);
                 }
             }
