@@ -72,62 +72,63 @@ public class ForwardChainFinder {
                 .filter(r -> r.getInputs().contains(entryFactType))
                 .collect(Collectors.toList());
 
-        // Step 2: Longest-path relaxation on the dependency DAG.
-        // Classic BFS (shortest-path) underestimates depth for rules that join
-        // both shallow facts (e.g., the raw entry event) AND deep derived facts:
-        // BFS locks the rule at depth 0 because it sees the short path first.
-        // We instead use a Bellman-Ford-style iterative relaxation that keeps
-        // updating a rule's depth upward whenever a longer derivation path is found.
-        Map<String, Integer> capturedRuleDepths = new LinkedHashMap<>();
-        Map<String, Set<String>> connectingFacts = new LinkedHashMap<>();
-
-        // Queue holds: (rule, depth) — re-enqueued whenever depth increases
-        Deque<RuleDepthEntry> queue = new ArrayDeque<>();
-
-        // Initialize seeds at depth 0
-        for (RuleMeta seed : seedRules) {
-            String name = seed.getRuleName();
-            if (!capturedRuleDepths.containsKey(name)) {
-                capturedRuleDepths.put(name, 0);
-                queue.add(new RuleDepthEntry(seed, 0));
+        // Step 2: BFS to find the sub-graph reachable from the seed rules.
+        // We first collect all reachable rules (ignoring depth), then compute
+        // longest path using Kahn's topological sort on that induced sub-graph.
+        // This is the research-standard method: longest acyclic path on the
+        // condensed DAG. Rules participating in cycles are naturally excluded
+        // from the topological sort (they never reach in-degree 0) and are
+        // reported separately as "cyclic / self-sustaining" rules.
+        Set<RuleMeta> reachable = new LinkedHashSet<>();
+        Deque<RuleMeta> bfsQueue = new ArrayDeque<>(seedRules);
+        while (!bfsQueue.isEmpty()) {
+            RuleMeta cur = bfsQueue.poll();
+            if (reachable.add(cur)) {
+                bfsQueue.addAll(graphBuilder.getSuccessors(cur));
             }
         }
 
-        // Longest-path traversal: re-enqueue a successor whenever we find
-        // a longer derivation path to it (depth relaxation).
-        while (!queue.isEmpty()) {
-            RuleDepthEntry current = queue.poll();
-            RuleMeta currentRule = current.rule;
-            int currentDepth = current.depth;
-
-            // Skip stale queue entries (we already found a longer path)
-            if (capturedRuleDepths.getOrDefault(currentRule.getRuleName(), -1) > currentDepth) {
-                continue;
+        // Step 3: Compute in-degrees within the reachable sub-graph
+        Map<RuleMeta, Integer> inDegree = new LinkedHashMap<>();
+        for (RuleMeta r : reachable) inDegree.put(r, 0);
+        Map<String, Set<String>> connectingFacts = new LinkedHashMap<>();
+        for (RuleMeta r : reachable) {
+            for (RuleMeta suc : graphBuilder.getSuccessors(r)) {
+                if (reachable.contains(suc)) {
+                    inDegree.merge(suc, 1, Integer::sum);
+                    // Record connecting fact types
+                    Set<String> conn = new HashSet<>(r.getOutputs());
+                    conn.retainAll(suc.getInputs());
+                    connectingFacts.computeIfAbsent(
+                            r.getRuleName() + " → " + suc.getRuleName(),
+                            k -> new LinkedHashSet<>()).addAll(conn);
+                }
             }
+        }
 
-            Set<RuleMeta> successors = graphBuilder.getSuccessors(currentRule);
-            for (RuleMeta successor : successors) {
-                // Record connecting fact types (outputs of current → inputs of successor)
-                Set<String> connection = new HashSet<>(currentRule.getOutputs());
-                connection.retainAll(successor.getInputs());
-                String edgeKey = currentRule.getRuleName() + " → " + successor.getRuleName();
-                connectingFacts.computeIfAbsent(edgeKey, k -> new LinkedHashSet<>()).addAll(connection);
+        // Step 4: Kahn's topological sort + longest-path relaxation.
+        // Seeds start at depth 0; every successor is updated to max(current, parent+1).
+        // Rules in a cycle never get in-degree 0 and are excluded automatically.
+        Map<String, Integer> capturedRuleDepths = new LinkedHashMap<>();
+        Deque<RuleMeta> topoQueue = new ArrayDeque<>();
+        for (RuleMeta seed : seedRules) {
+            if (reachable.contains(seed) && inDegree.getOrDefault(seed, 0) == 0) {
+                capturedRuleDepths.put(seed.getRuleName(), 0);
+                topoQueue.add(seed);
+            }
+        }
 
-                String successorName = successor.getRuleName();
-                int newDepth = currentDepth + 1;
-                
-                // Cycle protection: prevent infinite loops in cyclic dependency graphs
-                if (newDepth > allRules.size()) {
-                    continue;
-                }
-
-                // Relax: update depth if this path is longer than any previously found
-                if (!capturedRuleDepths.containsKey(successorName)
-                        || capturedRuleDepths.get(successorName) < newDepth) {
-                    capturedRuleDepths.put(successorName, newDepth);
-                    queue.add(new RuleDepthEntry(successor, newDepth));
-                }
-
+        while (!topoQueue.isEmpty()) {
+            RuleMeta cur = topoQueue.poll();
+            int curDepth = capturedRuleDepths.getOrDefault(cur.getRuleName(), 0);
+            for (RuleMeta suc : graphBuilder.getSuccessors(cur)) {
+                if (!reachable.contains(suc)) continue;
+                // Relax longest path
+                int newDepth = curDepth + 1;
+                capturedRuleDepths.merge(suc.getRuleName(), newDepth, Math::max);
+                // Kahn's: decrement in-degree; enqueue when all predecessors processed
+                int remaining = inDegree.merge(suc, -1, Integer::sum);
+                if (remaining == 0) topoQueue.add(suc);
             }
         }
 

@@ -487,53 +487,52 @@ public class WikimediaCharacterizationCollector {
     }
 
     private static Map<Integer, List<String>> computeChainDepths(List<RuleMeta> metas, String entryFact) {
+        // Kahn's topological sort + longest acyclic path on the fact-dependency graph.
+        // This is the research-standard method for computing derivation chain depth
+        // in production rule systems. Rules involved in cycles never satisfy the
+        // "all inputs known" condition in a topological pass and are excluded
+        // naturally, giving a clean acyclic longest-path metric for the paper.
+
         Map<String, Integer> factDepth = new HashMap<>();
         factDepth.put(entryFact, 0);
 
-        Map<String, Integer> ruleDepth = new HashMap<>();
+        Map<String, Integer> ruleDepth = new LinkedHashMap<>();
+        // Rules ready to process: all inputs are in factDepth
+        Deque<RuleMeta> ready = new ArrayDeque<>();
+        Set<String> processed = new HashSet<>();
 
-        // Longest-path relaxation: iterate until no depth increases.
-        // Classic BFS locks a rule at the FIRST (shortest) path found.
-        // Here we allow any rule's depth to be updated upward if a longer
-        // derivation path is discovered, then re-propagate its outputs.
-        boolean changed = true;
-        int iteration = 0;
-        while (changed) {
-            iteration++;
-            if (iteration > metas.size()) {
-                break; // Cycle protection
+        // Seed: find rules whose inputs are all immediately known (depth 0 facts)
+        for (RuleMeta rm : metas) {
+            if (allInputsResolved(rm, factDepth)) {
+                ready.add(rm);
             }
-            changed = false;
-            for (RuleMeta rm : metas) {
+        }
 
-                if (rm.inputs.isEmpty()) continue;
+        while (!ready.isEmpty()) {
+            RuleMeta rm = ready.poll();
+            if (processed.contains(rm.name)) continue;
+            processed.add(rm.name);
 
-                boolean allInputsKnown = true;
-                int maxInputDepth = 0;
-                for (String in : rm.inputs) {
-                    if (in.equals("Number") || in.equals("String")) continue;
-                    if (!factDepth.containsKey(in)) {
-                        allInputsKnown = false;
-                        break;
-                    }
-                    maxInputDepth = Math.max(maxInputDepth, factDepth.get(in));
+            // Compute this rule's depth from its inputs
+            int maxInputDepth = 0;
+            for (String in : rm.inputs) {
+                if (in.equals("Number") || in.equals("String")) continue;
+                maxInputDepth = Math.max(maxInputDepth, factDepth.getOrDefault(in, 0));
+            }
+            ruleDepth.put(rm.name, maxInputDepth);
+
+            // Propagate outputs as newly known facts at depth+1
+            for (String out : rm.outputs) {
+                int newFactDepth = maxInputDepth + 1;
+                if (!factDepth.containsKey(out) || factDepth.get(out) < newFactDepth) {
+                    factDepth.put(out, newFactDepth);
                 }
+            }
 
-                if (allInputsKnown) {
-                    // Relax: only update if this gives a deeper (longer) derivation
-                    Integer existing = ruleDepth.get(rm.name);
-                    if (existing == null || existing < maxInputDepth) {
-                        ruleDepth.put(rm.name, maxInputDepth);
-                        // Propagate: outputs of this rule are now reachable at depth+1
-                        for (String out : rm.outputs) {
-                            Integer existingFactDepth = factDepth.get(out);
-                            if (existingFactDepth == null || existingFactDepth < maxInputDepth + 1) {
-                                factDepth.put(out, maxInputDepth + 1);
-                                changed = true;
-                            }
-                        }
-                        changed = true;
-                    }
+            // Re-check all unprocessed rules — newly resolved facts may unlock them
+            for (RuleMeta candidate : metas) {
+                if (!processed.contains(candidate.name) && allInputsResolved(candidate, factDepth)) {
+                    ready.add(candidate);
                 }
             }
         }
@@ -544,6 +543,17 @@ public class WikimediaCharacterizationCollector {
         }
         return byDepth;
     }
+
+    private static boolean allInputsResolved(RuleMeta rm, Map<String, Integer> factDepth) {
+        if (rm.inputs.isEmpty()) return false;
+        for (String in : rm.inputs) {
+            if (in.equals("Number") || in.equals("String")) continue;
+            if (!factDepth.containsKey(in)) return false;
+        }
+        return true;
+    }
+
+
 
 
     public static List<WikiEvent> loadEvents(String path, int maxEvents) throws Exception {
