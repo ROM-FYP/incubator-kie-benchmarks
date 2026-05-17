@@ -1,24 +1,95 @@
+# ---------------------------------------------------------------
+# drools-benchmarks-parent — parent-level .gitignore
+# Applies to all sub-modules under this parent.
+# ---------------------------------------------------------------
+
+# Maven
 /target
 /local
 /bin
+**/target/
+**/dependency-reduced-pom.xml
 
+# Compiled classes and package artifacts
 *.class
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
 *.ear
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-
-# Eclipse, Netbeans and IntelliJ files
-/.*
-!.gitignore
+# ---------------------------------------------------------------
+# IDE files
+# ---------------------------------------------------------------
+# Eclipse / Netbeans / IntelliJ (root-level only, caught by /.*  below)
+.mtj.tmp/
 /nbproject
 /*.ipr
 /*.iws
 /*.iml
+
+# Hide all root dot-files except the ones we need
+/.*
+!.gitignore
+!/.github/
+!/.ci
+
+# ---------------------------------------------------------------
+# JVM crash and replay logs (any module)
+# ---------------------------------------------------------------
+hs_err_pid*.log
+replay_pid*.log
+hs_err_pid*
+replay_pid*
+
+# ---------------------------------------------------------------
+# JMH / benchmark outputs (any module)
+# ---------------------------------------------------------------
+jmh-result.json
+jmh-result-*.json
+*.jfr
+
+# ---------------------------------------------------------------
+# RIS / BGP event data and causal trace files (any module)
+# These can reach tens of GB and must never be committed.
+# ---------------------------------------------------------------
+riperis_causal_trace.jsonl
+riperis_causal_trace_*.jsonl
+**/data/*.jsonl
+**/data/*.json
+**/data/*.gz
+**/data/*.zst
+**/traces/
+
+# ---------------------------------------------------------------
+# Environment files
+# ---------------------------------------------------------------
+.env
+**/.env
+
+# ---------------------------------------------------------------
+# Gephi / network graph exports (any module)
+# ---------------------------------------------------------------
+*.net
+*.net.ftree
+*.gexf
+*.graphml
+
+# ---------------------------------------------------------------
+# OS artefacts
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------
+# Temporary / editor swap files
+# ---------------------------------------------------------------
+*.tmp
+*.bak
+*~
+*.swp
+*.swo
+
+# ---------------------------------------------------------------
+# Directory for Jenkinsfiles — keep
+# ---------------------------------------------------------------
+!.ci

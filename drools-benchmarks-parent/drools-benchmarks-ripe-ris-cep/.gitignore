@@ -1,67 +1,82 @@
 # ---------------------------------------------------------------
-# incubator-kie-benchmarks — root .gitignore
+# drools-benchmarks-ripe-ris-cep — module-level .gitignore
 # ---------------------------------------------------------------
 
-# Maven
-/target
-/local
-/bin
-**/target/
-**/dependency-reduced-pom.xml
+# Maven build output
+target/
+dependency-reduced-pom.xml
 
-# Compiled classes and package artifacts
-*.class
+# Package artifacts
 *.jar
 *.war
 *.ear
+*.class
 
 # ---------------------------------------------------------------
 # IDE files
 # ---------------------------------------------------------------
-.mtj.tmp/
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
 /nbproject
-/*.ipr
-/*.iws
-/*.iml
-
-# Hide all root dot-files except the ones we need
-/.*
-!.gitignore
-!/.github/
-!/.ci
+.mtj.tmp/
 
 # ---------------------------------------------------------------
-# JVM crash and replay logs (any module)
+# Environment and local configuration
+# .env holds sensitive paths/URLs — never commit
+# ---------------------------------------------------------------
+.env
+
+# ---------------------------------------------------------------
+# RIS / BGP event data files
+# These can be hundreds of MB to tens of GB.
+# Keep the data/ directory itself but ignore its contents.
+# ---------------------------------------------------------------
+/data/*.jsonl
+/data/*.json
+/data/*.gz
+/data/*.zst
+
+# Causal trace output (can reach 80 GB+)
+riperis_causal_trace.jsonl
+riperis_causal_trace_*.jsonl
+
+# Recorded trace output directory
+/traces/
+
+# ---------------------------------------------------------------
+# JMH / benchmark outputs
+# ---------------------------------------------------------------
+jmh-result.json
+jmh-result-*.json
+*.jfr
+benchmark_results/
+*.jmh.log
+
+# ---------------------------------------------------------------
+# Research result files (keep templates, ignore generated output)
+# ---------------------------------------------------------------
+docs/results/*.csv
+docs/results/*.html
+docs/results/*.json
+docs/results/*.jfr
+docs/results/*.md
+# Allow the directory and any committed README/template files
+!docs/results/.gitkeep
+!docs/results/README.md
+
+# ---------------------------------------------------------------
+# JVM crash and replay logs
 # ---------------------------------------------------------------
 hs_err_pid*.log
 replay_pid*.log
 hs_err_pid*
 replay_pid*
-
-# ---------------------------------------------------------------
-# JMH / benchmark outputs (any module)
-# ---------------------------------------------------------------
-jmh-result.json
-jmh-result-*.json
-*.jfr
-
-# ---------------------------------------------------------------
-# RIS / BGP event data and causal trace files (any module)
-# These can reach tens of GB and must never be committed.
-# ---------------------------------------------------------------
-riperis_causal_trace.jsonl
-riperis_causal_trace_*.jsonl
-**/data/*.jsonl
-**/data/*.json
-**/data/*.gz
-**/data/*.zst
-**/traces/
-
-# ---------------------------------------------------------------
-# Environment files
-# ---------------------------------------------------------------
-.env
-**/.env
 
 # ---------------------------------------------------------------
 # Gephi / network graph exports
@@ -70,6 +85,13 @@ riperis_causal_trace_*.jsonl
 *.net.ftree
 *.gexf
 *.graphml
+
+# ---------------------------------------------------------------
+# Characterization collector outputs
+# ---------------------------------------------------------------
+characterization_*.json
+characterization_*.csv
+characterization_*.txt
 
 # ---------------------------------------------------------------
 # OS artefacts
@@ -86,13 +108,3 @@ desktop.ini
 *~
 *.swp
 *.swo
-
-# ---------------------------------------------------------------
-# Directory for Jenkinsfiles — keep
-# ---------------------------------------------------------------
-!.ci
-
-# ---------------------------------------------------------------
-# Logs
-# ---------------------------------------------------------------
-*.log

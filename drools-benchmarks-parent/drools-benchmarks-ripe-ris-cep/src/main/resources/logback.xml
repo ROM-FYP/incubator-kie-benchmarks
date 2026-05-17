@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Console appender with timestamp, thread, level, and compact logger name -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Suppress noisy Drools/KIE internals; WARN is enough for benchmark runs -->
+    <logger name="org.drools"                        level="WARN"/>
+    <logger name="org.kie"                           level="WARN"/>
+
+    <!-- Suppress KIE builder package-path warnings (DRL in rules/ folder) -->
+    <logger name="org.drools.compiler.kie.builder"   level="ERROR"/>
+    <logger name="org.kie.internal.builder"          level="ERROR"/>
+
+    <!-- Suppress Phreak/RETE internal DEBUG spam -->
+    <logger name="org.drools.core.phreak"            level="WARN"/>
+    <logger name="org.drools.core.reteoo"            level="WARN"/>
+
+    <!-- RIPE RIS benchmark application logging at INFO -->
+    <logger name="org.kie.benchmark.cep.riperis"     level="INFO"/>
+
+    <!-- Root: INFO for everything else -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+</configuration>
