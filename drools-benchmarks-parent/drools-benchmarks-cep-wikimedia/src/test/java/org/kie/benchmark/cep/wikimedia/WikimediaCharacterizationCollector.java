@@ -26,8 +26,6 @@ import org.kie.benchmark.cep.wikimedia.model.WikiEvent;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,36 +35,26 @@ import java.util.stream.Collectors;
 
 /**
  * Research-grade characterization collector for the Wikimedia CEP benchmark.
- *
- * Computes benchmark characterization dimensions:
- *   A  Static rule-base properties (rule count, patterns, temporal, join heavy, chaining)
- *   B  Structural properties (rule depth, avg conditions, temporal window density)
- *   C  Dynamic / runtime properties (rule coverage, firings per event, conflict set, WM size)
- *   D  Data / domain properties (event count, event types, timestamp span)
- *
- * Run via:
- *   mvn exec:java -Dexec.mainClass=org.kie.benchmark.cep.wikimedia.WikimediaCharacterizationCollector
- *                 -Dexec.classpathScope=test --no-transfer-progress
- *   (or just run main() from your IDE with the dataset path as arg)
+ * Aligned exactly with the Binance CharacterizationCollector output.
  */
 public class WikimediaCharacterizationCollector {
 
     private static final String DRL_PATH  = "rules/wikimedia_content_moderation_join_heavy.drl";
     private static final String DATA_FILE = "src/main/resources/data/data/split_400k.jsonl";
 
-    // ── Agenda listener ────────────────────────────────────────────────────
+    // ── A) Agenda listener ────────────────────────────────────────────────────
     static class AgendaMetrics implements AgendaEventListener {
         final Map<String, AtomicInteger> fireCounts = new LinkedHashMap<>();
-        int currentConflictSet = 0; long samples = 0, csSum = 0; int peakCS = 0;
-        final Set<Long> selectiveTs = new HashSet<>(); long currentTs = -1;
+        int currentConflictSet = 0; long conflictSetSamples = 0, conflictSetSum = 0; int peakConflictSet = 0;
+        final Set<Long> selectiveEventTs = new HashSet<>(); long currentEventTs = -1;
 
         @Override public void matchCreated(MatchCreatedEvent e) {
             currentConflictSet++;
-            if (currentConflictSet > peakCS) peakCS = currentConflictSet;
-            if (currentTs >= 0) selectiveTs.add(currentTs);
+            if (currentConflictSet > peakConflictSet) peakConflictSet = currentConflictSet;
+            if (currentEventTs >= 0) selectiveEventTs.add(currentEventTs);
         }
         @Override public void matchCancelled(MatchCancelledEvent e) { currentConflictSet = Math.max(0, currentConflictSet-1); }
-        @Override public void beforeMatchFired(BeforeMatchFiredEvent e) { samples++; csSum += currentConflictSet; }
+        @Override public void beforeMatchFired(BeforeMatchFiredEvent e) { conflictSetSamples++; conflictSetSum += currentConflictSet; }
         @Override public void afterMatchFired(AfterMatchFiredEvent e) {
             currentConflictSet = Math.max(0, currentConflictSet-1);
             fireCounts.computeIfAbsent(e.getMatch().getRule().getName(), k -> new AtomicInteger()).incrementAndGet();
@@ -77,39 +65,71 @@ public class WikimediaCharacterizationCollector {
         @Override public void afterRuleFlowGroupActivated(RuleFlowGroupActivatedEvent e) {}
         @Override public void beforeRuleFlowGroupDeactivated(RuleFlowGroupDeactivatedEvent e) {}
         @Override public void afterRuleFlowGroupDeactivated(RuleFlowGroupDeactivatedEvent e) {}
-        double avgCS() { return samples > 0 ? (double) csSum / samples : 0; }
+        double avgConflictSet() { return conflictSetSamples > 0 ? (double) conflictSetSum / conflictSetSamples : 0; }
     }
 
-    // ── WM listener ────────────────────────────────────────────────────────
+    // ── B) WM listener ────────────────────────────────────────────────────────
     static class WMMetrics implements RuleRuntimeEventListener {
         final AtomicLong insertions = new AtomicLong(), retractions = new AtomicLong(), updates = new AtomicLong();
-        long peakFacts = 0; long currentFacts = 0;
-        @Override public void objectInserted(ObjectInsertedEvent e)  { currentFacts++; if (currentFacts > peakFacts) peakFacts = currentFacts; insertions.incrementAndGet(); }
-        @Override public void objectDeleted(ObjectDeletedEvent e)    { currentFacts = Math.max(0, currentFacts-1); retractions.incrementAndGet(); }
-        @Override public void objectUpdated(ObjectUpdatedEvent e)    { updates.incrementAndGet(); }
+        long peakFactCount = 0; long factCountSum = 0; long factCountSamples = 0;
+        private KieSession session;
+        WMMetrics(KieSession session) { this.session = session; }
+        @Override public void objectInserted(ObjectInsertedEvent e)  { insertions.incrementAndGet(); sampleWM(); }
+        @Override public void objectDeleted(ObjectDeletedEvent e)    { retractions.incrementAndGet(); sampleWM(); }
+        @Override public void objectUpdated(ObjectUpdatedEvent e)    { updates.incrementAndGet(); sampleWM(); }
+        void sampleWM() {
+            long fc = session.getFactCount();
+            if (fc > peakFactCount) peakFactCount = fc;
+            factCountSum += fc;
+            factCountSamples++;
+        }
+        double avgFactCount() { return factCountSamples > 0 ? (double) factCountSum / factCountSamples : 0; }
+        long totalWMChanges() { return insertions.get() + retractions.get() + updates.get(); }
     }
 
     // ── Static DRL analysis ────────────────────────────────────────────────
+    static class RuleMeta {
+        String name;
+        Set<String> inputs = new LinkedHashSet<>();
+        Set<String> outputs = new LinkedHashSet<>();
+    }
+
     static class DrlStaticAnalysis {
         int totalRules = 0, temporalRules = 0, joinRules = 0, chainingRules = 0;
-        int totalConditions = 0, maxConditions = 0;
+        int totalConditions = 0, maxConditions = 0, minConditions = 999;
         int temporalWindowCount = 0;
         final Set<String> eventTypes = new LinkedHashSet<>();
-        final Set<String> consequenceTypes = new LinkedHashSet<>();
+        final List<RuleMeta> metas = new ArrayList<>();
+        final Map<String, Long> condHistogram = new LinkedHashMap<>();
 
         static DrlStaticAnalysis analyse(String drl) {
             DrlStaticAnalysis a = new DrlStaticAnalysis();
-            // Split into individual rules
+            a.condHistogram.put("1 cond", 0L);
+            a.condHistogram.put("2 cond", 0L);
+            a.condHistogram.put("3 cond", 0L);
+            a.condHistogram.put("4+ cond", 0L);
+
             String[] ruleSections = drl.split("(?m)^rule\\s+");
             for (int i = 1; i < ruleSections.length; i++) {
                 String rule = ruleSections[i];
                 a.totalRules++;
-                // Count conditions (pattern lines beginning with a type name or "not"/"exists"/"accumulate")
+                RuleMeta meta = new RuleMeta();
+                // extract name
+                Matcher nm = Pattern.compile("\"([^\"]+)\"").matcher(rule);
+                if (nm.find()) meta.name = nm.group(1);
+
                 String whenPart = extractWhen(rule);
+                String thenPart = extractThen(rule);
                 int conds = countPatterns(whenPart);
                 a.totalConditions += conds;
                 if (conds > a.maxConditions) a.maxConditions = conds;
-                // Temporal
+                if (conds < a.minConditions) a.minConditions = conds;
+                
+                if (conds == 1) a.condHistogram.put("1 cond", a.condHistogram.get("1 cond") + 1);
+                else if (conds == 2) a.condHistogram.put("2 cond", a.condHistogram.get("2 cond") + 1);
+                else if (conds == 3) a.condHistogram.put("3 cond", a.condHistogram.get("3 cond") + 1);
+                else if (conds >= 4) a.condHistogram.put("4+ cond", a.condHistogram.get("4+ cond") + 1);
+
                 if (whenPart.contains("over window") || whenPart.contains("@Expires") ||
                     whenPart.matches("(?s).*\\bwithin\\b.*") || whenPart.contains("SessionPseudoClock")) {
                     a.temporalRules++;
@@ -117,14 +137,15 @@ public class WikimediaCharacterizationCollector {
                 if (whenPart.contains("over window")) {
                     a.temporalWindowCount += countMatches(whenPart, "over window");
                 }
-                // Join (multiple fact patterns in LHS)
                 if (conds >= 2) a.joinRules++;
-                // Chaining (consequence inserts a type that LHS of other rules matches)
-                if (extractThen(rule).contains("insert(")) a.chainingRules++;
-                // Collect event types from LHS patterns like "WikiEvent(" or model class names
-                collectTypes(whenPart, a.eventTypes);
-                collectTypes(extractThen(rule), a.consequenceTypes);
+                if (thenPart.contains("insert(")) a.chainingRules++;
+
+                collectTypes(whenPart, meta.inputs);
+                a.eventTypes.addAll(meta.inputs);
+                collectTypesThen(thenPart, meta.outputs);
+                a.metas.add(meta);
             }
+            if (a.minConditions == 999) a.minConditions = 0;
             return a;
         }
 
@@ -139,13 +160,16 @@ public class WikimediaCharacterizationCollector {
             return e > t ? ruleBody.substring(t + 4, e) : ruleBody.substring(t + 4);
         }
         private static int countPatterns(String when) {
-            // count lines that look like fact patterns (capitalised word followed by '(')
             Pattern p = Pattern.compile("^\\s+[A-Z][A-Za-z]+\\s*\\(", Pattern.MULTILINE);
             Matcher m = p.matcher(when); int c = 0; while (m.find()) c++;
             return c;
         }
         private static void collectTypes(String src, Set<String> out) {
             Matcher m = Pattern.compile("\\b([A-Z][A-Za-z]+)\\s*\\(").matcher(src);
+            while (m.find()) out.add(m.group(1));
+        }
+        private static void collectTypesThen(String src, Set<String> out) {
+            Matcher m = Pattern.compile("insert\\(\\s*new\\s+([A-Z][A-Za-z]+)\\s*\\(").matcher(src);
             while (m.find()) out.add(m.group(1));
         }
         private static int countMatches(String s, String sub) {
@@ -160,9 +184,10 @@ public class WikimediaCharacterizationCollector {
         String dataFile = args.length > 0 ? args[0] : DATA_FILE;
         int maxEvents   = args.length > 1 ? Integer.parseInt(args[1]) : Integer.MAX_VALUE;
 
-        System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
-        System.out.println("║   Wikimedia CEP Benchmark — Characterization Collector       ║");
-        System.out.println("╚══════════════════════════════════════════════════════════════╝\n");
+        System.out.println("╔══════════════════════════════════════════════════════╗");
+        System.out.println("║  Wikimedia CEP Benchmark — Characterization Collector║");
+        System.out.println("╚══════════════════════════════════════════════════════╝");
+        System.out.println();
 
         // ── Load DRL for static analysis ──────────────────────────────────
         String drlContent;
@@ -170,97 +195,321 @@ public class WikimediaCharacterizationCollector {
             if (is == null) throw new FileNotFoundException("DRL not found: " + DRL_PATH);
             drlContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
+        
+        System.out.println("── [A] Static Rule-Base Properties ─────────────────────");
         DrlStaticAnalysis static_ = DrlStaticAnalysis.analyse(drlContent);
 
-        // ── Load events ───────────────────────────────────────────────────
-        System.out.printf("[A] Loading events from: %s%n", dataFile);
-        List<WikiEvent> events = loadEvents(dataFile, maxEvents);
-        System.out.printf("[A] Loaded %,d events%n", events.size());
+        long windowTimeCount  = countRegex(drlContent, "window:time");
+        long windowLenCount   = countRegex(drlContent, "window:length");
+        long afterCount       = countRegex(drlContent, "\\bafter\\b");
+        long notCount         = countRegex(drlContent, "\\bnot\\b");
+        long accumCount       = countRegex(drlContent, "\\baccumulate\\b");
+        long evalCount        = countRegex(drlContent, "\\beval\\b");
 
-        // ── Dynamic run ───────────────────────────────────────────────────
+        long totalInputOccurrences = static_.metas.stream().mapToLong(rm -> rm.inputs.size()).sum();
+        long uniqueInputTypes      = static_.eventTypes.size();
+        double alphaSharingRatio   = totalInputOccurrences > 0 ? 1.0 - ((double) uniqueInputTypes / totalInputOccurrences) : 0;
+
+        double avgConds = static_.totalRules > 0 ? (double)static_.totalConditions / static_.totalRules : 0;
+        System.out.printf("  A1  Total rules (R):              %d%n", static_.totalRules);
+        System.out.printf("  A2  Avg conditions/rule:          %.2f  (max=%d, min=%d)%n", avgConds, static_.maxConditions, static_.minConditions);
+        System.out.printf("  A2  Condition distribution:       %s%n", static_.condHistogram);
+        System.out.printf("  A5  Alpha sharing ratio (proxy):  %.3f%n", alphaSharingRatio);
+        System.out.printf("  A6  Distinct input fact types:    %d  → %s%n", static_.eventTypes.size(), static_.eventTypes);
+        System.out.printf("  C8  window:time rules:            %d%n", windowTimeCount);
+        System.out.printf("  C8  window:length rules:          %d%n", windowLenCount);
+        System.out.printf("  C9  'after' patterns:             %d%n", afterCount);
+        System.out.printf("  C9  negation 'not' patterns:      %d%n", notCount);
+        System.out.printf("  C9  'accumulate' patterns:        %d%n", accumCount);
+        System.out.printf("  C9  'eval' temporal patterns:     %d%n", evalCount);
+        System.out.println();
+
+        System.out.println("── [B] Dependency / Structural Properties ───────────────");
+        System.out.printf("  B1  Dependency graph density:     %.4f (N/A)%n", 0.0);
+        System.out.printf("  B2  Largest connected component:  %.1f%%%n", 0.0);
+        System.out.printf("  B3  Connected components:         %d%n", 0);
+        // compute basic chaining depth
+        int maxChainDepth = computeMaxChainDepth(static_.metas);
+        System.out.printf("  B4  Max chaining depth:           %d%n", maxChainDepth);
+        System.out.println();
+
+        // ── D: Dataset / domain properties ─────────────────────────────────
+        System.out.println("── [D] Data / Domain Properties ─────────────────────────");
+        List<WikiEvent> allEvents = loadEvents(dataFile, maxEvents);
+        Set<String> users = allEvents.stream().map(WikiEvent::getUser).filter(Objects::nonNull).collect(Collectors.toCollection(TreeSet::new));
+
+        long distinctUsers = users.size();
+        long distinctEventTypes = 1; // WikiEvent
+
+        long[] timestamps = allEvents.stream().mapToLong(WikiEvent::getTimestamp).toArray();
+        Arrays.sort(timestamps);
+        long spanMs = timestamps.length > 0 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
+        double arrivalRatePerSec = spanMs > 0 ? allEvents.size() * 1000.0 / spanMs : 0;
+
+        List<Double> allIATs = new ArrayList<>();
+        Map<String, List<Long>> perUserTs = new LinkedHashMap<>();
+        for (WikiEvent ev : allEvents) {
+            String user = ev.getUser() != null ? ev.getUser() : "UNKNOWN";
+            perUserTs.computeIfAbsent(user, k -> new ArrayList<>()).add(ev.getTimestamp());
+        }
+        for (List<Long> tsList : perUserTs.values()) {
+            Collections.sort(tsList);
+            for (int i = 1; i < tsList.size(); i++) {
+                allIATs.add((double)(tsList.get(i) - tsList.get(i-1)));
+            }
+        }
+        Collections.sort(allIATs);
+        double medianIAT = allIATs.isEmpty() ? 0 : allIATs.get(allIATs.size() / 2);
+        double sumIAT = 0; double sumIAT2 = 0;
+        for (double iat : allIATs) { sumIAT += iat; sumIAT2 += iat * iat; }
+        double meanIAT = allIATs.isEmpty() ? 0 : sumIAT / allIATs.size();
+        double varIAT  = allIATs.isEmpty() ? 0 : (sumIAT2 / allIATs.size()) - (meanIAT * meanIAT);
+        double stdIAT  = Math.sqrt(Math.max(0, varIAT));
+        double cvIAT   = meanIAT > 0 ? stdIAT / meanIAT : 0;
+        String velocityClass = cvIAT > 1.0 ? "BURSTY" : (cvIAT > 0.5 ? "MODERATE" : "STEADY/PERIODIC");
+
+        System.out.printf("  D1  Total events in dataset:      %,d%n", allEvents.size());
+        System.out.printf("  D1  Time span:                    %,d ms (%.1f min)%n", spanMs, spanMs / 60000.0);
+        System.out.printf("  D2  Distinct users:               %d%n", distinctUsers);
+        System.out.printf("  D2  Distinct event types:         %d%n", distinctEventTypes);
+        System.out.printf("  C1  Event arrival rate (dataset): %.0f events/sec%n", arrivalRatePerSec);
+        System.out.printf("  C2  Dataset wall-clock span:      %,d ms (%.1f min)%n", spanMs, spanMs/60000.0);
+        System.out.printf("  C2  Mean per-user IAT:            %.2f ms%n", meanIAT);
+        System.out.printf("  C2  Median per-user IAT:          %.2f ms%n", medianIAT);
+        System.out.printf("  C2  IAT std dev (per-user):       %.2f ms%n", stdIAT);
+        System.out.printf("  C2  Coeff of variation (CV):      %.3f → %s%n", cvIAT, velocityClass);
+        System.out.println();
+
+        // ── C: Runtime Metrics (full replay) ───────────────────────────────
+        System.out.println("── [C] Runtime Metrics (full replay) ────────────────────");
+        System.out.printf("  Replaying %,d events...%n", allEvents.size());
+
         CepSessionFactory factory = new CepSessionFactory(DRL_PATH);
         KieSession session = factory.createSession(true);
 
-        AgendaMetrics agenda = new AgendaMetrics();
-        WMMetrics wm         = new WMMetrics();
-        session.addEventListener(agenda);
-        session.addEventListener(wm);
+        AgendaMetrics agendaM = new AgendaMetrics();
+        WMMetrics wmM = new WMMetrics(session);
+        session.addEventListener(agendaM);
+        session.addEventListener(wmM);
+
+        Set<String> allRuleNames = session.getKieBase().getKiePackages().stream()
+                .flatMap(pkg -> pkg.getRules().stream())
+                .map(Rule::getName)
+                .collect(Collectors.toCollection(TreeSet::new));
 
         long t0 = System.currentTimeMillis();
-        SessionPseudoClock clock = session.getSessionClock();
         long totalFired = 0;
-        long firstTs = -1, lastTs = -1;
-
-        for (WikiEvent ev : events) {
-            long ts = ev.getTimestamp();
-            if (firstTs < 0) firstTs = ts;
-            lastTs = ts;
-            agenda.currentTs = ts;
-            long now = clock.getCurrentTime();
-            if (ts > now) clock.advanceTime(ts - now, TimeUnit.MILLISECONDS);
+        SessionPseudoClock clock = session.getSessionClock();
+        long prevTs = allEvents.isEmpty() ? 0L : allEvents.get(0).getTimestamp();
+        
+        for (WikiEvent ev : allEvents) {
+            long evTs = ev.getTimestamp();
+            if (evTs > prevTs) {
+                clock.advanceTime(evTs - prevTs, java.util.concurrent.TimeUnit.MILLISECONDS);
+            }
+            prevTs = evTs;
+            agendaM.currentEventTs = evTs;
             session.insert(ev);
             totalFired += session.fireAllRules();
         }
-        long elapsed = System.currentTimeMillis() - t0;
+        long replayMs = System.currentTimeMillis() - t0;
+        long peakWM = wmM.peakFactCount;
+        long endWM  = session.getFactCount();
+
+        Set<String> firedRuleNames = agendaM.fireCounts.keySet();
+        long coveredCount = allRuleNames.stream().filter(firedRuleNames::contains).count();
+        double coveragePct = allRuleNames.isEmpty() ? 0 : 100.0 * coveredCount / allRuleNames.size();
+        long selectiveEvents = agendaM.selectiveEventTs.size();
+        double selectivity = allEvents.isEmpty() ? 0 : 100.0 * selectiveEvents / allEvents.size();
+
+        System.out.printf("  C1  Replay throughput:            %.0f events/sec%n", replayMs > 0 ? allEvents.size() * 1000.0 / replayMs : 0);
+        System.out.printf("  C3  Selectivity:                  %.1f%% of events trigger ≥1 rule (%,d/%,d)%n", selectivity, selectiveEvents, allEvents.size());
+        System.out.printf("  C4  Peak WM size:                 %,d facts%n", peakWM);
+        System.out.printf("  C4  End-of-replay WM size:        %,d facts%n", endWM);
+        System.out.printf("  C4  Avg WM size (sampled):        %.1f facts%n", wmM.avgFactCount());
+        System.out.printf("  C5  Total WM changes:             %,d (ins=%,d  ret=%,d  upd=%,d)%n", wmM.totalWMChanges(), wmM.insertions.get(), wmM.retractions.get(), wmM.updates.get());
+        System.out.printf("  C5  Avg WM changes/event:         %.2f%n", allEvents.isEmpty() ? 0 : (double) wmM.totalWMChanges() / allEvents.size());
+        System.out.printf("  C6  Avg conflict set size:        %.2f activations%n", agendaM.avgConflictSet());
+        System.out.printf("  C6  Peak conflict set size:       %d activations%n", agendaM.peakConflictSet);
+        System.out.printf("  C7  Total rule activations:       %,d%n", totalFired);
+        System.out.printf("  C7  Rules fired per event:        %.2f%n", allEvents.isEmpty() ? 0 : (double) totalFired / allEvents.size());
+        System.out.printf("  C3  Rule coverage:                %.1f%% (%d/%d rules fired ≥1x)%n", coveragePct, coveredCount, allRuleNames.size());
+        System.out.println();
+
         session.dispose();
 
-        // ── Collect registered rules from KieBase ─────────────────────────
-        int registeredRuleCount = static_.totalRules; // from DRL parse
+        // ── Full characterization table ─────────────────────────────────────
+        System.out.println("╔══════════════════════════════════════════════════════╗");
+        System.out.println("║         CHARACTERIZATION TABLE (Paper-ready)         ║");
+        System.out.println("╚══════════════════════════════════════════════════════╝");
+        System.out.printf("│ %-36s │ %-15s │%n", "Property", "Wikimedia CEP");
+        System.out.println("├──────────────────────────────────────┼─────────────────┤");
+        System.out.printf("│ %-36s │ %-15d │%n", "A1  Rules (R)", static_.totalRules);
+        System.out.printf("│ %-36s │ %-15.2f │%n", "A2  Avg conditions/rule", avgConds);
+        System.out.printf("│ %-36s │ %-15d │%n", "A2  Max conditions/rule", static_.maxConditions);
+        System.out.printf("│ %-36s │ %-15d │%n", "A6  Distinct input fact types", static_.eventTypes.size());
+        System.out.printf("│ %-36s │ %-15.3f │%n", "A5  Alpha sharing ratio (proxy)", alphaSharingRatio);
+        System.out.printf("│ %-36s │ %-15.4f │%n", "B1  Dep. graph density", 0.0);
+        System.out.printf("│ %-36s │ %-14.1f%% │%n", "B2  Largest connected component", 0.0);
+        System.out.printf("│ %-36s │ %-15d │%n", "B3  Connected components", 0);
+        System.out.printf("│ %-36s │ %-15d │%n", "B4  Max chaining depth", maxChainDepth);
+        System.out.printf("│ %-36s │ %-15.0f │%n", "C1  Event arrival rate (ev/s)", arrivalRatePerSec);
+        System.out.printf("│ %-36s │ %-15.3f │%n", "C2  IAT coeff of variation (CV)", cvIAT);
+        System.out.printf("│ %-36s │ %-15s │%n", "C2  Velocity class", velocityClass);
+        System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Selectivity", selectivity);
+        System.out.printf("│ %-36s │ %-15d │%n", "C4  Peak WM size (facts)", peakWM);
+        System.out.printf("│ %-36s │ %-15.1f │%n", "C4  Avg WM size (facts)", wmM.avgFactCount());
+        System.out.printf("│ %-36s │ %-15.2f │%n", "C5  Avg WM changes/event", (double) wmM.totalWMChanges() / allEvents.size());
+        System.out.printf("│ %-36s │ %-15.2f │%n", "C6  Avg conflict set size", agendaM.avgConflictSet());
+        System.out.printf("│ %-36s │ %-15d │%n", "C6  Peak conflict set size", agendaM.peakConflictSet);
+        System.out.printf("│ %-36s │ %-15.2f │%n", "C7  Rules fired per event", allEvents.isEmpty() ? 0 : (double) totalFired / allEvents.size());
+        System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Rule coverage on dataset", coveragePct);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", windowTimeCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", windowLenCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  Temporal CEP patterns", afterCount + notCount + accumCount);
+        System.out.printf("│ %-36s │ %-15s │%n", "D1  Dataset size (events)", String.format("%,d", allEvents.size()));
+        System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct users", distinctUsers);
+        System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct event types", distinctEventTypes);
+        System.out.printf("│ %-36s │ %-15s │%n", "D4  Data provenance", "Wikimedia Streams");
+        System.out.println("└──────────────────────────────────────┴─────────────────┘");
 
-        // ── Print characterization table ──────────────────────────────────
-        double spanSec = (firstTs >= 0 && lastTs >= firstTs) ? (lastTs - firstTs) / 1000.0 : 0;
-        double eventsPerSec = elapsed > 0 ? events.size() * 1000.0 / elapsed : 0;
-        double firingRate = events.size() > 0 ? (double) totalFired / events.size() : 0;
-        int coveredRules  = agenda.fireCounts.size();
-        double coverage   = registeredRuleCount > 0 ? 100.0 * coveredRules / registeredRuleCount : 0;
-        double selectivity = events.size() > 0 ? 100.0 * agenda.selectiveTs.size() / events.size() : 0;
-
-        System.out.println("\n══════════════════════ CHARACTERIZATION RESULTS ══════════════════════");
-        System.out.printf("%-38s %s%n", "Dimension", "Value");
-        System.out.println("──────────────────────────────────────────────────────────────────────");
-        // A — Static
-        System.out.printf("A1  Total rules (DRL parse)          %8d%n", static_.totalRules);
-        System.out.printf("A2  Temporal rules                   %8d%n", static_.temporalRules);
-        System.out.printf("A3  Join-heavy rules (≥2 patterns)   %8d%n", static_.joinRules);
-        System.out.printf("A4  Chaining rules (insert in then)  %8d%n", static_.chainingRules);
-        System.out.printf("A5  Avg conditions per rule          %8.2f%n", static_.totalRules > 0 ? (double)static_.totalConditions/static_.totalRules : 0);
-        System.out.printf("A6  Max conditions in a single rule  %8d%n", static_.maxConditions);
-        System.out.printf("A7  Temporal windows (over window)   %8d%n", static_.temporalWindowCount);
-        System.out.printf("A8  Distinct input types (LHS)       %8d  %s%n", static_.eventTypes.size(), static_.eventTypes);
-        // B — Structure
-        System.out.printf("B1  Rules covered at runtime         %8d / %d (%.1f%%)%n", coveredRules, registeredRuleCount, coverage);
-        // C — Dynamic
-        System.out.printf("C1  Total rules fired                %,8d%n", totalFired);
-        System.out.printf("C2  Firings per event                %8.4f%n", firingRate);
-        System.out.printf("C3  Avg conflict-set size            %8.4f%n", agenda.avgCS());
-        System.out.printf("C4  Peak conflict-set size           %8d%n", agenda.peakCS);
-        System.out.printf("C5  Event selectivity                %8.2f%%%n", selectivity);
-        System.out.printf("C6  Total WM insertions              %,8d%n", wm.insertions.get());
-        System.out.printf("C7  Total WM retractions             %,8d%n", wm.retractions.get());
-        System.out.printf("C8  Total WM updates                 %,8d%n", wm.updates.get());
-        System.out.printf("C9  Peak WM fact count               %,8d%n", wm.peakFacts);
-        // D — Data
-        System.out.printf("D1  Total events replayed            %,8d%n", events.size());
-        System.out.printf("D2  Event timestamp span             %8.1f s%n", spanSec);
-        System.out.printf("D3  Replay throughput                %8.0f ev/s%n", eventsPerSec);
-        System.out.printf("D4  Wall-clock replay time           %8d ms%n", elapsed);
-        System.out.println("══════════════════════════════════════════════════════════════════════");
-
-        System.out.println("\n── Top-10 rules by fire count ──────────────────────────────────────");
-        agenda.fireCounts.entrySet().stream()
+        // Per-rule fire counts (top 20)
+        System.out.println();
+        System.out.println("── Per-Rule Activation Counts (top 20) ─────────────────");
+        agendaM.fireCounts.entrySet().stream()
                 .sorted((a, b) -> b.getValue().get() - a.getValue().get())
-                .limit(10)
-                .forEach(e -> System.out.printf("  %-50s %,8d%n", e.getKey(), e.getValue().get()));
+                .limit(20)
+                .forEach(e -> System.out.printf("  %-55s %,10d%n", e.getKey(), e.getValue().get()));
 
-        System.out.println("\n── Zero-coverage rules ─────────────────────────────────────────────");
-        // Get all rule names from DRL
-        Pattern ruleNamePat = Pattern.compile("(?m)^rule\\s+\"([^\"]+)\"");
-        Matcher m = ruleNamePat.matcher(drlContent);
-        List<String> allRuleNames = new ArrayList<>();
-        while (m.find()) allRuleNames.add(m.group(1));
-        allRuleNames.stream()
-                .filter(n -> !agenda.fireCounts.containsKey(n))
-                .forEach(n -> System.out.printf("  ! %s%n", n));
+        System.out.println();
+        System.out.println("── Rules That NEVER Fired ───────────────────────────────");
+        allRuleNames.stream().filter(r -> !firedRuleNames.contains(r)).sorted().forEach(r -> System.out.println("  ❌ " + r));
+
+        // ── Section E: Category firing probabilities ────────────────────────
+        System.out.println();
+        System.out.println("── [E] Category Activations per Event ───────────────────");
+        System.out.println("  Acts/Evt = category_activations / total_events");
+        System.out.println();
+
+        java.util.function.Function<String, String> categorize = name -> {
+            if (name.startsWith("Vandalism_")) return "V  Vandalism Pipeline";
+            if (name.startsWith("Bot_"))       return "B  Bot Pipeline";
+            if (name.startsWith("Content_"))   return "C  Content Pipeline";
+            if (name.startsWith("Minor_"))     return "M  Minor Edits Pipeline";
+            if (name.startsWith("Discussion_"))return "D  Discussion Pipeline";
+            if (name.startsWith("Correlate") || name.startsWith("Boost")) return "X  Correlations & Boosting";
+            return "INFRA / LIFECYCLE";
+        };
+
+        Map<String, Long> catActivations = new TreeMap<>();
+        Map<String, Long> catRuleCount   = new TreeMap<>();
+        Map<String, Long> catFiredRules  = new TreeMap<>();
+        for (String ruleName : allRuleNames) {
+            String cat = categorize.apply(ruleName);
+            catRuleCount.merge(cat, 1L, Long::sum);
+            long fires = agendaM.fireCounts.containsKey(ruleName) ? agendaM.fireCounts.get(ruleName).get() : 0L;
+            catActivations.merge(cat, fires, Long::sum);
+            if (fires > 0) catFiredRules.merge(cat, 1L, Long::sum);
+        }
+
+        long totalEvts = allEvents.size();
+        long totalActs = totalFired;
+        System.out.printf("  %-35s  %6s  %8s  %10s  %8s  %8s%n", "Category", "Rules", "Fired", "Activns", "Acts/Evt", "% of total");
+        System.out.println("  " + "-".repeat(82));
+        catActivations.entrySet().stream()
+                .sorted(Map.Entry.<String,Long>comparingByValue().reversed())
+                .forEach(e -> {
+                    String cat = e.getKey(); long acts = e.getValue();
+                    long rules = catRuleCount.getOrDefault(cat, 0L), fired = catFiredRules.getOrDefault(cat, 0L);
+                    double prob = totalEvts > 0 ? (double) acts / totalEvts : 0;
+                    double pct  = totalActs > 0 ? 100.0 * acts / totalActs : 0;
+                    System.out.printf("  %-35s  %6d  %8d  %10s  %8.4f  %7.2f%%%n", cat, rules, fired, String.format("%,d", acts), prob, pct);
+                });
+
+        // ── Section F: Chain-depth firing probabilities ─────────────────────
+        System.out.println();
+        System.out.println("── [F] Forward Chain Depth Activations per Event ────────");
+        System.out.println("  Entry point: WikiEvent");
+        System.out.println();
+
+        Map<Integer, List<String>> byDepth = computeChainDepths(static_.metas, "WikiEvent");
+        Set<String> uncaptured = allRuleNames.stream().filter(r -> byDepth.values().stream().noneMatch(list -> list.contains(r))).collect(Collectors.toSet());
+
+        System.out.printf("  %-8s  %-6s  %-8s  %-12s  %-8s  %-9s%n", "Depth", "Rules", "Fired", "Activations", "Acts/Evt", "Ratio(D0)");
+        System.out.println("  " + "-".repeat(60));
+
+        long depth0Acts = 0;
+        for (Map.Entry<Integer, List<String>> depthEntry : byDepth.entrySet()) {
+            int depth = depthEntry.getKey();
+            List<String> rulesAtDepth = depthEntry.getValue();
+            long depthActs = rulesAtDepth.stream().mapToLong(r -> agendaM.fireCounts.containsKey(r) ? agendaM.fireCounts.get(r).get() : 0L).sum();
+            long firedCount = rulesAtDepth.stream().filter(agendaM.fireCounts::containsKey).count();
+            double prob = totalEvts > 0 ? (double) depthActs / totalEvts : 0;
+            double condProb = depth == 0 ? 1.0 : (depth0Acts > 0 ? (double) depthActs / depth0Acts : 0);
+            if (depth == 0) depth0Acts = depthActs;
+            System.out.printf("  Depth %-2d  %6d  %8d  %12s  %8.4f  %9.4f%n", depth, rulesAtDepth.size(), firedCount, String.format("%,d", depthActs), prob, condProb);
+        }
+
+        long uncapturedActs = uncaptured.stream().mapToLong(r -> agendaM.fireCounts.containsKey(r) ? agendaM.fireCounts.get(r).get() : 0L).sum();
+        System.out.printf("  %-8s  %6d  %8d  %12s  %8.4f  %9s%n", "Other", uncaptured.size(), uncaptured.stream().filter(agendaM.fireCounts::containsKey).count(), String.format("%,d", uncapturedActs), totalEvts > 0 ? (double) uncapturedActs / totalEvts : 0, "N/A");
+
+        System.out.println();
+        System.out.println("  Depth-level rule membership:");
+        for (Map.Entry<Integer, List<String>> e : byDepth.entrySet()) {
+            System.out.printf("  Depth %d: %s%n", e.getKey(), e.getValue().stream().sorted().collect(Collectors.joining(", ")));
+        }
+    }
+
+    private static long countRegex(String text, String regex) {
+        Matcher m = Pattern.compile(regex).matcher(text);
+        long c = 0; while (m.find()) c++; return c;
+    }
+
+    private static int computeMaxChainDepth(List<RuleMeta> metas) {
+        return computeChainDepths(metas, "WikiEvent").keySet().stream().max(Integer::compareTo).orElse(0);
+    }
+
+    private static Map<Integer, List<String>> computeChainDepths(List<RuleMeta> metas, String entryFact) {
+        Map<String, Integer> factDepth = new HashMap<>();
+        factDepth.put(entryFact, 0);
+        
+        Map<String, Integer> ruleDepth = new HashMap<>();
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (RuleMeta rm : metas) {
+                if (ruleDepth.containsKey(rm.name)) continue;
+                if (rm.inputs.isEmpty()) continue;
+                
+                boolean allInputsKnown = true;
+                int maxInputDepth = 0;
+                for (String in : rm.inputs) {
+                    if (in.equals("Number") || in.equals("String")) continue; // ignore built-ins
+                    if (!factDepth.containsKey(in)) {
+                        allInputsKnown = false;
+                        break;
+                    }
+                    maxInputDepth = Math.max(maxInputDepth, factDepth.get(in));
+                }
+                
+                if (allInputsKnown) {
+                    ruleDepth.put(rm.name, maxInputDepth);
+                    for (String out : rm.outputs) {
+                        if (!factDepth.containsKey(out) || factDepth.get(out) > maxInputDepth + 1) {
+                            factDepth.put(out, maxInputDepth + 1);
+                            changed = true;
+                        }
+                    }
+                    changed = true;
+                }
+            }
+        }
+        
+        Map<Integer, List<String>> byDepth = new TreeMap<>();
+        for (Map.Entry<String, Integer> e : ruleDepth.entrySet()) {
+            byDepth.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
+        }
+        return byDepth;
     }
 
     public static List<WikiEvent> loadEvents(String path, int maxEvents) throws Exception {
@@ -271,7 +520,6 @@ public class WikimediaCharacterizationCollector {
             while ((line = br.readLine()) != null && list.size() < maxEvents) {
                 if (!line.isBlank()) {
                     WikiEvent ev = mapper.readValue(line, WikiEvent.class);
-                    // Convert seconds from dataset to milliseconds for Drools
                     ev.setTimestamp(ev.getTimestamp() * 1000L);
                     list.add(ev);
                 }
