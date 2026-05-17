@@ -115,12 +115,19 @@ public class ForwardChainFinder {
 
                 String successorName = successor.getRuleName();
                 int newDepth = currentDepth + 1;
+                
+                // Cycle protection: prevent infinite loops in cyclic dependency graphs
+                if (newDepth > allRules.size()) {
+                    continue;
+                }
+
                 // Relax: update depth if this path is longer than any previously found
                 if (!capturedRuleDepths.containsKey(successorName)
                         || capturedRuleDepths.get(successorName) < newDepth) {
                     capturedRuleDepths.put(successorName, newDepth);
                     queue.add(new RuleDepthEntry(successor, newDepth));
                 }
+
             }
         }
 

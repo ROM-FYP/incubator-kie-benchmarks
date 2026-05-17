@@ -497,9 +497,15 @@ public class WikimediaCharacterizationCollector {
         // Here we allow any rule's depth to be updated upward if a longer
         // derivation path is discovered, then re-propagate its outputs.
         boolean changed = true;
+        int iteration = 0;
         while (changed) {
+            iteration++;
+            if (iteration > metas.size()) {
+                break; // Cycle protection
+            }
             changed = false;
             for (RuleMeta rm : metas) {
+
                 if (rm.inputs.isEmpty()) continue;
 
                 boolean allInputsKnown = true;
