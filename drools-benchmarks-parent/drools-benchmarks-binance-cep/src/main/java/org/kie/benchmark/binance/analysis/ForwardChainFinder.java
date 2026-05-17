@@ -136,7 +136,7 @@ public class ForwardChainFinder {
                 .map(RuleMeta::getRuleName)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Set<String> uncapturedRules = new LinkedHashSet<>(allRuleNames);
-        uncapturedRules.removeAll(visited);
+        uncapturedRules.removeAll(capturedRuleDepths.keySet());
 
         return new ForwardChainResult(entryFactType, seedRules.size(),
                 capturedRuleDepths, chainsByDepth, uncapturedRules, connectingFacts);
