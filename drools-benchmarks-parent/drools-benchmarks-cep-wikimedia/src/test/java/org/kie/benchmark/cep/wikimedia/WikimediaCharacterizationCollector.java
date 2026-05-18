@@ -241,21 +241,33 @@ public class WikimediaCharacterizationCollector {
         long distinctUsers = users.size();
         long distinctEventTypes = 1; // WikiEvent
 
-        long[] timestamps = allEvents.stream().mapToLong(WikiEvent::getTimestamp).toArray();
-        Arrays.sort(timestamps);
-        long spanMs = timestamps.length > 0 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
-        double arrivalRatePerSec = spanMs > 0 ? allEvents.size() * 1000.0 / spanMs : 0;
+        // Timestamps in the JSONL are Unix epoch seconds — keep them as seconds here
+        // for all dataset-level statistics (span, IAT). We only convert to ms when
+        // advancing the pseudo-clock during replay (see below).
+        // NOTE: a small number of events have timestamp==0 (JSON null parsed as long default);
+        //       exclude them from span/IAT stats so they don't distort the min to 0.
+        long[] timestamps = allEvents.stream()
+                .mapToLong(WikiEvent::getTimestamp)
+                .filter(t -> t > 0)
+                .sorted()
+                .toArray();
+        long spanSec = timestamps.length > 1 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
+        long spanMs  = spanSec * 1000L; // for display
+        double arrivalRatePerSec = spanSec > 0 ? (double) allEvents.size() / spanSec : 0;
 
+        // IAT in milliseconds (converting from seconds); skip events with ts==0
         List<Double> allIATs = new ArrayList<>();
         Map<String, List<Long>> perUserTs = new LinkedHashMap<>();
         for (WikiEvent ev : allEvents) {
+            if (ev.getTimestamp() == 0) continue; // skip null-timestamp events
             String user = ev.getUser() != null ? ev.getUser() : "UNKNOWN";
             perUserTs.computeIfAbsent(user, k -> new ArrayList<>()).add(ev.getTimestamp());
         }
         for (List<Long> tsList : perUserTs.values()) {
             Collections.sort(tsList);
             for (int i = 1; i < tsList.size(); i++) {
-                allIATs.add((double)(tsList.get(i) - tsList.get(i-1)));
+                // convert second-difference to ms for IAT
+                allIATs.add((double)(tsList.get(i) - tsList.get(i-1)) * 1000.0);
             }
         }
         Collections.sort(allIATs);
@@ -300,15 +312,20 @@ public class WikimediaCharacterizationCollector {
         long t0 = System.currentTimeMillis();
         long totalFired = 0;
         SessionPseudoClock clock = session.getSessionClock();
-        long prevTs = allEvents.isEmpty() ? 0L : allEvents.get(0).getTimestamp();
-        
+        // timestamps are in raw seconds; convert to ms for:
+        //   1) the pseudo-clock delta (so window:time rules fire correctly)
+        //   2) the @Timestamp field on WikiEvent (Drools reads it as ms for expiry)
+        long prevTsSec = allEvents.isEmpty() ? 0L : allEvents.get(0).getTimestamp();
+
         for (WikiEvent ev : allEvents) {
-            long evTs = ev.getTimestamp();
-            if (evTs > prevTs) {
-                clock.advanceTime(evTs - prevTs, java.util.concurrent.TimeUnit.MILLISECONDS);
+            long evTsSec = ev.getTimestamp();
+            if (evTsSec > prevTsSec) {
+                clock.advanceTime((evTsSec - prevTsSec) * 1000L, java.util.concurrent.TimeUnit.MILLISECONDS);
             }
-            prevTs = evTs;
-            agendaM.currentEventTs = evTs;
+            prevTsSec = evTsSec;
+            agendaM.currentEventTs = evTsSec;
+            // Set timestamp to ms so @Timestamp("timestamp") gives Drools the correct epoch-ms value
+            ev.setTimestamp(evTsSec * 1000L);
             session.insert(ev);
             totalFired += session.fireAllRules();
         }
@@ -470,47 +487,74 @@ public class WikimediaCharacterizationCollector {
     }
 
     private static Map<Integer, List<String>> computeChainDepths(List<RuleMeta> metas, String entryFact) {
+        // Kahn's topological sort + longest acyclic path on the fact-dependency graph.
+        // This is the research-standard method for computing derivation chain depth
+        // in production rule systems. Rules involved in cycles never satisfy the
+        // "all inputs known" condition in a topological pass and are excluded
+        // naturally, giving a clean acyclic longest-path metric for the paper.
+
         Map<String, Integer> factDepth = new HashMap<>();
         factDepth.put(entryFact, 0);
-        
-        Map<String, Integer> ruleDepth = new HashMap<>();
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (RuleMeta rm : metas) {
-                if (ruleDepth.containsKey(rm.name)) continue;
-                if (rm.inputs.isEmpty()) continue;
-                
-                boolean allInputsKnown = true;
-                int maxInputDepth = 0;
-                for (String in : rm.inputs) {
-                    if (in.equals("Number") || in.equals("String")) continue; // ignore built-ins
-                    if (!factDepth.containsKey(in)) {
-                        allInputsKnown = false;
-                        break;
-                    }
-                    maxInputDepth = Math.max(maxInputDepth, factDepth.get(in));
+
+        Map<String, Integer> ruleDepth = new LinkedHashMap<>();
+        // Rules ready to process: all inputs are in factDepth
+        Deque<RuleMeta> ready = new ArrayDeque<>();
+        Set<String> processed = new HashSet<>();
+
+        // Seed: find rules whose inputs are all immediately known (depth 0 facts)
+        for (RuleMeta rm : metas) {
+            if (allInputsResolved(rm, factDepth)) {
+                ready.add(rm);
+            }
+        }
+
+        while (!ready.isEmpty()) {
+            RuleMeta rm = ready.poll();
+            if (processed.contains(rm.name)) continue;
+            processed.add(rm.name);
+
+            // Compute this rule's depth from its inputs
+            int maxInputDepth = 0;
+            for (String in : rm.inputs) {
+                if (in.equals("Number") || in.equals("String")) continue;
+                maxInputDepth = Math.max(maxInputDepth, factDepth.getOrDefault(in, 0));
+            }
+            ruleDepth.put(rm.name, maxInputDepth);
+
+            // Propagate outputs as newly known facts at depth+1
+            for (String out : rm.outputs) {
+                int newFactDepth = maxInputDepth + 1;
+                if (!factDepth.containsKey(out) || factDepth.get(out) < newFactDepth) {
+                    factDepth.put(out, newFactDepth);
                 }
-                
-                if (allInputsKnown) {
-                    ruleDepth.put(rm.name, maxInputDepth);
-                    for (String out : rm.outputs) {
-                        if (!factDepth.containsKey(out) || factDepth.get(out) > maxInputDepth + 1) {
-                            factDepth.put(out, maxInputDepth + 1);
-                            changed = true;
-                        }
-                    }
-                    changed = true;
+            }
+
+            // Re-check all unprocessed rules — newly resolved facts may unlock them
+            for (RuleMeta candidate : metas) {
+                if (!processed.contains(candidate.name) && allInputsResolved(candidate, factDepth)) {
+                    ready.add(candidate);
                 }
             }
         }
-        
+
         Map<Integer, List<String>> byDepth = new TreeMap<>();
         for (Map.Entry<String, Integer> e : ruleDepth.entrySet()) {
             byDepth.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
         }
         return byDepth;
     }
+
+    private static boolean allInputsResolved(RuleMeta rm, Map<String, Integer> factDepth) {
+        if (rm.inputs.isEmpty()) return false;
+        for (String in : rm.inputs) {
+            if (in.equals("Number") || in.equals("String")) continue;
+            if (!factDepth.containsKey(in)) return false;
+        }
+        return true;
+    }
+
+
+
 
     public static List<WikiEvent> loadEvents(String path, int maxEvents) throws Exception {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -520,7 +564,8 @@ public class WikimediaCharacterizationCollector {
             while ((line = br.readLine()) != null && list.size() < maxEvents) {
                 if (!line.isBlank()) {
                     WikiEvent ev = mapper.readValue(line, WikiEvent.class);
-                    ev.setTimestamp(ev.getTimestamp() * 1000L);
+                    // Keep timestamp in raw seconds — conversion to ms happens
+                    // only when advancing the pseudo-clock during replay.
                     list.add(ev);
                 }
             }
