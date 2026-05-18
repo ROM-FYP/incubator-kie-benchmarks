@@ -23,9 +23,6 @@ package org.kie.benchmark.cep.riperis.util;
  */
 public class CepBenchmarkConfig {
 
-    public static final String DEFAULT_RULES_PATH = "rules/ripe_rfc4271_benchmark_79_rules.drl";
-    public static final String DEFAULT_RIS_LIVE_URL = "https://ris-live.ripe.net/v1/stream/?format=sse";
-
     private final long durationMinutes;
     private final String rulesPath;
     private final String risLiveUrl;
@@ -52,8 +49,8 @@ public class CepBenchmarkConfig {
     public static CepBenchmarkConfig getDefault() {
         return new CepBenchmarkConfig(
                 1,
-                EnvConfig.get("RIPERIS_RULES_FILE", DEFAULT_RULES_PATH),
-                EnvConfig.get("RIPERIS_STREAM_URL", DEFAULT_RIS_LIVE_URL),
+                EnvConfig.get("RIPERIS_RULES_FILE"),
+                EnvConfig.get("RIPERIS_STREAM_URL"),
                 true,
                 false);
     }

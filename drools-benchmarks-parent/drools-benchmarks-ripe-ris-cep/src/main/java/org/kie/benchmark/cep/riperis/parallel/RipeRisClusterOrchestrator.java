@@ -66,8 +66,8 @@ public class RipeRisClusterOrchestrator {
     private final Map<Integer, BlockingQueue<RisMessage>> eventQueues;
     private final ExecutorService threadPool;
 
-    private final Map<Integer, Integer> perSessionFired = new LinkedHashMap<>();
-    private final Map<Integer, Integer> perSessionEventsReceived = new LinkedHashMap<>();
+    private final Map<Integer, Long> perSessionFired = new LinkedHashMap<>();
+    private final Map<Integer, Long> perSessionEventsReceived = new LinkedHashMap<>();
 
     public RipeRisClusterOrchestrator(String fullDrlContent) {
         this.clusterSessions = new LinkedHashMap<>();
@@ -88,7 +88,7 @@ public class RipeRisClusterOrchestrator {
             KieSession session = buildSessionFromDrl(drl, clusterId);
             session.fireAllRules();
 
-            int ruleCount = session.getKieBase().getKiePackages().stream()
+            long ruleCount = session.getKieBase().getKiePackages().stream()
                     .mapToInt(p -> p.getRules().size()).sum();
 
             clusterSessions.put(clusterId, session);
@@ -99,11 +99,11 @@ public class RipeRisClusterOrchestrator {
         }
     }
 
-    public int replayEvents(List<RisMessage> events) {
+    public long replayEvents(List<RisMessage> events) {
         perSessionFired.clear();
         perSessionEventsReceived.clear();
 
-        Map<Integer, Future<int[]>> futures = new LinkedHashMap<>();
+        Map<Integer, Future<long[]>> futures = new LinkedHashMap<>();
         for (Map.Entry<Integer, KieSession> entry : clusterSessions.entrySet()) {
             int cid = entry.getKey();
             KieSession session = entry.getValue();
@@ -113,15 +113,9 @@ public class RipeRisClusterOrchestrator {
 
         for (RisMessage event : events) {
             try {
-                // TODO: Implement specific alpha-filter routing for RIPE RIS.
-                // For now, we broadcast all events to all clusters to ensure correctness,
-                // or you can choose to send them to specific clusters if you have a criteria.
-                
-                // Broadcast to all for now as a fallback
                 for (int i = 1; i <= POOL_SIZE; i++) {
                     eventQueues.get(i).put(event);
                 }
-                
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException("Interrupted while enqueuing event", e);
@@ -137,10 +131,10 @@ public class RipeRisClusterOrchestrator {
             }
         }
 
-        int totalFired = 0;
-        for (Map.Entry<Integer, Future<int[]>> entry : futures.entrySet()) {
+        long totalFired = 0L;
+        for (Map.Entry<Integer, Future<long[]>> entry : futures.entrySet()) {
             try {
-                int[] result = entry.getValue().get();
+                long[] result = entry.getValue().get();
                 totalFired += result[0];
                 perSessionFired.put(entry.getKey(), result[0]);
                 perSessionEventsReceived.put(entry.getKey(), result[1]);
@@ -151,15 +145,14 @@ public class RipeRisClusterOrchestrator {
         return totalFired;
     }
 
-    private int[] drainAndFire(KieSession session, BlockingQueue<RisMessage> queue)
+    private long[] drainAndFire(KieSession session, BlockingQueue<RisMessage> queue)
             throws InterruptedException {
         SessionPseudoClock clock = session.getSessionClock();
-        int fired = 0;
-        int received = 0;
+        long fired = 0L;
+        long received = 0L;
 
         while (true) {
             RisMessage event = queue.take();
-            // Check for poison pill by reference or by specific ID
             if (event == POISON_PILL || (event != null && "__STOP__".equals(event.getId()))) break;
             received++;
 
@@ -172,7 +165,7 @@ public class RipeRisClusterOrchestrator {
             session.insert(event);
             fired += session.fireAllRules();
         }
-        return new int[] { fired, received };
+        return new long[] { fired, received };
     }
 
     private KieSession buildSessionFromDrl(String drl, int clusterId) {
@@ -216,11 +209,11 @@ public class RipeRisClusterOrchestrator {
         return kc.newKieSession(ksessionName, cfg);
     }
 
-    public Map<Integer, Integer> getPerSessionFired() {
+    public Map<Integer, Long> getPerSessionFired() {
         return Collections.unmodifiableMap(perSessionFired);
     }
 
-    public Map<Integer, Integer> getPerSessionEventsReceived() {
+    public Map<Integer, Long> getPerSessionEventsReceived() {
         return Collections.unmodifiableMap(perSessionEventsReceived);
     }
 

@@ -44,7 +44,7 @@ public class RipeRisClusterBenchmark {
                 System.exit(1);
             }
             String dataFile = args[0];
-            int maxEvents = args.length > 1 ? Integer.parseInt(args[1]) : Integer.MAX_VALUE;
+            long maxEvents = args.length > 1 ? Long.parseLong(args[1]) : Long.MAX_VALUE;
 
             System.out.println("╔══════════════════════════════════════════════╗");
             System.out.println("║  Ripe RIS CEP — Cluster Parallel Benchmark  ║");
@@ -72,7 +72,7 @@ public class RipeRisClusterBenchmark {
             KieSession baselineSession = factory.createSession(true);
 
             long baselineStart = System.currentTimeMillis();
-            int baselineFired = 0;
+            long baselineFired = 0L;
             SessionPseudoClock baseClock = baselineSession.getSessionClock();
 
             for (int i = 0; i < events.size(); i++) {
@@ -101,11 +101,11 @@ public class RipeRisClusterBenchmark {
             RipeRisClusterOrchestrator orchestrator = new RipeRisClusterOrchestrator(drlContent);
 
             long clusterStart = System.currentTimeMillis();
-            int clusterFired = orchestrator.replayEvents(events);
+            long clusterFired = orchestrator.replayEvents(events);
             long clusterDuration = System.currentTimeMillis() - clusterStart;
 
-            Map<Integer, Integer> perSessionFired = orchestrator.getPerSessionFired();
-            Map<Integer, Integer> perSessionEvents = orchestrator.getPerSessionEventsReceived();
+            Map<Integer, Long> perSessionFired = orchestrator.getPerSessionFired();
+            Map<Integer, Long> perSessionEvents = orchestrator.getPerSessionEventsReceived();
 
             orchestrator.dispose();
 
@@ -136,10 +136,10 @@ public class RipeRisClusterBenchmark {
             // ══════════════════════════════════════════════
             String[] names = RipeRisClusterDrlGenerator.getClusterNames();
             System.out.println("\n── Per-Session Breakdown ───────────────────");
-            for (Map.Entry<Integer, Integer> entry : perSessionFired.entrySet()) {
+            for (Map.Entry<Integer, Long> entry : perSessionFired.entrySet()) {
                 int cid = entry.getKey();
-                int fired = entry.getValue();
-                int eventsRecv = perSessionEvents.getOrDefault(cid, 0);
+                long fired = entry.getValue();
+                long eventsRecv = perSessionEvents.getOrDefault(cid, 0L);
                 System.out.printf("  %-30s Events: %,8d  Fired: %,8d%n",
                         names[cid], eventsRecv, fired);
             }

@@ -95,8 +95,8 @@ public class RipeRisEventSource implements AutoCloseable {
             reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
             String line;
             StringBuilder eventData = new StringBuilder();
-            int lineCount = 0;
-            int eventCount = 0;
+            long lineCount = 0L;
+            long eventCount = 0L;
 
             while (running && (line = reader.readLine()) != null) {
                 lineCount++;

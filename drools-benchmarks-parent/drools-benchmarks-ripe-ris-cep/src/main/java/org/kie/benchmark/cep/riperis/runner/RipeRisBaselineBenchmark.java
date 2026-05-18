@@ -41,16 +41,21 @@ import java.util.concurrent.TimeUnit;
  */
 public class RipeRisBaselineBenchmark {
 
-    private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE", "rules/ripe_rfc4271_benchmark_79_rules.drl");
+    private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
-            System.err.println("Usage: RipeRisBaselineBenchmark <dataFile> [maxEvents]");
-            System.exit(1);
+        String dataFile;
+        long maxEvents = Long.MAX_VALUE;
+
+        if (args.length > 0) {
+            dataFile = EnvConfig.get(args[0]);
+            if (args.length > 1) {
+                maxEvents = Long.parseLong(args[1]);
+            }
+        } else {
+            dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
         }
-        String dataFile = args[0];
-        int maxEvents = args.length > 1 ? Integer.parseInt(args[1]) : Integer.MAX_VALUE;
 
         // 1. Load events
         System.out.println("[Baseline] Loading events from: " + dataFile);
@@ -65,7 +70,7 @@ public class RipeRisBaselineBenchmark {
         // 3. Replay
         System.out.printf("[Baseline] Ingesting %,d events...%n", events.size());
         long t0 = System.currentTimeMillis();
-        int totalFirings = 0;
+        long totalFirings = 0L;
 
         SessionPseudoClock clock = session.getSessionClock();
 
@@ -107,7 +112,7 @@ public class RipeRisBaselineBenchmark {
     /**
      * Load RisMessages from a JSONL file.
      */
-    public static List<RisMessage> loadEvents(String filePath, int maxEvents) throws Exception {
+    public static List<RisMessage> loadEvents(String filePath, long maxEvents) throws Exception {
         List<RisMessage> events = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(new File(filePath)))) {
             String line;

@@ -73,7 +73,7 @@ public class ForwardChainFinder {
                 .collect(Collectors.toList());
 
         // Step 2: BFS from each seed rule
-        Map<String, Integer> capturedRuleDepths = new LinkedHashMap<>();
+        Map<String, Long> capturedRuleDepths = new LinkedHashMap<>();
         Map<String, Set<String>> connectingFacts = new LinkedHashMap<>();
         Set<String> visited = new HashSet<>();
 
@@ -85,8 +85,8 @@ public class ForwardChainFinder {
             String name = seed.getRuleName();
             if (!visited.contains(name)) {
                 visited.add(name);
-                capturedRuleDepths.put(name, 0);
-                queue.add(new RuleDepthEntry(seed, 0));
+                capturedRuleDepths.put(name, 0L);
+                queue.add(new RuleDepthEntry(seed, 0L));
             }
         }
 
@@ -94,7 +94,7 @@ public class ForwardChainFinder {
         while (!queue.isEmpty()) {
             RuleDepthEntry current = queue.poll();
             RuleMeta currentRule = current.rule;
-            int currentDepth = current.depth;
+            long currentDepth = current.depth;
 
             Set<RuleMeta> successors = graphBuilder.getSuccessors(currentRule);
             for (RuleMeta successor : successors) {
@@ -108,7 +108,7 @@ public class ForwardChainFinder {
                 String successorName = successor.getRuleName();
                 if (!visited.contains(successorName)) {
                     visited.add(successorName);
-                    int newDepth = currentDepth + 1;
+                    long newDepth = currentDepth + 1L;
                     capturedRuleDepths.put(successorName, newDepth);
                     queue.add(new RuleDepthEntry(successor, newDepth));
                 }
@@ -116,8 +116,8 @@ public class ForwardChainFinder {
         }
 
         // Step 3: Group rules by depth
-        Map<Integer, List<String>> chainsByDepth = new TreeMap<>();
-        for (Map.Entry<String, Integer> entry : capturedRuleDepths.entrySet()) {
+        Map<Long, List<String>> chainsByDepth = new TreeMap<>();
+        for (Map.Entry<String, Long> entry : capturedRuleDepths.entrySet()) {
             chainsByDepth.computeIfAbsent(entry.getValue(), k -> new ArrayList<>()).add(entry.getKey());
         }
 
@@ -128,7 +128,7 @@ public class ForwardChainFinder {
         Set<String> uncapturedRules = new LinkedHashSet<>(allRuleNames);
         uncapturedRules.removeAll(visited);
 
-        return new ForwardChainResult(entryFactType, seedRules.size(),
+        return new ForwardChainResult(entryFactType, (long) seedRules.size(),
                 capturedRuleDepths, chainsByDepth, uncapturedRules, connectingFacts);
     }
 
@@ -141,9 +141,9 @@ public class ForwardChainFinder {
      */
     private static class RuleDepthEntry {
         final RuleMeta rule;
-        final int depth;
+        final long depth;
 
-        RuleDepthEntry(RuleMeta rule, int depth) {
+        RuleDepthEntry(RuleMeta rule, long depth) {
             this.rule = rule;
             this.depth = depth;
         }
@@ -154,15 +154,15 @@ public class ForwardChainFinder {
      */
     public static class ForwardChainResult {
         private final String entryFactType;
-        private final int seedCount;
-        private final Map<String, Integer> capturedRuleDepths;
-        private final Map<Integer, List<String>> chainsByDepth;
+        private final long seedCount;
+        private final Map<String, Long> capturedRuleDepths;
+        private final Map<Long, List<String>> chainsByDepth;
         private final Set<String> uncapturedRules;
         private final Map<String, Set<String>> connectingFacts;
 
-        public ForwardChainResult(String entryFactType, int seedCount,
-                                  Map<String, Integer> capturedRuleDepths,
-                                  Map<Integer, List<String>> chainsByDepth,
+        public ForwardChainResult(String entryFactType, long seedCount,
+                                  Map<String, Long> capturedRuleDepths,
+                                  Map<Long, List<String>> chainsByDepth,
                                   Set<String> uncapturedRules,
                                   Map<String, Set<String>> connectingFacts) {
             this.entryFactType = entryFactType;
@@ -177,15 +177,15 @@ public class ForwardChainFinder {
         public String getEntryFactType() { return entryFactType; }
 
         /** Number of seed rules (rules directly consuming the entry fact type). */
-        public int getSeedCount() { return seedCount; }
+        public long getSeedCount() { return seedCount; }
 
         /** Map of rule name → depth in the forward chain (0 = seed). */
-        public Map<String, Integer> getCapturedRuleDepths() {
+        public Map<String, Long> getCapturedRuleDepths() {
             return Collections.unmodifiableMap(capturedRuleDepths);
         }
 
         /** Rules grouped by depth level. */
-        public Map<Integer, List<String>> getChainsByDepth() {
+        public Map<Long, List<String>> getChainsByDepth() {
             return Collections.unmodifiableMap(chainsByDepth);
         }
 
@@ -200,11 +200,11 @@ public class ForwardChainFinder {
         }
 
         /** Total number of rules captured in the forward chain. */
-        public int getCapturedCount() { return capturedRuleDepths.size(); }
+        public long getCapturedCount() { return capturedRuleDepths.size(); }
 
         /** Maximum depth of the forward chain. */
-        public int getMaxDepth() {
-            return chainsByDepth.isEmpty() ? 0 :
+        public long getMaxDepth() {
+            return chainsByDepth.isEmpty() ? 0L :
                     Collections.max(chainsByDepth.keySet());
         }
 

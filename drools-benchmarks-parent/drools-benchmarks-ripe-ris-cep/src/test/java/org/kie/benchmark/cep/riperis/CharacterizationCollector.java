@@ -71,10 +71,10 @@ public class CharacterizationCollector {
         // Per-rule fire counts
         final Map<String, AtomicInteger> fireCounts = new LinkedHashMap<>();
         // Conflict set tracking (activations currently on the agenda)
-        int currentConflictSet = 0;
-        long conflictSetSamples = 0;
-        long conflictSetSum = 0;
-        int peakConflictSet = 0;
+        long currentConflictSet = 0L;
+        long conflictSetSamples = 0L;
+        long conflictSetSum = 0L;
+        long peakConflictSet = 0L;
         // Selectivity: set of event indices that triggered at least one rule
         final Set<Long> selectiveEventTs = new HashSet<>();
         // Current event timestamp being processed (set by replay loop)
@@ -188,6 +188,217 @@ public class CharacterizationCollector {
     }
 
     // -----------------------------------------------------------------------
+    // Static CEP / temporal-pattern analysis
+    // -----------------------------------------------------------------------
+    static class StaticTemporalMetrics {
+        long windowTimeCount;
+        long windowLengthCount;
+        long afterCount;
+        long beforeCount;
+        long coincidesCount;
+        long duringCount;
+        long includesCount;
+        long overlapsCount;
+        long overlappedByCount;
+        long startsCount;
+        long startedByCount;
+        long finishesCount;
+        long finishedByCount;
+        long meetsCount;
+        long metByCount;
+        long notCount;
+        long accumulateCount;
+        long evalCount;
+
+        long eventDeclarations;
+        long expiresAnnotations;
+        long timestampAnnotations;
+        long durationAnnotations;
+        long roleEventAnnotations;
+
+        long accumulateCountFn;
+        long accumulateSumFn;
+        long accumulateAverageFn;
+        long accumulateMinFn;
+        long accumulateMaxFn;
+        long accumulateCollectListFn;
+        long accumulateCollectSetFn;
+
+        long rulesWithWindowTime;
+        long rulesWithWindowLength;
+        long rulesWithTemporalOperator;
+        long rulesWithAccumulate;
+        long rulesWithNegativeTemporal;
+        long rulesWithAnyCepPattern;
+
+        final Map<String, Long> windowTimeArguments = new TreeMap<>();
+        final Map<String, Long> windowLengthArguments = new TreeMap<>();
+        final Map<String, Long> eventFactTypes = new TreeMap<>();
+        final Map<String, Long> temporalOperatorHistogram = new LinkedHashMap<>();
+        final Map<String, Long> topTemporalRules = new LinkedHashMap<>();
+
+        long totalTemporalOperators() {
+            return afterCount + beforeCount + coincidesCount + duringCount + includesCount
+                    + overlapsCount + overlappedByCount + startsCount + startedByCount
+                    + finishesCount + finishedByCount + meetsCount + metByCount;
+        }
+
+        long totalCepPatterns() {
+            return windowTimeCount + windowLengthCount + totalTemporalOperators() + accumulateCount;
+        }
+
+        long intervalOperatorCount() {
+            return duringCount + includesCount + overlapsCount + overlappedByCount
+                    + startsCount + startedByCount + finishesCount + finishedByCount
+                    + meetsCount + metByCount;
+        }
+    }
+
+    private static StaticTemporalMetrics analyzeTemporalPatterns(String drlContent) {
+        StaticTemporalMetrics m = new StaticTemporalMetrics();
+
+        m.windowTimeCount = count(drlContent, "\\bover\\s+window:time\\s*\\(");
+        m.windowLengthCount = count(drlContent, "\\bover\\s+window:length\\s*\\(");
+
+        m.afterCount = count(drlContent, "\\bafter\\b");
+        m.beforeCount = count(drlContent, "\\bbefore\\b");
+        m.coincidesCount = count(drlContent, "\\bcoincides\\b");
+        m.duringCount = count(drlContent, "\\bduring\\b");
+        m.includesCount = count(drlContent, "\\bincludes\\b");
+        m.overlapsCount = count(drlContent, "\\boverlaps\\b");
+        m.overlappedByCount = count(drlContent, "\\boverlappedby\\b");
+        m.startsCount = count(drlContent, "\\bstarts\\b");
+        m.startedByCount = count(drlContent, "\\bstartedby\\b");
+        m.finishesCount = count(drlContent, "\\bfinishes\\b");
+        m.finishedByCount = count(drlContent, "\\bfinishedby\\b");
+        m.meetsCount = count(drlContent, "\\bmeets\\b");
+        m.metByCount = count(drlContent, "\\bmetby\\b");
+
+        m.notCount = count(drlContent, "\\bnot\\b");
+        m.accumulateCount = count(drlContent, "\\baccumulate\\b");
+        m.evalCount = count(drlContent, "\\beval\\b");
+
+        m.eventDeclarations = count(drlContent, "(?s)declare\\s+\\w+.*?@role\\s*\\(\\s*event\\s*\\).*?end");
+        m.expiresAnnotations = count(drlContent, "@expires\\s*\\(");
+        m.timestampAnnotations = count(drlContent, "@timestamp\\s*\\(");
+        m.durationAnnotations = count(drlContent, "@duration\\s*\\(");
+        m.roleEventAnnotations = count(drlContent, "@role\\s*\\(\\s*event\\s*\\)");
+
+        m.accumulateCountFn = count(drlContent, "\\bcount\\s*\\(");
+        m.accumulateSumFn = count(drlContent, "\\bsum\\s*\\(");
+        m.accumulateAverageFn = count(drlContent, "\\baverage\\s*\\(");
+        m.accumulateMinFn = count(drlContent, "\\bmin\\s*\\(");
+        m.accumulateMaxFn = count(drlContent, "\\bmax\\s*\\(");
+        m.accumulateCollectListFn = count(drlContent, "\\bcollectList\\s*\\(");
+        m.accumulateCollectSetFn = count(drlContent, "\\bcollectSet\\s*\\(");
+
+        collectArguments(drlContent, "\\bover\\s+window:time\\s*\\(([^)]*)\\)", m.windowTimeArguments);
+        collectArguments(drlContent, "\\bover\\s+window:length\\s*\\(([^)]*)\\)", m.windowLengthArguments);
+        collectEventFactTypes(drlContent, m.eventFactTypes);
+
+        m.temporalOperatorHistogram.put("after", m.afterCount);
+        m.temporalOperatorHistogram.put("before", m.beforeCount);
+        m.temporalOperatorHistogram.put("coincides", m.coincidesCount);
+        m.temporalOperatorHistogram.put("during", m.duringCount);
+        m.temporalOperatorHistogram.put("includes", m.includesCount);
+        m.temporalOperatorHistogram.put("overlaps", m.overlapsCount);
+        m.temporalOperatorHistogram.put("overlappedby", m.overlappedByCount);
+        m.temporalOperatorHistogram.put("starts", m.startsCount);
+        m.temporalOperatorHistogram.put("startedby", m.startedByCount);
+        m.temporalOperatorHistogram.put("finishes", m.finishesCount);
+        m.temporalOperatorHistogram.put("finishedby", m.finishedByCount);
+        m.temporalOperatorHistogram.put("meets", m.meetsCount);
+        m.temporalOperatorHistogram.put("metby", m.metByCount);
+
+        analyzeTemporalRules(drlContent, m);
+
+        return m;
+    }
+
+    private static void collectArguments(String text, String regex, Map<String, Long> target) {
+        Matcher matcher = Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(text);
+        while (matcher.find()) {
+            String arg = matcher.group(1).replaceAll("\\s+", " ").trim();
+            if (!arg.isEmpty()) {
+                target.merge(arg, 1L, Long::sum);
+            }
+        }
+    }
+
+    private static void collectEventFactTypes(String drlContent, Map<String, Long> target) {
+        Pattern p = Pattern.compile("(?s)declare\\s+(\\w+).*?@role\\s*\\(\\s*event\\s*\\).*?end",
+                Pattern.CASE_INSENSITIVE);
+        Matcher matcher = p.matcher(drlContent);
+        while (matcher.find()) {
+            target.merge(matcher.group(1), 1L, Long::sum);
+        }
+    }
+
+    private static void analyzeTemporalRules(String drlContent, StaticTemporalMetrics metrics) {
+        Pattern rulePattern = Pattern.compile(
+                "(?s)rule\\s+[\"']([^\"']+)[\"'](.*?)\\bend\\b",
+                Pattern.CASE_INSENSITIVE);
+        Matcher matcher = rulePattern.matcher(drlContent);
+
+        Map<String, Long> temporalScoreByRule = new LinkedHashMap<>();
+
+        while (matcher.find()) {
+            String ruleName = matcher.group(1).trim();
+            String body = matcher.group(2);
+
+            long wt = count(body, "\\bover\\s+window:time\\s*\\(");
+            long wl = count(body, "\\bover\\s+window:length\\s*\\(");
+            long acc = count(body, "\\baccumulate\\b");
+            long nt = count(body, "\\bnot\\b");
+
+            long temporalOps = count(body, "\\bafter\\b")
+                    + count(body, "\\bbefore\\b")
+                    + count(body, "\\bcoincides\\b")
+                    + count(body, "\\bduring\\b")
+                    + count(body, "\\bincludes\\b")
+                    + count(body, "\\boverlaps\\b")
+                    + count(body, "\\boverlappedby\\b")
+                    + count(body, "\\bstarts\\b")
+                    + count(body, "\\bstartedby\\b")
+                    + count(body, "\\bfinishes\\b")
+                    + count(body, "\\bfinishedby\\b")
+                    + count(body, "\\bmeets\\b")
+                    + count(body, "\\bmetby\\b");
+
+            long total = wt + wl + acc + temporalOps;
+
+            if (wt > 0)
+                metrics.rulesWithWindowTime++;
+            if (wl > 0)
+                metrics.rulesWithWindowLength++;
+            if (temporalOps > 0)
+                metrics.rulesWithTemporalOperator++;
+            if (acc > 0)
+                metrics.rulesWithAccumulate++;
+            if (nt > 0 && temporalOps > 0)
+                metrics.rulesWithNegativeTemporal++;
+            if (total > 0) {
+                metrics.rulesWithAnyCepPattern++;
+                temporalScoreByRule.put(ruleName, total);
+            }
+        }
+
+        temporalScoreByRule.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(15)
+                .forEach(e -> metrics.topTemporalRules.put(e.getKey(), e.getValue()));
+    }
+
+    private static void printMapInline(String label, Map<String, Long> map) {
+        String rendered = map.isEmpty()
+                ? "{}"
+                : map.entrySet().stream()
+                        .map(e -> e.getKey() + "=" + e.getValue())
+                        .collect(Collectors.joining(", ", "{", "}"));
+        System.out.printf("  %-36s %s%n", label + ":", rendered);
+    }
+
+    // -----------------------------------------------------------------------
     // Main
     // -----------------------------------------------------------------------
     public static void main(String[] args) throws Exception {
@@ -198,7 +409,8 @@ public class CharacterizationCollector {
 
         // ── Load DRL text for static analysis ──────────────────────────────
         String drlContent;
-        try (InputStream is = CharacterizationCollector.class.getResourceAsStream("/" + EnvConfig.get("RIPERIS_RULES_FILE", "rules/ripe_rfc4271_benchmark_79_rules.drl"))) {
+        try (InputStream is = CharacterizationCollector.class.getResourceAsStream(
+                "/" + EnvConfig.get("RIPERIS_RULES_FILE"))) {
             drlContent = new String(Objects.requireNonNull(is).readAllBytes(), StandardCharsets.UTF_8);
         }
 
@@ -213,7 +425,7 @@ public class CharacterizationCollector {
             ruleMetas = Collections.emptyList();
         }
 
-        int ruleCount = ruleMetas.size();
+        long ruleCount = ruleMetas.size();
 
         // A2: Conditions per rule — count PatternDescr inputs per RuleMeta
         IntSummaryStatistics condStats = ruleMetas.stream()
@@ -225,13 +437,20 @@ public class CharacterizationCollector {
                 .flatMap(rm -> rm.getInputs().stream())
                 .collect(Collectors.toCollection(TreeSet::new));
 
-        // C8/C9: Pattern complexity — regex scan of DRL text
-        long windowTimeCount = count(drlContent, "window:time");
-        long windowLenCount = count(drlContent, "window:length");
-        long afterCount = count(drlContent, "\\bafter\\b");
-        long notCount = count(drlContent, "\\bnot\\b");
-        long accumCount = count(drlContent, "\\baccumulate\\b");
-        long evalCount = count(drlContent, "\\beval\\b");
+        // C8/C9: CEP / temporal-pattern complexity — regex scan of DRL text
+        StaticTemporalMetrics temporal = analyzeTemporalPatterns(drlContent);
+
+        long windowTimeCount = temporal.windowTimeCount;
+        long windowLenCount = temporal.windowLengthCount;
+        long afterCount = temporal.afterCount;
+        long beforeCount = temporal.beforeCount;
+        long coincidesCount = temporal.coincidesCount;
+        long intervalOperatorCount = temporal.intervalOperatorCount();
+        long temporalOperatorCount = temporal.totalTemporalOperators();
+        long notCount = temporal.notCount;
+        long accumCount = temporal.accumulateCount;
+        long evalCount = temporal.evalCount;
+        long totalCepPatternCount = temporal.totalCepPatterns();
 
         // A5: Alpha sharing — count unique alpha patterns (EventType + condition
         // combos)
@@ -256,32 +475,64 @@ public class CharacterizationCollector {
         System.out.printf("  A2  Condition distribution:       %s%n", condHistogram);
         System.out.printf("  A5  Alpha sharing ratio (proxy):  %.3f%n", alphaSharingRatio);
         System.out.printf("  A6  Distinct input fact types:    %d  → %s%n", allInputTypes.size(), allInputTypes);
-        System.out.printf("  C8  window:time rules:            %d%n", windowTimeCount);
-        System.out.printf("  C8  window:length rules:          %d%n", windowLenCount);
+        System.out.printf("  C8  event declarations:           %d%n", temporal.eventDeclarations);
+        System.out.printf("  C8  @expires annotations:         %d%n", temporal.expiresAnnotations);
+        System.out.printf("  C8  @timestamp annotations:       %d%n", temporal.timestampAnnotations);
+        System.out.printf("  C8  @duration annotations:        %d%n", temporal.durationAnnotations);
+        System.out.printf("  C8  window:time occurrences:      %d  (rules=%d)%n",
+                windowTimeCount, temporal.rulesWithWindowTime);
+        System.out.printf("  C8  window:length occurrences:    %d  (rules=%d)%n",
+                windowLenCount, temporal.rulesWithWindowLength);
         System.out.printf("  C9  'after' patterns:             %d%n", afterCount);
+        System.out.printf("  C9  'before' patterns:            %d%n", beforeCount);
+        System.out.printf("  C9  'coincides' patterns:         %d%n", coincidesCount);
+        System.out.printf("  C9  interval temporal operators:  %d%n", intervalOperatorCount);
+        System.out.printf("  C9  all temporal operators:       %d  (rules=%d)%n",
+                temporalOperatorCount, temporal.rulesWithTemporalOperator);
         System.out.printf("  C9  negation 'not' patterns:      %d%n", notCount);
-        System.out.printf("  C9  'accumulate' patterns:        %d%n", accumCount);
-        System.out.printf("  C9  'eval' temporal patterns:     %d%n", evalCount);
+        System.out.printf("  C9  negative temporal rules:      %d%n", temporal.rulesWithNegativeTemporal);
+        System.out.printf("  C9  'accumulate' patterns:        %d  (rules=%d)%n",
+                accumCount, temporal.rulesWithAccumulate);
+        System.out.printf("  C9  'eval' patterns:              %d%n", evalCount);
+        System.out.printf("  C9  total CEP pattern occurrences:%d  (rules=%d)%n",
+                totalCepPatternCount, temporal.rulesWithAnyCepPattern);
+        printMapInline("  C8  window:time args", temporal.windowTimeArguments);
+        printMapInline("  C8  window:length args", temporal.windowLengthArguments);
+        printMapInline("  C9  temporal op histogram", temporal.temporalOperatorHistogram);
+        printMapInline("  C9  accumulate functions",
+                new LinkedHashMap<String, Long>() {
+                    {
+                        put("count", temporal.accumulateCountFn);
+                        put("sum", temporal.accumulateSumFn);
+                        put("average", temporal.accumulateAverageFn);
+                        put("min", temporal.accumulateMinFn);
+                        put("max", temporal.accumulateMaxFn);
+                        put("collectList", temporal.accumulateCollectListFn);
+                        put("collectSet", temporal.accumulateCollectSetFn);
+                    }
+                });
+        printMapInline("  C8  event fact types", temporal.eventFactTypes);
+        printMapInline("  C9  top temporal rules", temporal.topTemporalRules);
         System.out.println();
 
         // ── B: Dependency graph metrics ─────────────────────────────────────
         System.out.println("── [B] Dependency / Structural Properties ───────────────");
         double graphDensity = 0;
-        int numComponents = 0;
+        long numComponents = 0L;
         double lccPct = 0;
-        int maxChainDepth = 0;
+        long maxChainDepth = 0L;
         if (!ruleMetas.isEmpty()) {
             DependencyGraphBuilder dgb = new DependencyGraphBuilder(ruleMetas);
             Graph<RuleMeta, DefaultEdge> g = dgb.getGraph();
-            int V = g.vertexSet().size();
-            int E = g.edgeSet().size();
+            long V = g.vertexSet().size();
+            long E = g.edgeSet().size();
             double maxEdges = (double) V * (V - 1);
             graphDensity = maxEdges > 0 ? E / maxEdges : 0;
 
             ConnectivityInspector<RuleMeta, DefaultEdge> ci = new ConnectivityInspector<>(g);
             List<Set<RuleMeta>> components = ci.connectedSets();
             numComponents = components.size();
-            int lccSize = components.stream().mapToInt(Set::size).max().orElse(0);
+            long lccSize = components.stream().mapToLong(Set::size).max().orElse(0L);
             lccPct = V > 0 ? 100.0 * lccSize / V : 0;
 
             // B4: chaining depth — longest shortest path in the DAG (proxy)
@@ -303,19 +554,25 @@ public class CharacterizationCollector {
 
         // ── D: Dataset / domain properties ─────────────────────────────────
         System.out.println("── [D] Data / Domain Properties ─────────────────────────");
-        String dataFile = EnvConfig.get("RIPERIS_DATA_FILE", "data/riperis_stream_20260512_004525.jsonl");
-        List<RisMessage> allEvents = RipeRisBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
+        String dataFile;
+        if (args != null && args.length > 0) {
+            dataFile = EnvConfig.get(args[0]);
+        } else {
+            dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
+        }
+        List<RisMessage> allEvents = RipeRisBaselineBenchmark.loadEvents(dataFile, Long.MAX_VALUE);
         Set<String> peers = allEvents.stream().map(RisMessage::getPeer).filter(Objects::nonNull)
                 .collect(Collectors.toCollection(TreeSet::new));
 
         // D2: Attribute cardinality
         long distinctPeers = peers.size();
-        long distinctEventTypes = allEvents.stream().map(RisMessage::getBgpType).filter(Objects::nonNull).distinct().count();
+        long distinctEventTypes = allEvents.stream().map(RisMessage::getBgpType).filter(Objects::nonNull).distinct()
+                .count();
 
         // D3 / C1 / C2: Temporal distribution and velocity profile.
         // Sort by timestamp to find dataset wall-clock span.
         // Use per-peer IAT to avoid cross-peer interleaving gaps skewing CV.
-        long[] timestamps = allEvents.stream().mapToLong(e -> (long)(e.getTimestamp() * 1000)).toArray();
+        long[] timestamps = allEvents.stream().mapToLong(e -> (long) (e.getTimestamp() * 1000)).toArray();
         Arrays.sort(timestamps);
         long spanMs = timestamps.length > 0 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
         // C1: arrival rate from dataset time span (how fast events arrive in real-time)
@@ -327,7 +584,7 @@ public class CharacterizationCollector {
         Map<String, List<Long>> perPeerTs = new LinkedHashMap<>();
         for (RisMessage ev : allEvents) {
             if (ev.getPeer() != null) {
-                perPeerTs.computeIfAbsent(ev.getPeer(), k -> new ArrayList<>()).add((long)(ev.getTimestamp() * 1000));
+                perPeerTs.computeIfAbsent(ev.getPeer(), k -> new ArrayList<>()).add((long) (ev.getTimestamp() * 1000));
             }
         }
         for (List<Long> tsList : perPeerTs.values()) {
@@ -375,7 +632,8 @@ public class CharacterizationCollector {
         System.out.println("── [C] Runtime Metrics (full replay) ────────────────────");
         System.out.printf("  Replaying %,d events...%n", allEvents.size());
 
-        CepSessionFactory factory = new CepSessionFactory(EnvConfig.get("RIPERIS_RULES_FILE", "rules/ripe_rfc4271_benchmark_79_rules.drl"));
+        CepSessionFactory factory = new CepSessionFactory(
+                EnvConfig.get("RIPERIS_RULES_FILE"));
         KieSession session = factory.createSession(true);
         AgendaMetrics agendaM = new AgendaMetrics();
         WMMetrics wmM = new WMMetrics(session);
@@ -393,9 +651,9 @@ public class CharacterizationCollector {
         // Manual replay to track per-event selectivity
         long totalFired = 0;
         org.drools.core.time.SessionPseudoClock clock = session.getSessionClock();
-        long prevTs = allEvents.isEmpty() ? 0L : (long)(allEvents.get(0).getTimestamp() * 1000);
+        long prevTs = allEvents.isEmpty() ? 0L : (long) (allEvents.get(0).getTimestamp() * 1000);
         for (RisMessage ev : allEvents) {
-            long evTs = (long)(ev.getTimestamp() * 1000);
+            long evTs = (long) (ev.getTimestamp() * 1000);
             if (evTs > prevTs) {
                 clock.advanceTime(evTs - prevTs, java.util.concurrent.TimeUnit.MILLISECONDS);
             }
@@ -464,9 +722,20 @@ public class CharacterizationCollector {
         System.out.printf("│ %-36s │ %-15d │%n", "C6  Peak conflict set size", agendaM.peakConflictSet);
         System.out.printf("│ %-36s │ %-15.2f │%n", "C7  Rules fired per event", (double) totalFired / allEvents.size());
         System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Rule coverage on dataset", coveragePct);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", windowTimeCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", windowLenCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  Temporal CEP patterns", afterCount + notCount + accumCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  Event declarations", temporal.eventDeclarations);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  @expires annotations", temporal.expiresAnnotations);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time occurrences", windowTimeCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", temporal.rulesWithWindowTime);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length occurrences", windowLenCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", temporal.rulesWithWindowLength);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  after patterns", afterCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  before patterns", beforeCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  coincides patterns", coincidesCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  interval operators", intervalOperatorCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  all temporal operators", temporalOperatorCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  accumulate patterns", accumCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  negative temporal rules", temporal.rulesWithNegativeTemporal);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  Total CEP patterns", totalCepPatternCount);
         System.out.printf("│ %-36s │ %-15s │%n", "D1  Dataset size (events)", String.format("%,d", allEvents.size()));
         System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct peers", distinctPeers);
         System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct event types", distinctEventTypes);
@@ -498,8 +767,10 @@ public class CharacterizationCollector {
 
         // Category classifier based on rule name prefix
         java.util.function.Function<String, String> categorize = name -> {
-            if (name.startsWith("BOOTSTRAP_") || name.startsWith("CLEANUP_")) return "INFRA / LIFECYCLE";
-            if (name.startsWith("R")) return "BGP Route Logic";
+            if (name.startsWith("BOOTSTRAP_") || name.startsWith("CLEANUP_"))
+                return "INFRA / LIFECYCLE";
+            if (name.startsWith("R"))
+                return "BGP Route Logic";
             return "OTHER";
         };
 
@@ -552,7 +823,7 @@ public class CharacterizationCollector {
         ForwardChainFinder.ForwardChainResult fcResult = fcf.findForwardChain("RisMessage");
 
         // Build depth → [rules] map
-        Map<Integer, List<String>> byDepth = new TreeMap<>(fcResult.getChainsByDepth());
+        Map<Long, List<String>> byDepth = new TreeMap<>(fcResult.getChainsByDepth());
 
         // Rules NOT in the chain (BOOTSTRAP, CLEANUP, rules reading only singleton
         // facts)
@@ -563,8 +834,8 @@ public class CharacterizationCollector {
         System.out.println("  " + "-".repeat(60));
 
         long depth0Acts = 0; // to compute conditional probability P(d+1 fires | d fired)
-        for (Map.Entry<Integer, List<String>> depthEntry : byDepth.entrySet()) {
-            int depth = depthEntry.getKey();
+        for (Map.Entry<Long, List<String>> depthEntry : byDepth.entrySet()) {
+            long depth = depthEntry.getKey();
             List<String> rulesAtDepth = depthEntry.getValue();
             long depthActs = rulesAtDepth.stream()
                     .mapToLong(r -> agendaM.fireCounts.containsKey(r)
@@ -597,7 +868,7 @@ public class CharacterizationCollector {
 
         System.out.println();
         System.out.println("  Depth-level rule membership:");
-        for (Map.Entry<Integer, List<String>> e : byDepth.entrySet()) {
+        for (Map.Entry<Long, List<String>> e : byDepth.entrySet()) {
             System.out.printf("  Depth %d: %s%n", e.getKey(),
                     e.getValue().stream().sorted().collect(Collectors.joining(", ")));
         }

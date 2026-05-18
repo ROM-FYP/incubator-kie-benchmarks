@@ -35,18 +35,18 @@ import java.util.concurrent.TimeUnit;
  */
 public class RipeRisCausalTraceRunner {
 
-    private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE", "rules/ripe_rfc4271_benchmark_79_rules.drl");
+    private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("Usage: RipeRisCausalTraceRunner <dataFile> [outputFile] [maxEvents]");
+            System.err.println("Usage: RipeRisCausalTraceRunner <ENV_VAR_FOR_DATA_FILE> [output_file.jsonl] [max_events]");
             System.exit(1);
         }
-        String dataFile = args[0];
-        String traceDir = EnvConfig.get("RIPERIS_RECORDED_TRACE_DIR", ".");
+        String dataFile = EnvConfig.get(args[0]);
+        String traceDir = EnvConfig.get("RIPERIS_RECORDED_TRACE_DIR");
         String defaultOutput = traceDir + "/riperis_causal_trace.jsonl";
         String outputFile = args.length > 1 ? args[1] : defaultOutput;
-        int maxEvents = args.length > 2 ? Integer.parseInt(args[2]) : Integer.MAX_VALUE;
+        long maxEvents = args.length > 2 ? Long.parseLong(args[2]) : Long.MAX_VALUE;
 
         // 1. Load events
         System.out.println("[CausalTraceRunner] Loading dataset...");
@@ -68,7 +68,7 @@ public class RipeRisCausalTraceRunner {
         System.out.printf("[CausalTraceRunner] Ingesting %,d events...%n", events.size());
         SessionPseudoClock clock = session.getSessionClock();
         long t0 = System.currentTimeMillis();
-        int totalFirings = 0;
+        long totalFirings = 0L;
 
         for (int i = 0; i < events.size(); i++) {
             RisMessage event = events.get(i);

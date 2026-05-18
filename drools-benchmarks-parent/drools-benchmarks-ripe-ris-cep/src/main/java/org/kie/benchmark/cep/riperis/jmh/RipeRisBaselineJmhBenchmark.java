@@ -53,11 +53,9 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 1, jvmArgs = { "-Xms4g", "-Xmx4g" })
 public class RipeRisBaselineJmhBenchmark {
 
-    private static final String DRL_PATH = EnvConfig.get(
-            "RIPERIS_RULES_FILE",
-            "rules/ripe_rfc4271_benchmark_79_rules.drl");
+    private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
 
-    private static final String DEFAULT_DATA_FILE = "data/riperis_stream_20260512_004525.jsonl";
+    private static final String DEFAULT_DATA_FILE = "RIPERIS_DEFAULT_DATA_FILE";
 
     @Param({ DEFAULT_DATA_FILE })
     private String dataFile;
@@ -67,19 +65,19 @@ public class RipeRisBaselineJmhBenchmark {
 
     // Per-invocation state
     private KieSession session;
-    private int lastRulesFired;
+    private long lastRulesFired;
     private long invocationStartTime;
 
     // Cumulative trial-level metrics
     private long totalRulesFired;
     private long totalTimeElapsed;
-    private int invocationCount;
+    private long invocationCount;
 
     @Setup(Level.Trial)
     public void setupTrial() throws Exception {
         System.out.println("\n=== RIPE RIS Baseline JMH Setup ===");
 
-        events = RipeRisBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
+        events = RipeRisBaselineBenchmark.loadEvents(EnvConfig.get(dataFile), Long.MAX_VALUE);
         factory = new CepSessionFactory(DRL_PATH);
 
         totalRulesFired = 0;
@@ -94,14 +92,14 @@ public class RipeRisBaselineJmhBenchmark {
     @Setup(Level.Invocation)
     public void setupInvocation() {
         session = factory.createSession(true);
-        lastRulesFired = 0;
+        lastRulesFired = 0L;
         invocationStartTime = System.currentTimeMillis();
     }
 
     @Benchmark
-    public int baselineReplay() {
+    public long baselineReplay() {
         SessionPseudoClock clock = session.getSessionClock();
-        int fired = 0;
+        long fired = 0L;
 
         for (RisMessage event : events) {
             advanceClock(clock, event);

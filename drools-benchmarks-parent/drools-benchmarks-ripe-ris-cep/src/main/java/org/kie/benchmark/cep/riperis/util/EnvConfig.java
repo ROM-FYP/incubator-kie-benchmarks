@@ -15,9 +15,9 @@ public class EnvConfig {
         }
     }
 
-    public static String get(String key, String defaultValue) {
+    public static String get(String key) {
         String val = System.getenv(key);
         if (val != null) return val;
-        return props.getProperty(key, defaultValue);
+        return props.getProperty(key);
     }
 }

@@ -4,7 +4,6 @@
 
 # Maven build output
 target/
-dependency-reduced-pom.xml
 
 # Package artifacts
 *.jar

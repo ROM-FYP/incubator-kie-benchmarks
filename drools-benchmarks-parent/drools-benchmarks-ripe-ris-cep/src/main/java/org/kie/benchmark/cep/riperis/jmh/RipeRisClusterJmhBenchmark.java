@@ -22,6 +22,7 @@ import org.kie.benchmark.cep.riperis.model.RisMessage;
 import org.kie.benchmark.cep.riperis.parallel.RipeRisClusterDrlGenerator;
 import org.kie.benchmark.cep.riperis.parallel.RipeRisClusterOrchestrator;
 import org.kie.benchmark.cep.riperis.runner.RipeRisBaselineBenchmark;
+import org.kie.benchmark.cep.riperis.util.EnvConfig;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
@@ -36,7 +37,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * JMH benchmark for the parallel Ripe RIS CEP execution.
  *
- * <p>Replays all events through the cluster architecture
+ * <p>
+ * Replays all events through the cluster architecture
  * using {@link RipeRisClusterOrchestrator}.
  */
 @State(Scope.Benchmark)
@@ -44,14 +46,12 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @Warmup(iterations = 3, batchSize = 1)
 @Measurement(iterations = 5, batchSize = 1)
-@Fork(value = 1, jvmArgs = {"-Xms4g", "-Xmx4g"})
+@Fork(value = 1, jvmArgs = { "-Xms4g", "-Xmx4g" })
 public class RipeRisClusterJmhBenchmark {
 
-    private static final String DRL_PATH = "rules/ripe_rfc4271_benchmark_79_rules.drl";
-    private static final String DEFAULT_DATA_FILE =
-            "src/main/java/org/kie/benchmark/cep/riperis/data/ris_live_stream.jsonl";
+    private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
 
-    @Param({DEFAULT_DATA_FILE})
+    @Param({ "RIPERIS_DEFAULT_DATA_FILE" })
     private String dataFile;
 
     private List<RisMessage> events;
@@ -59,21 +59,22 @@ public class RipeRisClusterJmhBenchmark {
 
     // Per-invocation state
     private RipeRisClusterOrchestrator orchestrator;
-    private int lastRulesFired;
+    private long lastRulesFired;
     private long invocationStartTime;
 
     // Cumulative trial-level metrics
     private long totalRulesFired;
     private long totalTimeElapsed;
-    private int invocationCount;
+    private long invocationCount;
 
     @Setup(Level.Trial)
     public void setupTrial() throws Exception {
         System.out.println("\n=== Ripe RIS Cluster JMH Setup ===");
-        events = RipeRisBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
+        events = RipeRisBaselineBenchmark.loadEvents(EnvConfig.get(dataFile), Long.MAX_VALUE);
 
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(DRL_PATH)) {
-            if (is == null) throw new RuntimeException("Cannot find " + DRL_PATH);
+            if (is == null)
+                throw new RuntimeException("Cannot find " + DRL_PATH);
             drlContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
 
@@ -95,7 +96,7 @@ public class RipeRisClusterJmhBenchmark {
     }
 
     @Benchmark
-    public int clusterReplay() {
+    public long clusterReplay() {
         lastRulesFired = orchestrator.replayEvents(events);
         return lastRulesFired;
     }
@@ -110,23 +111,24 @@ public class RipeRisClusterJmhBenchmark {
         totalTimeElapsed += duration;
 
         // Log per-session breakdown
-        Map<Integer, Integer> perFired = orchestrator.getPerSessionFired();
-        Map<Integer, Integer> perEvents = orchestrator.getPerSessionEventsReceived();
+        Map<Integer, Long> perFired = orchestrator.getPerSessionFired();
+        Map<Integer, Long> perEvents = orchestrator.getPerSessionEventsReceived();
         String[] names = RipeRisClusterDrlGenerator.getClusterNames();
 
         System.out.printf("[Cluster Invocation %d] Rules fired: %,d | Duration: %d ms | Throughput: %.2f events/sec%n",
                 invocationCount, lastRulesFired, duration, throughput);
-        for (Map.Entry<Integer, Integer> entry : perFired.entrySet()) {
+        for (Map.Entry<Integer, Long> entry : perFired.entrySet()) {
             int cid = entry.getKey();
             System.out.printf("  %s:  Events=%,d  Fired=%,d%n",
-                    names[cid], perEvents.getOrDefault(cid, 0), entry.getValue());
+                    names[cid], perEvents.getOrDefault(cid, 0L), entry.getValue());
         }
     }
 
     @TearDown(Level.Trial)
     public void teardownTrial() {
         double avgThroughput = (totalTimeElapsed > 0)
-                ? (invocationCount * events.size() * 1000.0) / totalTimeElapsed : 0;
+                ? (invocationCount * events.size() * 1000.0) / totalTimeElapsed
+                : 0;
 
         System.out.println("\n=== Cluster Trial Summary ===");
         System.out.println("Pool size:              " + RipeRisClusterDrlGenerator.getClusterCount());

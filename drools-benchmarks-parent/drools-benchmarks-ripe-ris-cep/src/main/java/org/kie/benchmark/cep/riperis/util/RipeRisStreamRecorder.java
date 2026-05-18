@@ -40,33 +40,41 @@ import java.util.concurrent.atomic.AtomicLong;
  * 
  * Output is saved to the 'data' directory under the project root.
  * 
- * Usage: java RipeRisStreamRecorder [durationMinutes]
- * Default duration is 5 minutes.
+ * Usage: java RipeRisStreamRecorder [durationSeconds]
+ * Default duration is 300 seconds (5 minutes).
+ * Example: RipeRisStreamRecorder 75  → records for 1 minute 15 seconds.
  */
 public class RipeRisStreamRecorder {
 
-    private static final String RIPE_RIS_STREAM_URL = EnvConfig.get("RIPERIS_STREAM_URL",
-            "https://ris-live.ripe.net/v1/stream/?format=sse");
-    private static final int DEFAULT_DURATION_MINUTES = 5;
+    private static final String RIPE_RIS_STREAM_URL = EnvConfig.get("RIPERIS_STREAM_URL");
+    private static final long DEFAULT_DURATION_SECONDS = 300;
 
     public static void main(String[] args) {
-        int durationMinutes = DEFAULT_DURATION_MINUTES;
+        long durationSeconds = DEFAULT_DURATION_SECONDS;
         if (args.length > 0) {
             try {
-                durationMinutes = Integer.parseInt(args[0]);
+                durationSeconds = Long.parseLong(args[0]);
             } catch (NumberFormatException e) {
-                System.err.println("Invalid duration, using default: " + DEFAULT_DURATION_MINUTES + " minutes");
+                System.err.println("Invalid duration, using default: " + DEFAULT_DURATION_SECONDS + " seconds");
             }
         }
 
         RipeRisStreamRecorder recorder = new RipeRisStreamRecorder();
-        recorder.record(durationMinutes);
+        recorder.recordSeconds(durationSeconds);
     }
 
     /**
-     * Record raw stream data for the specified duration.
+     * Record raw stream data for the specified number of whole minutes.
+     * Kept for backward compatibility.
      */
     public void record(int durationMinutes) {
+        recordSeconds(durationMinutes * 60L);
+    }
+
+    /**
+     * Record raw stream data for the specified number of seconds.
+     */
+    public void recordSeconds(long durationSeconds) {
         // Generate output filename with timestamp
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String filename = "riperis_stream_" + timestamp + ".jsonl";
@@ -77,13 +85,13 @@ public class RipeRisStreamRecorder {
         System.out.println("========================================");
         System.out.println("RIPE RIS Stream Recorder");
         System.out.println("========================================");
-        System.out.println("Duration: " + durationMinutes + " minutes");
+        System.out.printf("Duration: %d min %02d sec%n", durationSeconds / 60, durationSeconds % 60);
         System.out.println("Output: " + outputPath.toAbsolutePath());
         System.out.println("Stream: " + RIPE_RIS_STREAM_URL);
         System.out.println("========================================");
 
         long startTime = System.currentTimeMillis();
-        long endTime = startTime + (durationMinutes * 60 * 1000L);
+        long endTime = startTime + (durationSeconds * 1000L);
         AtomicLong eventCount = new AtomicLong(0);
 
         HttpURLConnection connection = null;
@@ -221,7 +229,7 @@ public class RipeRisStreamRecorder {
     }
 
     private Path getOutputPath(String filename) {
-        String dir = EnvConfig.get("RIPERIS_RECORDED_EVENT_DIR", "data");
+        String dir = EnvConfig.get("RIPERIS_RECORDED_EVENT_DIR");
         Path path = Paths.get(dir, filename);
         return path;
     }
