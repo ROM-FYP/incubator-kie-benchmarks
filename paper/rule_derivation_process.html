@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rule Derivation Process</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      color: #1a1a2e;
+      padding: 2.5rem 1.5rem;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 0.3rem;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 2rem;
+    }
+
+    /* ── horizontal flow ─────────────────────────────── */
+    .flow {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0;
+    }
+
+    /* nodes */
+    .node {
+      width: 155px;
+      border-radius: 10px;
+      padding: 0.85rem 0.75rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .node .num {
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.15rem;
+    }
+
+    .node .title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.3rem;
+    }
+
+    .node .desc {
+      font-size: 0.66rem;
+      line-height: 1.4;
+      color: #374151;
+    }
+
+    .node-input {
+      background: #fff;
+      border: 2px solid #94a3b8;
+    }
+
+    .node-input .title {
+      color: #1e293b;
+    }
+
+    .node-s1 {
+      background: #e8eaf6;
+      border: 2px solid #5c6bc0;
+    }
+
+    .node-s1 .num {
+      color: #5c6bc0;
+    }
+
+    .node-s1 .title {
+      color: #283593;
+    }
+
+    .node-s2 {
+      background: #e8f5e9;
+      border: 2px solid #388e3c;
+    }
+
+    .node-s2 .num {
+      color: #388e3c;
+    }
+
+    .node-s2 .title {
+      color: #1b5e20;
+    }
+
+    .node-s3a {
+      background: #fff8e1;
+      border: 2px solid #f9a825;
+    }
+
+    .node-s3a .num {
+      color: #f9a825;
+    }
+
+    .node-s3a .title {
+      color: #e65100;
+    }
+
+    .node-s3b {
+      background: #f3e5f5;
+      border: 2px solid #7b1fa2;
+    }
+
+    .node-s3b .num {
+      color: #7b1fa2;
+    }
+
+    .node-s3b .title {
+      color: #4a148c;
+    }
+
+    .node-output {
+      background: #fff;
+      border: 2px solid #16a34a;
+    }
+
+    .node-output .title {
+      color: #16a34a;
+    }
+
+    /* arrows between nodes */
+    .arrow-h {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      padding-top: 2rem;
+      overflow: visible;
+    }
+
+    .arrow-line {
+      width: 100%;
+      height: 2px;
+      background: #94a3b8;
+      position: relative;
+    }
+
+    .arrow-line::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid #94a3b8;
+    }
+
+    .arrow-text {
+      font-size: 0.58rem;
+      color: #475569;
+      font-weight: 500;
+      margin-top: 0.2rem;
+      text-align: center;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: visible;
+    }
+
+    /* loop wrapper for stages 3a + 3b */
+    .loop-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .loop-pair {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    /* loop-back arrow underneath stages 3a → 3b */
+    .loop-back {
+      position: relative;
+      width: 100%;
+      height: 38px;
+      margin-top: 0.2rem;
+    }
+
+    .loop-back svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* detail bullets */
+    .details {
+      text-align: left;
+      margin-top: 0.35rem;
+      padding-left: 0.1rem;
+    }
+
+    .details li {
+      font-size: 0.6rem;
+      color: #475569;
+      line-height: 1.45;
+      list-style: none;
+      padding-left: 0.65rem;
+      position: relative;
+    }
+
+    .details li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    /* domain tags */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      justify-content: center;
+      margin-top: 0.35rem;
+    }
+
+    .tag {
+      font-size: 0.55rem;
+      font-weight: 600;
+      padding: 0.1rem 0.35rem;
+      border-radius: 8px;
+      border: 1.5px solid;
+    }
+
+    .tag-sky {
+      background: #dcfce7;
+      border-color: #16a34a;
+      color: #166534;
+    }
+
+    .tag-bin {
+      background: #fef3c7;
+      border-color: #d97706;
+      color: #92400e;
+    }
+
+    .tag-wiki {
+      background: #dbeafe;
+      border-color: #2563eb;
+      color: #1e40af;
+    }
+
+    figcaption {
+      text-align: center;
+      font-size: 0.73rem;
+      color: #555;
+      margin-top: 2rem;
+      line-height: 1.5;
+      max-width: 860px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="flow">
+
+    <!-- Input -->
+    <div class="node node-input">
+      <div class="title">Public Domain Guidelines</div>
+      <div class="desc">Authoritative references per application domain</div>
+    </div>
+
+    <div class="arrow-h">
+      <div class="arrow-line"></div>
+      <div class="arrow-text">guidelines +<br>constraints</div>
+    </div>
+
+    <!-- Stage 1: Source ID + LLM Generation (merged) -->
+    <div class="node node-s1" style="width:180px;">
+      <div class="num">Stage 1</div>
+      <div class="title">Source Identification &amp; LLM Generation</div>
+      <div class="desc">Domain guidelines fed as structured prompt context to produce an initial DRL rule set</div>
+    </div>
+
+    <div class="arrow-h">
+      <div class="arrow-line"></div>
+      <div class="arrow-text">initial DRL<br>(approximate)</div>
+    </div>
+
+    <!-- Stages 3a + 3b with loop -->
+    <div class="loop-group">
+      <div class="loop-pair">
+
+        <!-- Stage 2a: Human Refinement -->
+        <div class="node node-s3a">
+          <div class="num">Stage 2a</div>
+          <div class="title">Human Refinement</div>
+          <div class="desc">Manual correction of temporal operators, thresholds, and chaining structure</div>
+        </div>
+
+        <div class="arrow-h" style="padding-top:2rem;">
+          <div class="arrow-line"></div>
+          <div class="arrow-text">revised DRL</div>
+        </div>
+
+        <!-- Stage 2b: Validation -->
+        <div class="node node-s3b">
+          <div class="num">Stage 2b</div>
+          <div class="title">Validation</div>
+          <div class="desc">Rules replayed against collected data dumps; structural targets verified by characterisation collector</div>
+        </div>
+
+      </div>
+
+      <!-- Loop-back arrow: from Validation back to Refinement -->
+      <div class="loop-back">
+        <svg viewBox="0 0 360 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- right side down -->
+          <line x1="310" y1="0" x2="310" y2="18" stroke="#7b1fa2" stroke-width="2" />
+          <!-- horizontal bottom -->
+          <line x1="50" y1="18" x2="310" y2="18" stroke="#7b1fa2" stroke-width="2" />
+          <!-- left side up -->
+          <line x1="50" y1="18" x2="50" y2="2" stroke="#7b1fa2" stroke-width="2" />
+          <!-- arrowhead pointing up -->
+          <polygon points="50,0 44,8 56,8" fill="#7b1fa2" />
+          <!-- label -->
+          <text x="180" y="32" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" font-weight="600"
+            fill="#7b1fa2">fail → refine &amp; re-validate</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="arrow-h">
+      <div class="arrow-line"></div>
+      <div class="arrow-text">pass ✓</div>
+    </div>
+
+    <!-- Output -->
+    <div class="node node-output">
+      <div class="title">Final DRL Rule Sets</div>
+      <div class="desc">Production-grade, structurally characterised</div>
+    </div>
+
+  </div>
+
+</body>
+
+</html>

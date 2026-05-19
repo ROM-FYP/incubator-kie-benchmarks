@@ -1,0 +1,41 @@
+% ============================================================
+% Section 3 — Benchmark Design and Creation
+% ============================================================
+
+\section{Benchmark Design and Creation}\label{sec:design}
+
+\subsection{Rule Derivation Process}\label{sec:rule-derivation}
+
+Each benchmark in the suite requires a domain-specific rule set written in the Drools Rule Language (DRL).
+Rather than designing rules from scratch, we adopted a semi-automated derivation process grounded in publicly available domain guidelines.
+The process, illustrated in Fig.~\ref{fig:derivation}, consists of three stages: source identification and LLM-assisted generation, human refinement, and validation.
+
+\textbf{Source identification and LLM-assisted generation (Stage~1).}
+For each domain, we identified authoritative and publicly available references that define the detection logic and operational constraints for the benchmark.
+For the \emph{aviation} domain, we used the EUROCONTROL Guidelines for Short-Term Conflict Alert~\cite{eurocontrol_stca}. Events are drawn from the OpenSky Network REST API (\texttt{GET /states/all}), which provides real-time ADS-B state vectors for all tracked aircraft.
+For the \emph{financial trading} domain, the rule logic is grounded in MiFID~II Article~17~\cite{esma_mifid2_art17} and Commission Delegated Regulation (EU)~2017/589 (RTS~6)~\cite{eu_rts6_2017}, which define organisational requirements for algorithmic trading. Events are sourced from the Binance Futures WebSocket stream (\texttt{wss://fstream.binance.com/stream}).
+For the \emph{collaborative editing} domain, we used the ORES machine-learning framework for revision quality scoring~\cite{halfaker2020ores} together with established Wikipedia anti-vandalism heuristics. Events are ingested from the Wikimedia EventStreams Server-Sent Events feed (\texttt{https://stream.wikimedia.org/v2/stream/recentchange}).
+These references were then provided as structured context to a large language model, which was prompted to produce an initial DRL rule set. The prompts specified the target fact model, the required CEP annotations (e.g., \texttt{@Role(Event)}, \texttt{@Expires}), and the expected chaining behaviour, yielding a syntactically valid but semantically approximate rule set for each domain.
+
+\textbf{Human refinement (Stage~3a).}
+The generated rules were reviewed and manually corrected by the authors.
+The key interventions included:
+(i)~correcting temporal operator usage to ensure that \texttt{after}, \texttt{before}, and sliding-window semantics matched the intended domain logic;
+(ii)~adjusting numeric thresholds (e.g., separation minima, staleness timeouts) to values consistent with the source guidelines;
+(iii)~restructuring forward-chaining paths to produce multi-level derivation pipelines rather than flat, single-depth rule sets;
+and (iv)~adding deduplication, inhibition, and retraction rules required for realistic working-memory management under continuous event ingestion.
+
+\textbf{Validation (Stage~3b).}
+After each refinement cycle, the revised rule set was executed against pre-collected data dumps for each domain using the characterisation collector.
+The validation criteria were: forward-chaining depth consistent with the expected pipeline topology, rule coverage exceeding 60\% on a representative dataset, temporal operator distribution present across rule categories, and stable memory behaviour under sustained replay of 400K or more events.
+If any criterion was not met, the process returned to Stage~3a for further refinement. The loop continued until all structural targets were confirmed.
+
+\begin{figure}[t]
+  \centering
+  % Replace with your actual diagram file:
+  % \includegraphics[width=0.85\textwidth]{figures/derivation_process.pdf}
+  \fbox{\parbox{0.8\textwidth}{\centering\vspace{3em}
+    \textit{[Process diagram: Public Guidelines $\rightarrow$ Stage 1: Source Identification \& LLM Generation $\rightarrow$ Stage 2a: Human Refinement $\rightleftharpoons$ Stage 2b: Validation $\rightarrow$ Final DRL]}
+  \vspace{3em}}}
+  \caption{Semi-automated rule derivation process. Public domain guidelines are used as context for LLM-assisted DRL generation (Stage~1), followed by iterative human refinement (Stage~2a) and validation against collected data dumps (Stage~2b). The loop between Stages~2a and~2b continues until all structural targets are confirmed.}\label{fig:derivation}
+\end{figure}

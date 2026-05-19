@@ -1,0 +1,20 @@
+% ============================================================
+% Introduction section — LNCS style
+% Place this between \maketitle / abstract and \section{Related Work}.
+% References resolved from references.bib
+% ============================================================
+
+\section{Introduction}\label{sec:intro}
+
+Rule-based systems are widely deployed in high-stakes domains --- air traffic control, financial surveillance, and clinical decision support --- yet the benchmarking literature has not kept pace with their use in streaming contexts. Existing performance evaluations for production rule engines such as Drools rely predominantly on classical workloads designed for static, in-memory reasoning. When temporal operators, event expiration, and stream-mode execution are introduced, systematic and reproducible evaluation becomes difficult due to the absence of suitable benchmark suites.
+
+When we examined the existing landscape --- rule-engine benchmarks, CEP system comparisons, and stream-processing suites --- we found no benchmark that simultaneously addresses all four of the following: (i)~a \emph{real-world} streaming dataset, (ii)~a domain-derived, semantically grounded rule set, (iii)~native temporal CEP operators, and (iv)~a structural characterisation of the rule base itself. Each existing effort covers at most two of these dimensions. This gap is well-documented: Dayarathna and Perera~\cite{dayarathna2018event} conclude that ``there are few widely agreed-upon benchmarks for EP,'' and Bizarro et al.~\cite{bizarro2011bicep} note ``no agreed-upon benchmarks in the CEP community'' --- observations that remain valid today.
+
+This paper presents a multi-domain CEP benchmark suite covering three application domains --- financial trading (Binance cryptocurrency order-book), collaborative knowledge editing (Wikimedia recent-changes stream), and aviation surveillance (OpenSky Network ADS-B transponders) --- evaluated on Apache Drools with STREAM-mode execution. Our contributions are:
+
+\begin{enumerate}
+  \item \textbf{Three production-grade benchmark workloads}, each comprising a rule set derived from domain standards or operational practice, a real-world streaming dataset, and a reproducible replay harness.
+  \item \textbf{A 22-dimension structural characterisation framework and empirical cross-suite analysis}, covering static rule-base properties and dynamic runtime metrics to demonstrate how domain characteristics --- event arrival regularity, co-location probability, and alert persistence semantics --- produce measurable and systematic differences in engine behaviour.
+\end{enumerate}
+
+The remainder of this paper is organised as follows. Section~\ref{sec:related} surveys related work and positions the proposed suite relative to prior benchmarks. Section~3 describes the benchmark design and creation process, covering the publicly available domain guidelines used to derive each rule set and the shared replay architecture. Section~4 presents the cross-suite analysis, reporting characterisation metrics, execution time, and throughput across all three domains. Section~5 discusses directions for future work and concludes.
