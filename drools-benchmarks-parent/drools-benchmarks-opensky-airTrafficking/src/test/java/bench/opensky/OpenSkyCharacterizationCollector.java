@@ -122,8 +122,24 @@ public class OpenSkyCharacterizationCollector {
         static String extractWhen(String r) { int w=r.indexOf("when"),t=r.indexOf("then"); return (w<0||t<=w)?""  :r.substring(w+4,t); }
         static String extractThen(String r) { int t=r.indexOf("then"),e=r.indexOf("\nend"); return t<0?"":e>t?r.substring(t+4,e):r.substring(t+4); }
         static int countPatterns(String s) {
-            Matcher m = Pattern.compile("^\\s+[A-Z][A-Za-z]+\\s*\\(", Pattern.MULTILINE).matcher(s);
-            int c=0; while(m.find()) c++; return c;
+            // Count top-level LHS patterns. Handles:
+            //   $var : Type(...)       — bound pattern
+            //   not Type(...)          — negation
+            //   Type(...)              — unbound pattern
+            int c = 0;
+            for (String line : s.split("\n")) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+                // Strip optional binding prefix: $var :
+                String rest = trimmed.replaceFirst("^\\$\\w+\\s*:\\s*", "");
+                // Strip optional 'not' prefix
+                rest = rest.replaceFirst("^not\\s+", "");
+                // Now check if line starts with a CapitalizedType(
+                if (rest.matches("^[A-Z][A-Za-z]+\\s*\\(.*")) {
+                    c++;
+                }
+            }
+            return c;
         }
         static void collectTypes(String s, Set<String> out) {
             Matcher m = Pattern.compile("\\b([A-Z][A-Za-z]+)\\s*\\(").matcher(s); while(m.find()) out.add(m.group(1));
@@ -160,14 +176,15 @@ public class OpenSkyCharacterizationCollector {
         double alphaSharingRatio   = totalInputOccurrences > 0
                 ? 1.0 - ((double) uniqueInputTypes / totalInputOccurrences) : 0;
 
-        // Temporal pattern counts from DRL text
-        long windowTimeCount = countRegex(drlContent, "window:time");
-        long windowLenCount  = countRegex(drlContent, "window:length");
-        long afterCount      = countRegex(drlContent, "\\bafter\\b");
-        long beforeCount     = countRegex(drlContent, "\\bbefore\\b");
-        long notCount        = countRegex(drlContent, "\\bnot\\b");
-        long accumCount      = countRegex(drlContent, "\\baccumulate\\b");
-        long evalCount       = countRegex(drlContent, "\\beval\\b");
+        // Temporal pattern counts from DRL text (comments stripped)
+        String drlNoComments = drlContent.replaceAll("//[^\\n]*", "");
+        long windowTimeCount = countRegex(drlNoComments, "window:time");
+        long windowLenCount  = countRegex(drlNoComments, "window:length");
+        long afterCount      = countRegex(drlNoComments, "\\bafter\\b");
+        long beforeCount     = countRegex(drlNoComments, "\\bbefore\\b");
+        long notCount        = countRegex(drlNoComments, "\\bnot\\s+[A-Z][A-Za-z]+\\s*\\(");
+        long accumCount      = countRegex(drlNoComments, "\\baccumulate\\b");
+        long evalCount       = countRegex(drlNoComments, "\\beval\\b");
 
         // ── [A] Static Rule-Base Properties ──────────────────────────────
         System.out.println("── [A] Static Rule-Base Properties ─────────────────────");
