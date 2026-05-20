@@ -241,32 +241,28 @@ public class WikimediaCharacterizationCollector {
         long distinctUsers = users.size();
         long distinctEventTypes = 1; // WikiEvent
 
-        // Timestamps in the JSONL are Unix epoch seconds — keep them as seconds here
-        // for all dataset-level statistics (span, IAT). We only convert to ms when
-        // advancing the pseudo-clock during replay (see below).
-        // NOTE: a small number of events have timestamp==0 (JSON null parsed as long default);
-        //       exclude them from span/IAT stats so they don't distort the min to 0.
+        // Timestamps are Unix epoch seconds. Bad events (nulls, historical outliers)
+        // have been permanently removed from the dataset file.
         long[] timestamps = allEvents.stream()
                 .mapToLong(WikiEvent::getTimestamp)
                 .filter(t -> t > 0)
                 .sorted()
                 .toArray();
         long spanSec = timestamps.length > 1 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
-        long spanMs  = spanSec * 1000L; // for display
-        double arrivalRatePerSec = spanSec > 0 ? (double) allEvents.size() / spanSec : 0;
+        long spanMs  = spanSec * 1000L;
 
-        // IAT in milliseconds (converting from seconds); skip events with ts==0
+        // IAT in milliseconds (converting from seconds)
         List<Double> allIATs = new ArrayList<>();
         Map<String, List<Long>> perUserTs = new LinkedHashMap<>();
         for (WikiEvent ev : allEvents) {
-            if (ev.getTimestamp() == 0) continue; // skip null-timestamp events
+            long ts = ev.getTimestamp();
+            if (ts == 0) continue;
             String user = ev.getUser() != null ? ev.getUser() : "UNKNOWN";
-            perUserTs.computeIfAbsent(user, k -> new ArrayList<>()).add(ev.getTimestamp());
+            perUserTs.computeIfAbsent(user, k -> new ArrayList<>()).add(ts);
         }
         for (List<Long> tsList : perUserTs.values()) {
             Collections.sort(tsList);
             for (int i = 1; i < tsList.size(); i++) {
-                // convert second-difference to ms for IAT
                 allIATs.add((double)(tsList.get(i) - tsList.get(i-1)) * 1000.0);
             }
         }
@@ -281,11 +277,10 @@ public class WikimediaCharacterizationCollector {
         String velocityClass = cvIAT > 1.0 ? "BURSTY" : (cvIAT > 0.5 ? "MODERATE" : "STEADY/PERIODIC");
 
         System.out.printf("  D1  Total events in dataset:      %,d%n", allEvents.size());
-        System.out.printf("  D1  Time span:                    %,d ms (%.1f min)%n", spanMs, spanMs / 60000.0);
-        System.out.printf("  D2  Distinct users:               %d%n", distinctUsers);
+        System.out.printf("  D1  Time span:                    %s%n", formatDuration(spanMs));
+        System.out.printf("  D2  Distinct users:               %,d%n", distinctUsers);
         System.out.printf("  D2  Distinct event types:         %d%n", distinctEventTypes);
-        System.out.printf("  C1  Event arrival rate (dataset): %.0f events/sec%n", arrivalRatePerSec);
-        System.out.printf("  C2  Dataset wall-clock span:      %,d ms (%.1f min)%n", spanMs, spanMs/60000.0);
+        System.out.printf("  C1  Event arrival rate (dataset): %s%n", formatRate(allEvents.size(), spanMs));
         System.out.printf("  C2  Mean per-user IAT:            %.2f ms%n", meanIAT);
         System.out.printf("  C2  Median per-user IAT:          %.2f ms%n", medianIAT);
         System.out.printf("  C2  IAT std dev (per-user):       %.2f ms%n", stdIAT);
@@ -312,10 +307,16 @@ public class WikimediaCharacterizationCollector {
         long t0 = System.currentTimeMillis();
         long totalFired = 0;
         SessionPseudoClock clock = session.getSessionClock();
-        // timestamps are in raw seconds; convert to ms for:
-        //   1) the pseudo-clock delta (so window:time rules fire correctly)
-        //   2) the @Timestamp field on WikiEvent (Drools reads it as ms for expiry)
+
+        // CRITICAL: initialize the pseudo-clock to the first event's epoch-ms timestamp.
+        // Without this, the clock starts at 0 while @Timestamp("timestamp") field values
+        // are ~1.7 trillion ms (epoch). Drools computes expiry as (event_timestamp + 90s),
+        // which the clock never reaches from 0, so @Expires("90s") never fires and WM
+        // grows unboundedly → O(n²) accumulate slowdown.
         long prevTsSec = allEvents.isEmpty() ? 0L : allEvents.get(0).getTimestamp();
+        if (!allEvents.isEmpty()) {
+            clock.advanceTime(prevTsSec * 1000L, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
 
         for (WikiEvent ev : allEvents) {
             long evTsSec = ev.getTimestamp();
@@ -324,7 +325,6 @@ public class WikimediaCharacterizationCollector {
             }
             prevTsSec = evTsSec;
             agendaM.currentEventTs = evTsSec;
-            // Set timestamp to ms so @Timestamp("timestamp") gives Drools the correct epoch-ms value
             ev.setTimestamp(evTsSec * 1000L);
             session.insert(ev);
             totalFired += session.fireAllRules();
@@ -370,7 +370,7 @@ public class WikimediaCharacterizationCollector {
         System.out.printf("│ %-36s │ %-14.1f%% │%n", "B2  Largest connected component", 0.0);
         System.out.printf("│ %-36s │ %-15d │%n", "B3  Connected components", 0);
         System.out.printf("│ %-36s │ %-15d │%n", "B4  Max chaining depth", maxChainDepth);
-        System.out.printf("│ %-36s │ %-15.0f │%n", "C1  Event arrival rate (ev/s)", arrivalRatePerSec);
+        System.out.printf("│ %-36s │ %-15s │%n", "C1  Event arrival rate (ev/s)", formatRate(allEvents.size(), spanMs));
         System.out.printf("│ %-36s │ %-15.3f │%n", "C2  IAT coeff of variation (CV)", cvIAT);
         System.out.printf("│ %-36s │ %-15s │%n", "C2  Velocity class", velocityClass);
         System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Selectivity", selectivity);
@@ -414,6 +414,7 @@ public class WikimediaCharacterizationCollector {
             if (name.startsWith("Content_"))   return "C  Content Pipeline";
             if (name.startsWith("Minor_"))     return "M  Minor Edits Pipeline";
             if (name.startsWith("Discussion_"))return "D  Discussion Pipeline";
+            if (name.startsWith("Temporal_"))  return "T  Temporal CEP Patterns";
             if (name.startsWith("Correlate") || name.startsWith("Boost")) return "X  Correlations & Boosting";
             return "INFRA / LIFECYCLE";
         };
@@ -572,4 +573,32 @@ public class WikimediaCharacterizationCollector {
         }
         return list;
     }
+
+    /** Format a duration in milliseconds into the most human-readable unit. */
+    static String formatDuration(long ms) {
+        if (ms <= 0)      return "0 ms";
+        if (ms < 2_000)   return String.format("%,d ms", ms);
+        long secs = ms / 1000;
+        if (secs < 120)   return String.format("%d sec (%,d ms)", secs, ms);
+        long mins = secs / 60;
+        if (mins < 120)   return String.format("%d min %.0f sec (%,d ms)", mins, (secs % 60.0), ms);
+        long hours = mins / 60;
+        if (hours < 48)   return String.format("%.2f hours (%d min)", hours + (mins % 60) / 60.0, mins);
+        double days = ms / 86_400_000.0;
+        return String.format("%.2f days (%.1f hours)", days, days * 24);
+    }
+
+    /** Format an event arrival rate into the most human-readable unit (never shows "0"). */
+    static String formatRate(long events, long spanMs) {
+        if (spanMs <= 0) return "N/A";
+        double perSec  = events * 1000.0 / spanMs;
+        double perMin  = perSec * 60;
+        double perHour = perMin * 60;
+        double perDay  = perHour * 24;
+        if (perSec >= 1.0)   return String.format("%.1f events/sec",  perSec);
+        if (perMin >= 1.0)   return String.format("%.1f events/min",  perMin);
+        if (perHour >= 1.0)  return String.format("%.1f events/hour", perHour);
+        return String.format("%.1f events/day", perDay);
+    }
 }
+

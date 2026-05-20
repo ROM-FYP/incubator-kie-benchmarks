@@ -12,7 +12,7 @@ import java.io.Serializable;
 public class DrlFacts {
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("24h")  // state fact — must survive between a user's edits (avg gap ~11 min)
     public static class UserActivity implements Serializable {
         public String user;
         public int editCount;
@@ -30,7 +30,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("24h")  // state fact — article quality persists across edits
     public static class ArticleQuality implements Serializable {
         public String title;
         public int qualityScore;
@@ -48,7 +48,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("24h")  // state fact — edit patterns accumulate across a user's session
     public static class EditPattern implements Serializable {
         public String user;
         public String title;
@@ -161,7 +161,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("10m")  // bot state — bots edit rapidly, 10 min window is sufficient
     public static class BotHealthCheck implements Serializable {
         public String user;
         public String status;
@@ -192,7 +192,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("10m")  // bot state — accumulate window is 60s, 10m gives comfortable buffer
     @Timestamp("timestamp")
     public static class BotActivity implements Serializable {
         public String user;
@@ -211,7 +211,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("10m")  // bot state
     public static class BotProfile implements Serializable {
         public String user;
         public String category;
@@ -235,7 +235,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("10m")  // bot state
     public static class BotMetrics implements Serializable {
         public String user;
         public int activityRate;
@@ -255,7 +255,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("10m")  // bot state
     public static class BotReported implements Serializable {
         public String user;
         public long timestamp;
@@ -531,7 +531,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("24h")  // state fact — high risk designation should persist across the day
     public static class HighRiskUser implements Serializable {
         public String user;
         public String riskFactors;
@@ -546,7 +546,7 @@ public class DrlFacts {
     }
 
     @Role(Role.Type.EVENT)
-    @Expires("90s")
+    @Expires("24h")  // state fact — article attack state persists during an attack event
     public static class ArticleUnderAttack implements Serializable {
         public String title;
         public int attackSeverity;

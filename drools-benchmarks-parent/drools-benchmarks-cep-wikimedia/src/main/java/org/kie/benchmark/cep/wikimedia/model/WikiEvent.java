@@ -20,13 +20,21 @@
 package org.kie.benchmark.cep.wikimedia.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import org.kie.api.definition.type.Role;
 import org.kie.api.definition.type.Expires;
 import org.kie.api.definition.type.Timestamp;
 
+import java.util.Map;
+
 /**
  * Represents a Wikipedia edit event from the Wikimedia stream.
  * This is the primary event type fed into the Drools CEP engine.
+ *
+ * <p>The raw Wikimedia Recent Changes stream has article sizes in a nested object:
+ * <pre>{"length": {"old": 24354, "new": 24420}}</pre>
+ * This class computes {@code sizeDelta = length.new - length.old} during
+ * deserialization so rules can use {@code sizeDelta} directly.
  *
  * <p>{@code @JsonIgnoreProperties(ignoreUnknown = true)} silently drops
  * extra fields present in the live Wikimedia dataset (e.g. {@code $schema},
@@ -42,6 +50,7 @@ public class WikiEvent {
     private String user;
     private String comment;
     private boolean bot;
+    private boolean minor;
     private long timestamp;
     private int sizeDelta;
 
@@ -55,6 +64,21 @@ public class WikiEvent {
         this.bot = bot;
         this.timestamp = timestamp;
         this.sizeDelta = sizeDelta;
+    }
+
+    /**
+     * Jackson setter for the nested "length" object.
+     * Computes sizeDelta = new - old.  If either field is missing, sizeDelta stays 0.
+     */
+    @JsonSetter("length")
+    public void setLength(Map<String, Integer> length) {
+        if (length != null) {
+            Integer oldLen = length.get("old");
+            Integer newLen = length.get("new");
+            if (oldLen != null && newLen != null) {
+                this.sizeDelta = newLen - oldLen;
+            }
+        }
     }
 
     public String getTitle() {
@@ -89,6 +113,14 @@ public class WikiEvent {
         this.bot = bot;
     }
 
+    public boolean isMinor() {
+        return minor;
+    }
+
+    public void setMinor(boolean minor) {
+        this.minor = minor;
+    }
+
     public long getTimestamp() {
         return timestamp;
     }
@@ -111,8 +143,10 @@ public class WikiEvent {
                 "title='" + title + '\'' +
                 ", user='" + user + '\'' +
                 ", bot=" + bot +
+                ", minor=" + minor +
                 ", timestamp=" + timestamp +
                 ", sizeDelta=" + sizeDelta +
                 '}';
     }
 }
+
