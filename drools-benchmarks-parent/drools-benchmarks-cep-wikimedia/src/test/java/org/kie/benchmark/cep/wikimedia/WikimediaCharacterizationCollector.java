@@ -90,8 +90,17 @@ public class WikimediaCharacterizationCollector {
     // ── Static DRL analysis ────────────────────────────────────────────────
     static class RuleMeta {
         String name;
-        Set<String> inputs = new LinkedHashSet<>();
+        Set<String> inputs = new LinkedHashSet<>();      // all LHS types (for A6 reporting)
+        Set<String> negInputs = new LinkedHashSet<>();   // types from 'not Type(...)' patterns
         Set<String> outputs = new LinkedHashSet<>();
+        /** Positive inputs = inputs consumed via positive patterns (not negation). */
+        Set<String> positiveInputs() {
+            Set<String> pos = new LinkedHashSet<>(inputs);
+            pos.removeAll(negInputs);
+            // Also exclude JDK types used as accumulate results
+            pos.removeAll(Set.of("Number", "String", "Integer", "Long", "Double", "Math"));
+            return pos;
+        }
     }
 
     static class DrlStaticAnalysis {
@@ -141,6 +150,7 @@ public class WikimediaCharacterizationCollector {
                 if (thenPart.contains("insert(")) a.chainingRules++;
 
                 collectTypes(whenPart, meta.inputs);
+                collectNegTypes(whenPart, meta.negInputs);
                 a.eventTypes.addAll(meta.inputs);
                 collectTypesThen(thenPart, meta.outputs);
                 a.metas.add(meta);
@@ -182,6 +192,11 @@ public class WikimediaCharacterizationCollector {
         }
         private static void collectTypes(String src, Set<String> out) {
             Matcher m = Pattern.compile("\\b([A-Z][A-Za-z]+)\\s*\\(").matcher(src);
+            while (m.find()) out.add(m.group(1));
+        }
+        /** Collect types appearing in 'not Type(...)' negation patterns. */
+        private static void collectNegTypes(String src, Set<String> out) {
+            Matcher m = Pattern.compile("\\bnot\\s+([A-Z][A-Za-z]+)\\s*\\(").matcher(src);
             while (m.find()) out.add(m.group(1));
         }
         private static void collectTypesThen(String src, Set<String> out) {
@@ -265,8 +280,9 @@ public class WikimediaCharacterizationCollector {
             for (RuleMeta b : static_.metas) {
                 if (a.name.equals(b.name)) continue;
                 boolean connected = false;
+                Set<String> bPosInputs = b.positiveInputs();
                 for (String out : a.outputs) {
-                    if (b.inputs.contains(out)) { connected = true; break; }
+                    if (bPosInputs.contains(out)) { connected = true; break; }
                 }
                 if (connected) {
                     adj.get(a.name).add(b.name);
@@ -595,10 +611,9 @@ public class WikimediaCharacterizationCollector {
             if (processed.contains(rm.name)) continue;
             processed.add(rm.name);
 
-            // Compute this rule's depth from its inputs
+            // Compute this rule's depth from its positive inputs
             int maxInputDepth = 0;
-            for (String in : rm.inputs) {
-                if (in.equals("Number") || in.equals("String")) continue;
+            for (String in : rm.positiveInputs()) {
                 maxInputDepth = Math.max(maxInputDepth, factDepth.getOrDefault(in, 0));
             }
             ruleDepth.put(rm.name, maxInputDepth);
@@ -627,9 +642,9 @@ public class WikimediaCharacterizationCollector {
     }
 
     private static boolean allInputsResolved(RuleMeta rm, Map<String, Integer> factDepth) {
-        if (rm.inputs.isEmpty()) return false;
-        for (String in : rm.inputs) {
-            if (in.equals("Number") || in.equals("String")) continue;
+        Set<String> posInputs = rm.positiveInputs();
+        if (posInputs.isEmpty()) return false;
+        for (String in : posInputs) {
             if (!factDepth.containsKey(in)) return false;
         }
         return true;
