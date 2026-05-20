@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Wikimedia Content Moderation Rule Taxonomy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter',sans-serif;background:#fff;color:#1a1a2e;min-height:100vh;}
+  .stats-bar{display:flex;justify-content:center;gap:2rem;padding:0.7rem 1rem;background:#eef2fb;border-bottom:1px solid #d0d8ee;font-size:0.8rem;color:#334;}
+  .stats-bar span b{color:#2563eb;}
+  .pipeline{display:flex;flex-direction:column;align-items:center;gap:0;padding:1.5rem 1rem 2rem;max-width:780px;margin:0 auto;}
+  .io-node{background:#fff;border:2px solid #94a3b8;border-radius:8px;padding:0.8rem 2rem;text-align:center;font-size:0.85rem;width:360px;}
+  .io-node .label{font-weight:700;font-size:0.95rem;color:#1e293b;}
+  .io-node .sub{color:#64748b;font-size:0.75rem;margin-top:0.2rem;}
+  .arrow{width:2px;height:32px;background:#64748b;position:relative;}
+  .arrow::after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #64748b;}
+  .arrow-label{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:0.72rem;color:#475569;white-space:nowrap;font-weight:500;}
+  .phase{width:480px;border-radius:10px;position:relative;border:2px solid transparent;}
+  .phase-header{padding:1rem 1.2rem;}
+  .phase .num{font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;}
+  .phase .title{font-size:1rem;font-weight:700;margin:0.15rem 0 0.1rem;}
+  .phase .subtitle{font-size:0.8rem;opacity:0.8;}
+  .badge-container{position:absolute;top:0.9rem;right:1rem;display:flex;gap:0.4rem;}
+  .badge{font-size:0.65rem;font-weight:700;padding:0.2rem 0.5rem;border-radius:12px;background:#eef2fb;color:#334;border:1px solid #d0d8ee;}
+  .phase-1{background:#e8eaf6;border-color:#5c6bc0;} .phase-1 .title{color:#283593;} .phase-1 .num{color:#5c6bc0;}
+  .phase-2{background:#e8f5e9;border-color:#388e3c;} .phase-2 .title{color:#1b5e20;} .phase-2 .num{color:#388e3c;}
+  .phase-3{background:#e3f2fd;border-color:#1976d2;} .phase-3 .title{color:#0d47a1;} .phase-3 .num{color:#1976d2;}
+  .phase-4{background:#fff8e1;border-color:#f9a825;} .phase-4 .title{color:#e65100;} .phase-4 .num{color:#f9a825;}
+  .phase-5{background:#f3e5f5;border-color:#7b1fa2;} .phase-5 .title{color:#4a148c;} .phase-5 .num{color:#7b1fa2;}
+  .phase-6{background:#fce4ec;border-color:#c62828;} .phase-6 .title{color:#b71c1c;} .phase-6 .num{color:#c62828;}
+  .outputs{display:flex;gap:2rem;margin-top:0;}
+  .output-node{background:#fff;border:2px solid #94a3b8;border-radius:8px;padding:0.7rem 1.2rem;text-align:center;font-size:0.8rem;width:200px;}
+  .output-node .label{font-weight:700;font-size:0.88rem;}
+  .output-node .sub{color:#64748b;font-size:0.7rem;margin-top:0.15rem;}
+  .out-alert{border-color:#dc2626;} .out-alert .label{color:#dc2626;}
+  .out-health{border-color:#16a34a;} .out-health .label{color:#16a34a;}
+  figcaption{text-align:center;font-size:0.78rem;color:#555;padding:0.5rem 1rem 1.5rem;max-width:780px;margin:0 auto;line-height:1.5;}
+  @media print{body{background:#fff;}.stats-bar{background:#eee;}}
+</style>
+</head>
+<body>
+<div class="stats-bar">
+<span><b>63</b> active rules</span>
+<span><b>6</b> processing phases</span>
+<span><b>5</b> parallel pipelines</span>
+<span><b>31</b> fact types</span>
+</div>
+<div class="pipeline">
+<div class="io-node">
+<div class="label">WikiEvent Stream</div>
+<div class="sub">VANDALISM · BOT · CONTENT · MINOR · TALK</div>
+</div>
+<div class="arrow" style="height:28px;"></div>
+<div class="phase phase-1">
+<div class="phase-header">
+<div class="num">Phase 1</div>
+<div class="title">Ingestion &amp; Lifecycle</div>
+<div class="subtitle">Event detection · User activity initialization</div>
+<div class="badge-container"><span class="badge">6 rules</span></div></div>
+</div>
+<div class="arrow"><span class="arrow-label">Candidate Facts</span></div>
+<div class="phase phase-2">
+<div class="phase-header">
+<div class="num">Phase 2</div>
+<div class="title">Behavioral Analysis</div>
+<div class="subtitle">Deletion scoring · Bot profiling · Sentiment</div>
+<div class="badge-container"><span class="badge">13 rules</span></div></div>
+</div>
+<div class="arrow"><span class="arrow-label">Analysis &amp; Profiles</span></div>
+<div class="phase phase-3">
+<div class="phase-header">
+<div class="num">Phase 3</div>
+<div class="title">Quality Verification</div>
+<div class="subtitle">Article quality join · Content tiering</div>
+<div class="badge-container"><span class="badge">13 rules</span></div></div>
+</div>
+<div class="arrow"><span class="arrow-label">Verified Verdicts</span></div>
+<div class="phase phase-4">
+<div class="phase-header">
+<div class="num">Phase 4</div>
+<div class="title">Action &amp; Policy</div>
+<div class="subtitle">Flagging · Health checks · Approvals</div>
+<div class="badge-container"><span class="badge">15 rules</span></div></div>
+</div>
+<div class="arrow"><span class="arrow-label">Enforcement Signals</span></div>
+<div class="phase phase-5">
+<div class="phase-header">
+<div class="num">Phase 5</div>
+<div class="title">Processing &amp; Output</div>
+<div class="subtitle">Indexing · Caching · Reporting</div>
+<div class="badge-container"><span class="badge">13 rules</span></div></div>
+</div>
+<div class="arrow"><span class="arrow-label">Final States</span></div>
+<div class="phase phase-6">
+<div class="phase-header">
+<div class="num">Phase 6</div>
+<div class="title">Correlation &amp; Risks</div>
+<div class="subtitle">Cross-pipeline patterns · Article attacks</div>
+<div class="badge-container"><span class="badge">3 rules</span></div></div>
+</div>
+<div class="arrow" style="height:28px;"></div>
+<div class="outputs">
+<div class="output-node out-alert">
+<div class="label">VandalismLogged</div>
+<div class="sub">security channel</div>
+</div>
+<div class="output-node out-health">
+<div class="label">BotHealthCheck</div>
+<div class="sub">governance board</div>
+</div>
+</div>
+</div>
+<figcaption>
+<b>Fig. Y.</b> Six-phase processing taxonomy of the Wikimedia Content Moderation rule set (<code>wikimedia_content_moderation_join_heavy.drl</code>).
+Phases are ordered by data dependency; arrow labels denote intermediate fact types.
+Badge counts reflect active rules.
+</figcaption>
+</body>
+</html>

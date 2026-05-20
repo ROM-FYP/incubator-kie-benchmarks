@@ -1,0 +1,264 @@
+cd /home/maheshdila/mahesh/re
+search/incubator-kie-benchmarks/drools-benchmarks-parent/drools-benchmarks-opensky-airTrafficking 
+                                                                                                  
+mvn compile test-compile --no-transfer-progress -q && \                                           
+CLASSPATH=$(mvn dependency:build-classpath -Dmdep.outputFile=/dev/stdout -q --no-transfer-progress
+ 2>/dev/null):target/classes:target/test-classes && \                                             
+java -Xmx8g -cp "$CLASSPATH" bench.opensky.OpenSkyCharacterizationCollector data/data/split_1600k.
+jsonl                                                                                             
+╔══════════════════════════════════════════════════════╗                                          
+║  OpenSky AirTraffic CEP — Characterization Collector ║                                          
+╚══════════════════════════════════════════════════════╝                                          
+                                                                                                  
+── [A] Static Rule-Base Properties ─────────────────────                                          
+  A1  Total rules (R):              103                                                           
+  A2  Avg conditions/rule:          0.27  (max=2)                                                 
+  A2  Condition distribution:       {1 cond=24, 2 cond=2, 3 cond=0, 4+ cond=0}                    
+  A3  Temporal rules:               6                                                             
+  A4  Join-heavy rules (≥2 conds):  2                                                             
+  A4  Chaining rules (insert RHS):  62                                                            
+  A5  Alpha sharing ratio (proxy):  0.464                                                         
+  A6  Distinct input fact types:    15  → [Params, OpenSkyStateVector, TrackQuality, Alert, Kinema
+ticDelta, GridCell, PairCandidate, AlertInhibit, ConflictCandidate, Number, CpaMetrics, PairRiskSt
+ate, AlertAck, Status, AuditEvent]                                                                
+  A7  Temporal windows (over):      0                                                             
+  A7  window:time / window:length:  0 / 0                                                         
+  A8  'after' / 'before' patterns:  1 / 5                                                         
+  A8  negation 'not' patterns:      13                                                            
+  A8  'accumulate' patterns:        1                                                             
+  A8  'eval' temporal patterns:     8                                                             
+                                                                                                  
+── [D] Loading dataset: data/data/split_1600k.jsonl                                               
+21:06:19 [INFO ] b.opensky.replay.OpenSkyJsonlLoader -- Loading flat CEP stream from classpath: da
+ta/data/split_1600k.jsonl                                                                         
+21:06:46 [INFO ] b.opensky.replay.OpenSkyJsonlLoader -- Parsed 1600000 records from 1600000 lines 
+(0 errors)                                                                                        
+21:06:46 [INFO ] b.opensky.replay.OpenSkyJsonlLoader -- Loaded 1600000 events                     
+  Loaded 1,600,000 state-vector events                                                            
+                                                                                                  
+── [D] Data / Domain Properties ─────────────────────────                                         
+  D1  Total events in dataset:      1,600,000                                                     
+  D1  Time span:                    1,150,000 ms (19.2 min)                                       
+  D2  Distinct aircraft (ICAO24):   14,301                                                        
+  C1  Event arrival rate (dataset): 1391 events/sec                                               
+  C2  Mean per-aircraft IAT:        8041.71 ms                                                    
+  C2  Median per-aircraft IAT:      6000.00 ms                                                    
+  C2  IAT std dev (per-aircraft):   9300.08 ms                                                    
+  C2  Coeff of variation (CV):      1.156 → BURSTY                                                
+                                                                                                  
+── [C] Runtime Metrics (full replay) ────────────────────                                         
+  Replaying 1,600,000 events...                                                                   
+21:06:48 [INFO ] b.opensky.replay.OpenSkyReplayEngine -- Building KieBase from DRL [mode=baseline]
+...                                                                                               
+21:06:49 [WARN ] o.d.c.k.builder.impl.KieBuilderImpl -- File 'rules/airTraffick_rules.drl' is in f
+older 'rules' but declares package 'ats.surveillance.stca.prototype'. It is advised to have a corr
+espondance between package and folder names.                                                      
+21:06:51 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [clock.getCurrentTime
+() / 1000 - $t > 30] : '$t' comes from previous pattern 'AlertAck'. Consider placing the constrain
+t in the pattern and removing the eval if possible, as eval is not performance-efficient.         
+21:06:51 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [clock.getCurrentTime
+() / 1000 - $t > 600] : '$t' comes from previous pattern 'AlertAck'. Consider placing the constrai
+nt in the pattern and removing the eval if possible, as eval is not performance-efficient.        
+21:06:51 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [clock.getCurrentTime
+() / 1000 - $t > 120] : '$t' comes from previous pattern 'Alert'. Consider placing the constraint 
+in the pattern and removing the eval if possible, as eval is not performance-efficient.           
+21:06:52 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [$a.compareTo($b) < 0
+] : '$a' comes from previous pattern 'GridCell'. '$b' comes from previous pattern 'GridCell'. Cons
+ider placing the constraint in the pattern and removing the eval if possible, as eval is not perfo
+rmance-efficient.                                                                                 
+21:06:52 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [Math.abs($aa - $ba) 
+> ($p.getVertMinFt() * 0.3048)] : '$aa' comes from previous pattern 'OpenSkyStateVector'. '$ba' co
+mes from previous pattern 'OpenSkyStateVector'. '$p' comes from previous pattern 'Params'. Conside
+r placing the constraint in the pattern and removing the eval if possible, as eval is not performa
+nce-efficient.                                                                                    
+21:06:52 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [$g0 != $g1] : '$g0' 
+comes from previous pattern 'OpenSkyStateVector'. '$g1' comes from previous pattern 'OpenSkyStateV
+ector'. Consider placing the constraint in the pattern and removing the eval if possible, as eval 
+is not performance-efficient.                                                                     
+21:06:52 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [!$sq0.equals($sq1)] 
+: '$sq0' comes from previous pattern 'OpenSkyStateVector'. '$sq1' comes from previous pattern 'Ope
+nSkyStateVector'. Consider placing the constraint in the pattern and removing the eval if possible
+, as eval is not performance-efficient.                                                           
+21:06:52 [WARN ] org.drools.base.rule.EvalCondition -- In an eval expression [Math.min(Math.abs($t
+rk1 - $trk0), 360 - Math.abs($trk1 - $trk0)) / Math.max($s1.getSnapshotTime() - $s0.getSnapshotTim
+e(), 1) > 10] : '$s0' comes from previous pattern 'OpenSkyStateVector'. '$s1' comes from previous 
+pattern 'OpenSkyStateVector'. '$trk0' comes from previous pattern 'OpenSkyStateVector'. '$trk1' co
+mes from previous pattern 'OpenSkyStateVector'. Consider placing the constraint in the pattern and
+ removing the eval if possible, as eval is not performance-efficient.                             
+21:06:55 [WARN ] org.drools.mvel.MVELConstraint -- clock is not relevant to this pattern, so it ca
+uses class reactivity. Consider placing this constraint in the original pattern if possible :  (cl
+ock.getCurrentTime() / 1000 - lastContact) > $p.staleAnySec                                       
+21:06:55 [INFO ] b.opensky.replay.OpenSkyReplayEngine -- KieSession ready [mode=baseline] (pseudo 
+clock at 0ms)                                                                                     
+21:06:56 [WARN ] org.drools.mvel.MVELConstraint -- Exception jitting: (geoAltitudeM != null ? geoA
+ltitudeM : baroAltitudeM) != null. This is NOT an error and NOT prevent the correct execution sinc
+e the constraint will be evaluated in intrepreted mode                                            
+  C1  Replay throughput:            551 events/sec                                                
+  C1  Wall-clock replay time:       2,901,795 ms                                                  
+  C3  Selectivity:                  0.01% of events trigger ≥1 rule (130/1,600,000)               
+  C4  Peak WM size:                 31,678,857 facts                                              
+  C5  Total WM changes:             39,257,929 (ins=35,206,974  ret=3,528,117  upd=522,838)       
+  C5  Avg WM changes/event:         24.54                                                         
+  C6  Avg conflict-set size:        246210.9195 activations                                       
+  C6  Peak conflict-set size:       2,992,487 activations                                         
+  C7  Total rule activations:       63,100,403                                                    
+  C7  Rules fired per event:        39.4378                                                       
+  C3  Rule coverage:                71.8% (74/103 rules fired ≥1x)                                
+                                                                                                  
+── [B] Structural Properties ────────────────────────────                                         
+  B1  Rules covered at runtime:     74 / 103 (71.8%)                                              
+  B2  Zero-coverage rules:          29                                                            
+  B4  Max chaining depth:           10                                                            
+                                                                                                  
+╔══════════════════════════════════════════════════════╗                                          
+║         CHARACTERIZATION TABLE (Paper-ready)         ║                                          
+╚══════════════════════════════════════════════════════╝                                          
+│ Property                             │ OpenSky CEP     │                                        
+├──────────────────────────────────────┼─────────────────┤                                        
+│ A1  Rules (R)                        │ 103             │                                        
+│ A2  Avg conditions/rule              │ 0.27            │                                        
+│ A2  Max conditions/rule              │ 2               │                                        
+│ A4  Chaining rules (insert RHS)      │ 62              │                                        
+│ A6  Distinct input fact types        │ 15              │                                        
+│ A5  Alpha sharing ratio (proxy)      │ 0.464           │                                        
+│ A7  Temporal windows (over)          │ 0               │                                        
+│ A8  'after'/'before' patterns        │ 1/5             │                                        
+│ A8  eval temporal patterns           │ 8               │                                        
+│ B4  Max chaining depth               │ 10              │                                        
+│ C1  Event arrival rate (ev/s)        │ 1391            │                                        
+│ C2  IAT coeff of variation (CV)      │ 1.156           │                                        
+│ C2  Velocity class                   │ BURSTY          │                                        
+│ C3  Selectivity                      │ 0.01          % │                                        
+│ C4  Peak WM size (facts)             │ 31678857        │                                        
+│ C5  Avg WM changes/event             │ 24.54           │                                        
+│ C6  Avg conflict set size            │ 246210.9195     │                                        
+│ C6  Peak conflict set size           │ 2992487         │                                        
+│ C7  Rules fired per event            │ 39.4378         │                                        
+│ C3  Rule coverage on dataset         │ 71.8          % │                                        
+│ D1  Dataset size (events)            │ 1,600,000       │                                        
+│ D2  Distinct aircraft (ICAO24)       │ 14301           │                                        
+│ D4  Data provenance                  │ OpenSky Network │                                        
+└──────────────────────────────────────┴─────────────────┘                                        
+                                                                                                  
+── Per-Rule Activation Counts (top 20) ─────────────────                                          
+  R098_PerformanceCountersPlaceholder                     25,409,592                              
+  R079_MultiConflictHotspotEscalation                     17,562,246                              
+  R053_BusyAirspaceCellAudit                               3,581,469                              
+  R042_PairWithinCell                                      2,815,679                              
+  R021_DeltaVelocityOver10s                                2,618,956                              
+  R050_SkipIfVerticalSeparationSufficient                  2,168,537                              
+  R016_CategoryUnknownAudit                                1,600,000                              
+  R041_AssignGridCell                                      1,470,722                              
+  R010_FilterStalePositionFromPairing                      1,077,490                              
+  R013_FilterStaleContactFromPairing                         880,914                              
+  R056_BuildConflictCandidateBasic                           733,258                              
+  R067b_DedupeConflictCandidates_KeepFirst                   389,784                              
+  R049_SkipIfAnyTrackQualityBad                              305,094                              
+  R051_PairDedupGuard                                        287,768                              
+  R002_StalePositionFlag                                     236,921                              
+  R066_ConflictCandidateAudit_ALERT                          209,770                              
+  R003_StaleContactFlag                                      194,145                              
+  R068_ClearOldConflictCandidates                            149,134                              
+  R070_SuppressIfNotClosingOrPastCPA                         126,181                              
+  R074a_UpdateStreaks_ALERT                                  122,610                              
+                                                                                                  
+── Rules That NEVER Fired ───────────────────────────────                                         
+  ❌ R005_BadVelocityFlag                                                                         
+  ❌ R015_StaleContactClearsOldAlerts                                                             
+  ❌ R017_NonAdsbPositionSourceAudit                                                              
+  ❌ R020_TrackDegRangeAudit                                                                      
+  ❌ R028_UnknownTrackButMovingAudit                                                              
+  ❌ R031_SlowHoveringRotorcraftAudit                                                             
+  ❌ R032_UAVAudit                                                                                
+  ❌ R033_GliderAudit                                                                             
+  ❌ R034_EmergencyVehicleAudit                                                                   
+  ❌ R035_PointObstacleAudit                                                                      
+  ❌ R039_OriginCountryMissingAudit                                                               
+  ❌ R043_NoPairIfSameAircraft                                                                    
+  ❌ R044_PairInhibitByCell                                                                       
+  ❌ R045_PairInhibitByFlight                                                                     
+  ❌ R046_PairInhibitByFlightB                                                                    
+  ❌ R047_PairInhibitByPairKey                                                                    
+  ❌ R049b_RetractConflictIfTrackQualityBad                                                       
+  ❌ R057_DowngradeIfVerticalSeparationLarge                                                      
+  ❌ R077_InhibitSafetyAlertsByPair                                                               
+  ❌ R078_InhibitMustBeKnown_Audit                                                                
+  ❌ R083_AlertPersistsWhileConditionExists                                                       
+  ❌ R084_AckSilencesAudibleEquivalent                                                            
+  ❌ R085_ClearAlertAfterAckAndNoNewConflicts                                                     
+  ❌ R086_InhibitAlertsByFlight                                                                   
+  ❌ R087_InhibitAlertsByPair                                                                     
+  ❌ R089_StatusWhenNotAvailable                                                                  
+  ❌ R092_DoNotSpamNuisanceAlerts                                                                 
+  ❌ R094_ClearOldAdvisories                                                                      
+  ❌ R095_ClearOldAcks                                                                            
+                                                                                                  
+── [E] Category Activations per Event ───────────────────                                         
+  Acts/Evt = category_activations / total_events                                                  
+                                                                                                  
+  Category                                   Rules     Fired     Activns  Acts/Evt   % total      
+  --------------------------------------------------------------------------------------          
+  R091-R100  Audit & Compound Rules             10         7  25,468,590   15.9179    40.36%      
+  R056-R080  Conflict Detection (CPA)           29        26  19,978,062   12.4863    31.66%      
+  R041-R055  Grid & Pair Candidates             15         9  10,687,146    6.6795    16.94%      
+  R001-R020  Track & Data Quality               21        17   4,220,798    2.6380     6.69%      
+  R021-R040  Kinematics & Anomaly               19        12   2,678,398    1.6740     4.24%      
+  R081-R090  Alert & Advisory Mgmt               9         3      67,409    0.0421     0.11%      
+                                                                                                  
+── [F] Forward Chain Depth Activations per Event ────────                                         
+  Entry point: OpenSkyStateVector (externally inserted by Java replay loop)                       
+  Acts/Evt = activations_at_depth_d / total_events                                                
+                                                                                                  
+  Depth     Rules   Fired     Activations   Acts/Evt  Ratio(D0)                                   
+  ------------------------------------------------------------                                    
+  Depth 0       32        22     6,346,923    3.9668     1.0000                                   
+  Depth 1        4         4     6,398,069    3.9988     1.0081                                   
+  Depth 2       14         9     4,781,866    2.9887     0.7534                                   
+  Depth 3        3         3       847,363    0.5296     0.1335                                   
+  Depth 4        2         2        86,583    0.0541     0.0136                                   
+  Depth 5       15        13     1,136,529    0.7103     0.1791                                   
+  Depth 6        7         7    17,962,028   11.2263     2.8300                                   
+  Depth 7       14         6        13,230    0.0083     0.0021                                   
+  Depth 8        2         2         9,387    0.0059     0.0015                                   
+  Depth 9        3         2        75,029    0.0469     0.0118                                   
+  Depth 10       2         2    25,443,394   15.9021     4.0088                                   
+  Other          5         2             2    0.0000        N/A                                   
+                                                                                                  
+  Depth-level rule membership:                                                                    
+  Depth 0: R001_MissingPositionFlag, R002_StalePositionFlag, R003_StaleContactFlag, R004_BadAltitu
+deFlag, R005_BadVelocityFlag, R006_OnGroundButHighSpeed, R007_MissingCallsignAudit, R008_SquawkSpe
+cialPurposeAudit, R016_CategoryUnknownAudit, R017_NonAdsbPositionSourceAudit, R018_TooFastForAltit
+udeBandAudit, R019_NullAltitudesAudit, R020_TrackDegRangeAudit, R021_DeltaVelocityOver10s, R023_Su
+ddenVerticalRateAudit, R024_SuddenTurnRateApproxAudit, R025_AltitudeJumpAudit, R026_OnGroundStateF
+lipAudit, R027_UnknownVelButMovingAudit, R028_UnknownTrackButMovingAudit, R029_ClimbWhileOnGroundA
+udit, R030_BaroGeoDisagreeAudit, R031_SlowHoveringRotorcraftAudit, R032_UAVAudit, R033_GliderAudit
+, R034_EmergencyVehicleAudit, R035_PointObstacleAudit, R036_SquawkChangedAudit, R037_SpiSetAudit, 
+R038_CallsignWhitespaceAudit, R039_OriginCountryMissingAudit, R041_AssignGridCell                 
+  Depth 1: R022_SuddenSpeedJumpAudit, R042_PairWithinCell, R053_BusyAirspaceCellAudit, R055_HighAc
+celerationAudit                                                                                   
+  Depth 2: R009_FilterTracksMissingPositionFromPairing, R010_FilterStalePositionFromPairing, R011_
+FilterBadVelocityFromPairing, R012_FilterBadAltitudeFromPairing, R013_FilterStaleContactFromPairin
+g, R043_NoPairIfSameAircraft, R044_PairInhibitByCell, R045_PairInhibitByFlight, R046_PairInhibitBy
+FlightB, R047_PairInhibitByPairKey, R048_SkipOnGroundPairs, R049_SkipIfAnyTrackQualityBad, R050_Sk
+ipIfVerticalSeparationSufficient, R051_PairDedupGuard                                             
+  Depth 3: R052_FinalPairReadyForConflictCheck, R056_BuildConflictCandidateBasic, R068b_ComputeCpa
+Metrics                                                                                           
+  Depth 4: R069_CreateConflictFromCpaMetrics, R080_RecordCPAForAnalysis                           
+  Depth 5: R049b_RetractConflictIfTrackQualityBad, R057_DowngradeIfVerticalSeparationLarge, R058_U
+pgradeIfVeryClose, R059_WarnIfBelowPrototypeRadarMinima, R060_AlertIfBelowPrototypeRadarMinima, R0
+61_WarnIfTTCWithinWarningTime, R062_AlertIfTTCWithinAlertTime, R063_SuppressIfNotClosingAndFar, R0
+64_SuppressIfAnyOnGround, R067a_DedupeConflictCandidates_KeepALERT, R067b_DedupeConflictCandidates
+_KeepFirst, R068_ClearOldConflictCandidates, R070_SuppressIfNotClosingOrPastCPA, R071_UpgradeToWAR
+N_UsingCPA, R072_UpgradeToALERT_UsingCPA                                                          
+  Depth 6: R065_ConflictCandidateAudit_WARN, R066_ConflictCandidateAudit_ALERT, R073_InitPairRiskS
+tate, R074a_UpdateStreaks_ALERT, R074b_UpdateStreaks_WARN, R074c_UpdateStreaks_INFO, R079_MultiCon
+flictHotspotEscalation                                                                            
+  Depth 7: R014_StalePosClearsOldAlerts, R015_StaleContactClearsOldAlerts, R075_RaiseAlertsOnlyAft
+erPersistence, R076_Hysteresis_ClearOnlyAfterSafePersistence, R077_InhibitSafetyAlertsByPair, R081
+_RaiseTrafficAdvisoryOnWARN, R082_RaiseSafetyAlertOnALERT, R084_AckSilencesAudibleEquivalent, R085
+_ClearAlertAfterAckAndNoNewConflicts, R086_InhibitAlertsByFlight, R087_InhibitAlertsByPair, R092_D
+oNotSpamNuisanceAlerts, R093_EscalateFromAdvisoryToSafetyAlert, R094_ClearOldAdvisories           
+  Depth 8: R096_RecordEverySafetyAlert, R097_RecordEveryTrafficAdvisory                           
+  Depth 9: R083_AlertPersistsWhileConditionExists, R090_SafetyAlertPriorityAudit, R091_TrafficAdvi
+soryAudit                                                                                         
+  Depth 10: R098_PerformanceCountersPlaceholder, R099_IgnoreNonJustifiedAlertPlaceholder 

@@ -1,0 +1,109 @@
+% ============================================================
+% Section 4 — Cross-Suite Analysis
+% Requires: \usepackage{booktabs}
+% ============================================================
+
+\section{Cross-Suite Analysis}\label{sec:analysis}
+
+\subsection{Analysis Methodology}\label{sec:metrics}
+
+We characterise each benchmark along four categories of properties.
+
+\emph{Static rule-base properties} (Table~\ref{tab:static}) are extracted by parsing the DRL source text.
+Conditions per rule are counted by matching LHS fact patterns; the alpha-sharing ratio is
+$1 - (\mathrm{distinct\ fact\ types} / \mathrm{total\ pattern\ occurrences})$, quantifying how much
+node sharing the RETE alpha network can exploit.
+Temporal operators (\texttt{after}, \texttt{before}, \texttt{accumulate}, \texttt{window:time},
+\texttt{not}, \texttt{eval}) are tallied by regex over the DRL text.
+Maximum forward-chain depth is computed as the longest path on the SCC condensation DAG of the
+rule dependency graph, equivalent to standard Datalog stratification~\cite{ullman1989}.
+
+\emph{Dataset properties} (Table~\ref{tab:stream}) are computed from the event stream before replay.
+The inter-arrival time~(IAT) coefficient of variation (CV) is $\sigma_{\mathrm{IAT}} / \mu_{\mathrm{IAT}}$,
+computed per entity (aircraft, symbol, or user) and then aggregated; CV~$>$~1 classifies the
+stream as \emph{bursty}.
+
+\emph{Runtime dynamics} (Table~\ref{tab:runtime}) are collected during full-dataset replay
+through a pseudo-clock \texttt{KieSession} instrumented with agenda and working-memory~(WM) event
+listeners.
+Selectivity is the fraction of events that trigger at least one rule activation.
+Peak WM size is the maximum number of facts simultaneously present.
+Conflict-set size is sampled before each rule firing.
+Rule coverage is the fraction of rules that fire at least once.
+
+\emph{Forward-chain depth activations} (Table~\ref{tab:depth}) assign each rule its depth $d$ in
+the dependency graph and report $P(d)$, the fraction of total activations at each depth.
+
+\begin{table}[t]
+\centering
+\caption{Static rule-base and structural properties.}\label{tab:static}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Property} & \textbf{AirTraffic} & \textbf{Binance} & \textbf{Wikimedia} \\
+\midrule
+Rules (R)                       & 103      & 108      & 70      \\
+Avg / max conditions per rule   & 0.27 / 2 & 2.02 / 4 & 0.01 / 1 \\
+Alpha sharing ratio             & 0.464    & 0.899    & 0.738   \\
+Distinct input fact types       & 15       & 22       & 32      \\
+Max forward-chain depth         & 9        & 4        & 5       \\
+Temporal operators              & 15       & 35       & 44      \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Dataset and stream properties.}\label{tab:stream}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Property} & \textbf{AirTraffic} & \textbf{Binance} & \textbf{Wikimedia} \\
+\midrule
+Dataset size (events)         & 1,600,000   & 1,613,159   & 1,599,966   \\
+Time span                     & 19.2~min    & 30.0~min    & 4.15~days   \\
+Distinct entities             & 14,301 acft & 10 symbols  & 32,225 users \\
+Arrival rate (ev/s)           & 1,391       & 896         & 4.5         \\
+IAT coeff.\ of variation (CV) & 1.156       & 4.203       & 9.958       \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Runtime engine behaviour metrics.}\label{tab:runtime}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Property} & \textbf{AirTraffic} & \textbf{Binance} & \textbf{Wikimedia} \\
+\midrule
+Replay throughput (ev/s)  & 551        & 18,824  & 14,426  \\
+Selectivity               & 0.01\%     & 23.6\%  & 2.3\%   \\
+Peak WM size (facts)      & 31,678,857 & 172     & 13,009  \\
+Avg WM changes / event    & 24.54      & 11.25   & 6.51    \\
+Avg conflict-set size     & 246,211    & 3.97    & 1.01    \\
+Rules fired / event       & 39.44      & 15.72   & 3.69    \\
+Rule coverage             & 71.8\%     & 63.9\%  & 78.6\%  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Forward-chain depth activation probability $P(d)$: fraction of depth-assigned
+activations at each depth. Cross-cutting WM monitors (R098, R099) are excluded from the
+AirTraffic distribution; Binance and Wikimedia terminate at depths~3 and~5
+respectively.}\label{tab:depth}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lcccccccc@{}}
+\toprule
+\textbf{Domain} & \textbf{d=0} & \textbf{d=1} & \textbf{d=2} & \textbf{d=3}
+  & \textbf{d=4} & \textbf{d=5} & \textbf{d=6} & \textbf{d=7--9} \\
+\midrule
+AirTraffic & 16.9\% & 17.0\% & 12.7\% & 2.3\% & 0.2\% & 3.0\% & 47.7\% & 0.3\% \\
+Binance    & 49.0\% & 38.8\% &  6.9\% & 5.3\% & ---   & ---   & ---    & ---   \\
+Wikimedia  & 69.3\% & 29.8\% & 0.22\% & 0.22\%& 0.22\%& 0.22\%& ---    & ---   \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,11 @@
+% ============================================================
+% Section 5 — Conclusion and Future Work
+% ============================================================
+
+\section{Conclusion and Future Work}\label{sec:conclusion}
+
+We introduced a multi-domain CEP benchmark suite covering aviation, financial trading, and collaborative editing. Each benchmark pairs a rule set---derived from domain guidelines via a semi-automated pipeline---with a real-world stream of approximately 1.6~million events. Built on the \texttt{incubator-kie-benchmarks} infrastructure, the suite ensures reproducible performance evaluation.
+
+Our cross-suite characterisation confirms that the benchmarks stress the rule engine in distinct ways, providing diverse, realistic workload profiles (join-heavy, chain-deep, and pipeline-sequential) that are lacking in synthetic benchmarks. Furthermore, high rule coverage ($>$63\%) across domains validates that the real-world streams effectively exercise the rule sets.
+
+Future work includes extending the suite to additional domains and integrating JMH latency and throughput benchmarks for comprehensive performance evaluation.
