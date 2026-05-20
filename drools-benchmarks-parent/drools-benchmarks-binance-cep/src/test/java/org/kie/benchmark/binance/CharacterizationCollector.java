@@ -191,13 +191,14 @@ public class CharacterizationCollector {
                 .flatMap(rm -> rm.getInputs().stream())
                 .collect(Collectors.toCollection(TreeSet::new));
 
-        // C8/C9: Pattern complexity — regex scan of DRL text
-        long windowTimeCount  = count(drlContent, "window:time");
-        long windowLenCount   = count(drlContent, "window:length");
-        long afterCount       = count(drlContent, "\\bafter\\b");
-        long notCount         = count(drlContent, "\\bnot\\b");
-        long accumCount       = count(drlContent, "\\baccumulate\\b");
-        long evalCount        = count(drlContent, "\\beval\\b");
+        // C8/C9: Pattern complexity — regex scan of DRL text (comments stripped)
+        String drlNoComments = drlContent.replaceAll("//[^\\n]*", "");
+        long windowTimeCount  = count(drlNoComments, "window:time");
+        long windowLenCount   = count(drlNoComments, "window:length");
+        long afterCount       = count(drlNoComments, "\\bafter\\b");
+        long notCount         = count(drlNoComments, "\\bnot\\s+[A-Z][A-Za-z]+\\s*\\(");
+        long accumCount       = count(drlNoComments, "\\baccumulate\\b");
+        long evalCount        = count(drlNoComments, "\\beval\\b");
 
         // A5: Alpha sharing — count unique alpha patterns (EventType + condition combos)
         // Proxy: distinct (factType, constraint) strings extracted from LHS

@@ -160,8 +160,24 @@ public class WikimediaCharacterizationCollector {
             return e > t ? ruleBody.substring(t + 4, e) : ruleBody.substring(t + 4);
         }
         private static int countPatterns(String when) {
-            Pattern p = Pattern.compile("^\\s+[A-Z][A-Za-z]+\\s*\\(", Pattern.MULTILINE);
-            Matcher m = p.matcher(when); int c = 0; while (m.find()) c++;
+            // Count top-level LHS patterns. Must handle:
+            //   $var : Type(...)       — bound pattern
+            //   not Type(...)          — negation
+            //   Type(...)              — unbound pattern
+            //   $var : Number(...) from accumulate(...)  — accumulate result
+            int c = 0;
+            for (String line : when.split("\n")) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+                // Strip optional binding prefix: $var :
+                String rest = trimmed.replaceFirst("^\\$\\w+\\s*:\\s*", "");
+                // Strip optional 'not' prefix
+                rest = rest.replaceFirst("^not\\s+", "");
+                // Now check if line starts with a CapitalizedType(
+                if (rest.matches("^[A-Z][A-Za-z]+\\s*\\(.*")) {
+                    c++;
+                }
+            }
             return c;
         }
         private static void collectTypes(String src, Set<String> out) {
@@ -199,12 +215,17 @@ public class WikimediaCharacterizationCollector {
         System.out.println("── [A] Static Rule-Base Properties ─────────────────────");
         DrlStaticAnalysis static_ = DrlStaticAnalysis.analyse(drlContent);
 
-        long windowTimeCount  = countRegex(drlContent, "window:time");
-        long windowLenCount   = countRegex(drlContent, "window:length");
-        long afterCount       = countRegex(drlContent, "\\bafter\\b");
-        long notCount         = countRegex(drlContent, "\\bnot\\b");
-        long accumCount       = countRegex(drlContent, "\\baccumulate\\b");
-        long evalCount        = countRegex(drlContent, "\\beval\\b");
+        // Strip single-line comments before running pattern counts so that
+        // comment text (e.g. "// accumulate over window:time") doesn't inflate C8/C9 metrics.
+        String drlNoComments = drlContent.replaceAll("//[^\\n]*", "");
+
+        long windowTimeCount  = countRegex(drlNoComments, "window:time");
+        long windowLenCount   = countRegex(drlNoComments, "window:length");
+        long afterCount       = countRegex(drlNoComments, "\\bafter\\b");
+        // Match only LHS negation patterns: 'not TypeName(' — excludes field-level 'not contains'
+        long notCount         = countRegex(drlNoComments, "\\bnot\\s+[A-Z][A-Za-z]+\\s*\\(");
+        long accumCount       = countRegex(drlNoComments, "\\baccumulate\\b");
+        long evalCount        = countRegex(drlNoComments, "\\beval\\b");
 
         long totalInputOccurrences = static_.metas.stream().mapToLong(rm -> rm.inputs.size()).sum();
         long uniqueInputTypes      = static_.eventTypes.size();
@@ -225,11 +246,71 @@ public class WikimediaCharacterizationCollector {
         System.out.println();
 
         System.out.println("── [B] Dependency / Structural Properties ───────────────");
-        System.out.printf("  B1  Dependency graph density:     %.4f (N/A)%n", 0.0);
-        System.out.printf("  B2  Largest connected component:  %.1f%%%n", 0.0);
-        System.out.printf("  B3  Connected components:         %d%n", 0);
-        // compute basic chaining depth
+
+        // Build a simple dependency graph: rule A → rule B if A produces a fact type that B consumes.
+        // Then compute B1 (density), B2 (largest connected component), B3 (# components).
+        Map<String, Set<String>> ruleProducesMap = new HashMap<>();
+        Map<String, Set<String>> ruleConsumesMap = new HashMap<>();
+        for (RuleMeta rm : static_.metas) {
+            ruleProducesMap.put(rm.name, rm.outputs);
+            ruleConsumesMap.put(rm.name, rm.inputs);
+        }
+
+        // Build adjacency: edge from ruleA → ruleB if ruleA.outputs ∩ ruleB.inputs ≠ ∅
+        int V = static_.metas.size();
+        Map<String, Set<String>> adj = new LinkedHashMap<>();
+        for (RuleMeta rm : static_.metas) adj.put(rm.name, new LinkedHashSet<>());
+        int edgeCount = 0;
+        for (RuleMeta a : static_.metas) {
+            for (RuleMeta b : static_.metas) {
+                if (a.name.equals(b.name)) continue;
+                boolean connected = false;
+                for (String out : a.outputs) {
+                    if (b.inputs.contains(out)) { connected = true; break; }
+                }
+                if (connected) {
+                    adj.get(a.name).add(b.name);
+                    edgeCount++;
+                }
+            }
+        }
+        double maxEdges = (double) V * (V - 1);
+        double graphDensity = maxEdges > 0 ? edgeCount / maxEdges : 0;
+
+        // Connected components (undirected) via BFS
+        Set<String> visited = new HashSet<>();
+        List<Integer> componentSizes = new ArrayList<>();
+        for (RuleMeta rm : static_.metas) {
+            if (visited.contains(rm.name)) continue;
+            // BFS undirected
+            Deque<String> queue = new ArrayDeque<>();
+            queue.add(rm.name); visited.add(rm.name);
+            int size = 0;
+            while (!queue.isEmpty()) {
+                String cur = queue.poll(); size++;
+                // Forward edges
+                for (String nbr : adj.getOrDefault(cur, Collections.emptySet())) {
+                    if (visited.add(nbr)) queue.add(nbr);
+                }
+                // Reverse edges (undirected)
+                for (Map.Entry<String, Set<String>> entry : adj.entrySet()) {
+                    if (entry.getValue().contains(cur) && visited.add(entry.getKey())) {
+                        queue.add(entry.getKey());
+                    }
+                }
+            }
+            componentSizes.add(size);
+        }
+        int numComponents = componentSizes.size();
+        int lccSize = componentSizes.stream().mapToInt(Integer::intValue).max().orElse(0);
+        double lccPct = V > 0 ? 100.0 * lccSize / V : 0;
+
+        // compute chaining depth
         int maxChainDepth = computeMaxChainDepth(static_.metas);
+
+        System.out.printf("  B1  Dependency graph density:     %.4f%n", graphDensity);
+        System.out.printf("  B2  Largest connected component:  %.1f%%%n", lccPct);
+        System.out.printf("  B3  Connected components:         %d%n", numComponents);
         System.out.printf("  B4  Max chaining depth:           %d%n", maxChainDepth);
         System.out.println();
 
@@ -366,9 +447,9 @@ public class WikimediaCharacterizationCollector {
         System.out.printf("│ %-36s │ %-15d │%n", "A2  Max conditions/rule", static_.maxConditions);
         System.out.printf("│ %-36s │ %-15d │%n", "A6  Distinct input fact types", static_.eventTypes.size());
         System.out.printf("│ %-36s │ %-15.3f │%n", "A5  Alpha sharing ratio (proxy)", alphaSharingRatio);
-        System.out.printf("│ %-36s │ %-15.4f │%n", "B1  Dep. graph density", 0.0);
-        System.out.printf("│ %-36s │ %-14.1f%% │%n", "B2  Largest connected component", 0.0);
-        System.out.printf("│ %-36s │ %-15d │%n", "B3  Connected components", 0);
+        System.out.printf("│ %-36s │ %-15.4f │%n", "B1  Dep. graph density", graphDensity);
+        System.out.printf("│ %-36s │ %-14.1f%% │%n", "B2  Largest connected component", lccPct);
+        System.out.printf("│ %-36s │ %-15d │%n", "B3  Connected components", numComponents);
         System.out.printf("│ %-36s │ %-15d │%n", "B4  Max chaining depth", maxChainDepth);
         System.out.printf("│ %-36s │ %-15s │%n", "C1  Event arrival rate (ev/s)", formatRate(allEvents.size(), spanMs));
         System.out.printf("│ %-36s │ %-15.3f │%n", "C2  IAT coeff of variation (CV)", cvIAT);
