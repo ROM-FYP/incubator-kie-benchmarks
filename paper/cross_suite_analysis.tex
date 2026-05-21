@@ -23,13 +23,10 @@ The inter-arrival time~(IAT) coefficient of variation (CV) is $\sigma_{\mathrm{I
 computed per entity (aircraft, symbol, or user) and then aggregated; CV~$>$~1 classifies the
 stream as \emph{bursty}.
 
-\emph{Runtime dynamics} (Table~\ref{tab:runtime}) are collected during full-dataset replay
-through a pseudo-clock \texttt{KieSession} instrumented with agenda and working-memory~(WM) event
-listeners.
-Selectivity is the fraction of events that trigger at least one rule activation.
-Peak WM size is the maximum number of facts simultaneously present.
-Conflict-set size is sampled before each rule firing.
-Rule coverage is the fraction of rules that fire at least once.
+\emph{Runtime dynamics} (Table~\ref{tab:runtime}) are measured by replaying the full event dataset through a Drools stream-mode rule session whose internal clock is advanced to each event's original timestamp, preserving real-world inter-arrival patterns.
+Peak working memory size is the maximum number of facts held simultaneously in the session during replay.
+Rules fired per event is the average number of rule activations produced per incoming event.
+Rule coverage is the fraction of rules in the rule base that fire at least once during the full replay.
 
 \emph{Forward-chain depth activations} (Table~\ref{tab:depth}) assign each rule its depth $d$ in
 the dependency graph and report $P(d)$, the fraction of total activations at each depth.
@@ -77,13 +74,10 @@ IAT coeff.\ of variation (CV) & 1.156       & 4.203       & 9.958       \\
 \toprule
 \textbf{Property} & \textbf{AirTraffic} & \textbf{Binance} & \textbf{Wikimedia} \\
 \midrule
-Replay throughput (ev/s)  & 551        & 18,824  & 14,426  \\
-Selectivity               & 0.01\%     & 23.6\%  & 2.3\%   \\
-Peak WM size (facts)      & 31,678,857 & 172     & 13,009  \\
-Avg WM changes / event    & 24.54      & 11.25   & 6.51    \\
-Avg conflict-set size     & 246,211    & 3.97    & 1.01    \\
-Rules fired / event       & 39.44      & 15.72   & 3.69    \\
-Rule coverage             & 71.8\%     & 63.9\%  & 78.6\%  \\
+Replay throughput (ev/s)       & 551        & 18,824  & 14,426  \\
+Peak working memory (facts)    & 31,678,857 & 172     & 13,009  \\
+Rules fired / event            & 39.44      & 15.72   & 3.69    \\
+Rule coverage                  & 71.8\%     & 63.9\%  & 78.6\%  \\
 \bottomrule
 \end{tabular}
 \end{table}

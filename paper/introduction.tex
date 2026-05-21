@@ -13,7 +13,7 @@ When we examined the existing landscape --- rule-engine benchmarks, CEP system c
 This paper presents a multi-domain CEP benchmark suite covering three application domains --- financial trading (Binance cryptocurrency order-book), collaborative knowledge editing (Wikimedia recent-changes stream), and aviation surveillance (OpenSky Network ADS-B transponders) --- evaluated on Apache Drools with STREAM-mode execution. Our contributions are:
 
 \begin{enumerate}
-  \item \textbf{Three production-grade benchmark workloads}, each comprising a rule set derived from domain standards or operational practice, a real-world streaming dataset, and a reproducible replay harness.
+  \item \textbf{A benchmark suite spanning three real-world domains}, each comprising a rule set derived from domain standards or operational practice, data collectors for obtaining real-world streaming data from public APIs, and a reproducible replay harness.
   \item \textbf{An empirical cross-suite characterisation} covering static rule-base properties and dynamic runtime metrics, demonstrating how domain characteristics --- event arrival regularity, join complexity, and forward-chaining depth --- produce measurable and systematic differences in engine behaviour.
 \end{enumerate}
 

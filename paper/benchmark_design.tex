@@ -53,37 +53,42 @@ Failure on any criterion returned the process to Stage~2a.
 
 \subsection{Benchmark Domains}\label{sec:domains}
 
-Each domain exercises a distinct region of the CEP engine's capability space.
+The three benchmark domains are drawn from real-world operational contexts in which rule-based event processing is actively used.
 Fig.~\ref{fig:taxonomy} presents the processing taxonomy for each rule set.
 
 \textbf{Aviation surveillance.}
-Models an STCA system based on EUROCONTROL guidelines~\cite{eurocontrol_stca}.
-ADS-B data is refined through quality filtering, kinematic anomaly detection, grid-based pair generation, CPA computation, severity classification with persistence-based hysteresis, and an alerting policy layer.
-Stress profile: \emph{deep forward chaining} --- a single event triggers derived-fact cascades across all six phases.
+Models an STCA system based on EUROCONTROL guidelines~\cite{eurocontrol_stca} and uses data sourced from the OpenSky Network~\cite{schafer2014opensky}.
+ADS-B data is refined through quality filtering, kinematic anomaly detection, grid-based pair generation, Closest Point of Approach (CPA) computation --- which estimates the minimum separation distance and the time at which two aircraft will be closest --- severity classification with persistence-based hysteresis, and an alerting policy layer.
+Stress profile: \emph{deep forward chaining} --- a single state-vector event triggers derived-fact cascades across all six processing phases.
 
 \textbf{Financial market risk.}
-Implements a MiFID~II/RTS~6-compliant market-data risk engine for crypto-asset futures~\cite{esma_mifid2_art17, eu_rts6_2017}, ingesting order-book depth, trades, mark-price, and liquidation streams.
+Implements a market-data risk engine for crypto-asset futures, modelled on the algorithmic trading oversight principles of MiFID~II and RTS~6~\cite{esma_mifid2_art17, eu_rts6_2017}, ingesting order-book depth, trades, mark-price, and liquidation streams.
 Sliding-window rules detect trade-rate bursts and liquidation cascades.
 Stress profile: \emph{high-frequency state management} --- derived analytics are singleton facts per symbol, generating intensive WM updates under bursty arrival.
 
 \textbf{Collaborative editing moderation.}
 Models a real-time anti-vandalism and bot-governance pipeline for Wikipedia, based on the ORES framework~\cite{halfaker2020ores}.
-Five parallel pipelines (vandalism, bot, content, minor-edit, discussion) each progress through detection, analysis, verification, enforcement, and output stages.
-Stress profile: \emph{join-intensive multi-pattern evaluation} --- vandalism detection requires cross-product joins across deletion-size tiers, user reputation, and repeat-offender history; a correlation layer joins outputs from multiple pipelines.
+Five independent processing pipelines --- vandalism, bot activity, content addition, minor-edit, and discussion --- each progress through detection, analysis, verification, enforcement, and output stages.
+Vandalism detection is join-intensive: a single suspected edit must be matched against deletion-size tiers, user reputation history, and article quality scores simultaneously.
+In addition, a higher-level layer detects coordinated patterns by combining outcomes from across the independent pipelines --- for example, identifying users who trigger both vandalism and bot anomaly signals within the same time window.
+Stress profile: \emph{join-intensive multi-pattern evaluation} with cross-pipeline correlation.
 
 \begin{figure*}[t]
   \centering
   % Replace with your actual taxonomy diagram files:
-  % \includegraphics[width=0.32\textwidth]{figures/taxonomy_aviation.pdf}%
+  % Row 1: Aviation + Financial
+  % \includegraphics[width=0.47\textwidth]{figures/taxonomy_aviation.pdf}%
   % \hfill
-  % \includegraphics[width=0.32\textwidth]{figures/taxonomy_binance.pdf}%
-  % \hfill
-  % \includegraphics[width=0.32\textwidth]{figures/taxonomy_wikimedia.pdf}
-  \fbox{\parbox{0.31\textwidth}{\centering\vspace{4em}\textit{Aviation}\vspace{4em}}}%
+  % \includegraphics[width=0.47\textwidth]{figures/taxonomy_binance.pdf}
+  % \par\bigskip
+  % Row 2: Collaborative (centered)
+  % \includegraphics[width=0.47\textwidth]{figures/taxonomy_wikimedia.pdf}
+  % --- placeholder boxes ---
+  \fbox{\parbox{0.47\textwidth}{\centering\vspace{4em}\textit{Aviation}\vspace{4em}}}%
   \hfill
-  \fbox{\parbox{0.31\textwidth}{\centering\vspace{4em}\textit{Financial}\vspace{4em}}}%
-  \hfill
-  \fbox{\parbox{0.31\textwidth}{\centering\vspace{4em}\textit{Collaborative}\vspace{4em}}}
+  \fbox{\parbox{0.47\textwidth}{\centering\vspace{4em}\textit{Financial}\vspace{4em}}}%
+  \par\bigskip
+  \fbox{\parbox{0.47\textwidth}{\centering\vspace{4em}\textit{Collaborative}\vspace{4em}}}
   \caption{Six-phase processing taxonomies of the three benchmark rule sets. Each phase box shows its rule count; arrow labels denote intermediate fact types flowing between phases.}\label{fig:taxonomy}
 \end{figure*}
 
