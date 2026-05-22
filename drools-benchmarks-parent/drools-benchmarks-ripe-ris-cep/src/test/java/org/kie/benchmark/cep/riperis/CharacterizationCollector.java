@@ -188,217 +188,6 @@ public class CharacterizationCollector {
     }
 
     // -----------------------------------------------------------------------
-    // Static CEP / temporal-pattern analysis
-    // -----------------------------------------------------------------------
-    static class StaticTemporalMetrics {
-        long windowTimeCount;
-        long windowLengthCount;
-        long afterCount;
-        long beforeCount;
-        long coincidesCount;
-        long duringCount;
-        long includesCount;
-        long overlapsCount;
-        long overlappedByCount;
-        long startsCount;
-        long startedByCount;
-        long finishesCount;
-        long finishedByCount;
-        long meetsCount;
-        long metByCount;
-        long notCount;
-        long accumulateCount;
-        long evalCount;
-
-        long eventDeclarations;
-        long expiresAnnotations;
-        long timestampAnnotations;
-        long durationAnnotations;
-        long roleEventAnnotations;
-
-        long accumulateCountFn;
-        long accumulateSumFn;
-        long accumulateAverageFn;
-        long accumulateMinFn;
-        long accumulateMaxFn;
-        long accumulateCollectListFn;
-        long accumulateCollectSetFn;
-
-        long rulesWithWindowTime;
-        long rulesWithWindowLength;
-        long rulesWithTemporalOperator;
-        long rulesWithAccumulate;
-        long rulesWithNegativeTemporal;
-        long rulesWithAnyCepPattern;
-
-        final Map<String, Long> windowTimeArguments = new TreeMap<>();
-        final Map<String, Long> windowLengthArguments = new TreeMap<>();
-        final Map<String, Long> eventFactTypes = new TreeMap<>();
-        final Map<String, Long> temporalOperatorHistogram = new LinkedHashMap<>();
-        final Map<String, Long> topTemporalRules = new LinkedHashMap<>();
-
-        long totalTemporalOperators() {
-            return afterCount + beforeCount + coincidesCount + duringCount + includesCount
-                    + overlapsCount + overlappedByCount + startsCount + startedByCount
-                    + finishesCount + finishedByCount + meetsCount + metByCount;
-        }
-
-        long totalCepPatterns() {
-            return windowTimeCount + windowLengthCount + totalTemporalOperators() + accumulateCount;
-        }
-
-        long intervalOperatorCount() {
-            return duringCount + includesCount + overlapsCount + overlappedByCount
-                    + startsCount + startedByCount + finishesCount + finishedByCount
-                    + meetsCount + metByCount;
-        }
-    }
-
-    private static StaticTemporalMetrics analyzeTemporalPatterns(String drlContent) {
-        StaticTemporalMetrics m = new StaticTemporalMetrics();
-
-        m.windowTimeCount = count(drlContent, "\\bover\\s+window:time\\s*\\(");
-        m.windowLengthCount = count(drlContent, "\\bover\\s+window:length\\s*\\(");
-
-        m.afterCount = count(drlContent, "\\bafter\\b");
-        m.beforeCount = count(drlContent, "\\bbefore\\b");
-        m.coincidesCount = count(drlContent, "\\bcoincides\\b");
-        m.duringCount = count(drlContent, "\\bduring\\b");
-        m.includesCount = count(drlContent, "\\bincludes\\b");
-        m.overlapsCount = count(drlContent, "\\boverlaps\\b");
-        m.overlappedByCount = count(drlContent, "\\boverlappedby\\b");
-        m.startsCount = count(drlContent, "\\bstarts\\b");
-        m.startedByCount = count(drlContent, "\\bstartedby\\b");
-        m.finishesCount = count(drlContent, "\\bfinishes\\b");
-        m.finishedByCount = count(drlContent, "\\bfinishedby\\b");
-        m.meetsCount = count(drlContent, "\\bmeets\\b");
-        m.metByCount = count(drlContent, "\\bmetby\\b");
-
-        m.notCount = count(drlContent, "\\bnot\\b");
-        m.accumulateCount = count(drlContent, "\\baccumulate\\b");
-        m.evalCount = count(drlContent, "\\beval\\b");
-
-        m.eventDeclarations = count(drlContent, "(?s)declare\\s+\\w+.*?@role\\s*\\(\\s*event\\s*\\).*?end");
-        m.expiresAnnotations = count(drlContent, "@expires\\s*\\(");
-        m.timestampAnnotations = count(drlContent, "@timestamp\\s*\\(");
-        m.durationAnnotations = count(drlContent, "@duration\\s*\\(");
-        m.roleEventAnnotations = count(drlContent, "@role\\s*\\(\\s*event\\s*\\)");
-
-        m.accumulateCountFn = count(drlContent, "\\bcount\\s*\\(");
-        m.accumulateSumFn = count(drlContent, "\\bsum\\s*\\(");
-        m.accumulateAverageFn = count(drlContent, "\\baverage\\s*\\(");
-        m.accumulateMinFn = count(drlContent, "\\bmin\\s*\\(");
-        m.accumulateMaxFn = count(drlContent, "\\bmax\\s*\\(");
-        m.accumulateCollectListFn = count(drlContent, "\\bcollectList\\s*\\(");
-        m.accumulateCollectSetFn = count(drlContent, "\\bcollectSet\\s*\\(");
-
-        collectArguments(drlContent, "\\bover\\s+window:time\\s*\\(([^)]*)\\)", m.windowTimeArguments);
-        collectArguments(drlContent, "\\bover\\s+window:length\\s*\\(([^)]*)\\)", m.windowLengthArguments);
-        collectEventFactTypes(drlContent, m.eventFactTypes);
-
-        m.temporalOperatorHistogram.put("after", m.afterCount);
-        m.temporalOperatorHistogram.put("before", m.beforeCount);
-        m.temporalOperatorHistogram.put("coincides", m.coincidesCount);
-        m.temporalOperatorHistogram.put("during", m.duringCount);
-        m.temporalOperatorHistogram.put("includes", m.includesCount);
-        m.temporalOperatorHistogram.put("overlaps", m.overlapsCount);
-        m.temporalOperatorHistogram.put("overlappedby", m.overlappedByCount);
-        m.temporalOperatorHistogram.put("starts", m.startsCount);
-        m.temporalOperatorHistogram.put("startedby", m.startedByCount);
-        m.temporalOperatorHistogram.put("finishes", m.finishesCount);
-        m.temporalOperatorHistogram.put("finishedby", m.finishedByCount);
-        m.temporalOperatorHistogram.put("meets", m.meetsCount);
-        m.temporalOperatorHistogram.put("metby", m.metByCount);
-
-        analyzeTemporalRules(drlContent, m);
-
-        return m;
-    }
-
-    private static void collectArguments(String text, String regex, Map<String, Long> target) {
-        Matcher matcher = Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(text);
-        while (matcher.find()) {
-            String arg = matcher.group(1).replaceAll("\\s+", " ").trim();
-            if (!arg.isEmpty()) {
-                target.merge(arg, 1L, Long::sum);
-            }
-        }
-    }
-
-    private static void collectEventFactTypes(String drlContent, Map<String, Long> target) {
-        Pattern p = Pattern.compile("(?s)declare\\s+(\\w+).*?@role\\s*\\(\\s*event\\s*\\).*?end",
-                Pattern.CASE_INSENSITIVE);
-        Matcher matcher = p.matcher(drlContent);
-        while (matcher.find()) {
-            target.merge(matcher.group(1), 1L, Long::sum);
-        }
-    }
-
-    private static void analyzeTemporalRules(String drlContent, StaticTemporalMetrics metrics) {
-        Pattern rulePattern = Pattern.compile(
-                "(?s)rule\\s+[\"']([^\"']+)[\"'](.*?)\\bend\\b",
-                Pattern.CASE_INSENSITIVE);
-        Matcher matcher = rulePattern.matcher(drlContent);
-
-        Map<String, Long> temporalScoreByRule = new LinkedHashMap<>();
-
-        while (matcher.find()) {
-            String ruleName = matcher.group(1).trim();
-            String body = matcher.group(2);
-
-            long wt = count(body, "\\bover\\s+window:time\\s*\\(");
-            long wl = count(body, "\\bover\\s+window:length\\s*\\(");
-            long acc = count(body, "\\baccumulate\\b");
-            long nt = count(body, "\\bnot\\b");
-
-            long temporalOps = count(body, "\\bafter\\b")
-                    + count(body, "\\bbefore\\b")
-                    + count(body, "\\bcoincides\\b")
-                    + count(body, "\\bduring\\b")
-                    + count(body, "\\bincludes\\b")
-                    + count(body, "\\boverlaps\\b")
-                    + count(body, "\\boverlappedby\\b")
-                    + count(body, "\\bstarts\\b")
-                    + count(body, "\\bstartedby\\b")
-                    + count(body, "\\bfinishes\\b")
-                    + count(body, "\\bfinishedby\\b")
-                    + count(body, "\\bmeets\\b")
-                    + count(body, "\\bmetby\\b");
-
-            long total = wt + wl + acc + temporalOps;
-
-            if (wt > 0)
-                metrics.rulesWithWindowTime++;
-            if (wl > 0)
-                metrics.rulesWithWindowLength++;
-            if (temporalOps > 0)
-                metrics.rulesWithTemporalOperator++;
-            if (acc > 0)
-                metrics.rulesWithAccumulate++;
-            if (nt > 0 && temporalOps > 0)
-                metrics.rulesWithNegativeTemporal++;
-            if (total > 0) {
-                metrics.rulesWithAnyCepPattern++;
-                temporalScoreByRule.put(ruleName, total);
-            }
-        }
-
-        temporalScoreByRule.entrySet().stream()
-                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
-                .limit(15)
-                .forEach(e -> metrics.topTemporalRules.put(e.getKey(), e.getValue()));
-    }
-
-    private static void printMapInline(String label, Map<String, Long> map) {
-        String rendered = map.isEmpty()
-                ? "{}"
-                : map.entrySet().stream()
-                        .map(e -> e.getKey() + "=" + e.getValue())
-                        .collect(Collectors.joining(", ", "{", "}"));
-        System.out.printf("  %-36s %s%n", label + ":", rendered);
-    }
-
-    // -----------------------------------------------------------------------
     // Main
     // -----------------------------------------------------------------------
     public static void main(String[] args) throws Exception {
@@ -409,8 +198,8 @@ public class CharacterizationCollector {
 
         // ── Load DRL text for static analysis ──────────────────────────────
         String drlContent;
-        try (InputStream is = CharacterizationCollector.class.getResourceAsStream(
-                "/" + EnvConfig.get("RIPERIS_RULES_FILE"))) {
+        try (InputStream is = CharacterizationCollector.class
+                .getResourceAsStream("/" + EnvConfig.get("RIPERIS_RULES_FILE"))) {
             drlContent = new String(Objects.requireNonNull(is).readAllBytes(), StandardCharsets.UTF_8);
         }
 
@@ -437,20 +226,13 @@ public class CharacterizationCollector {
                 .flatMap(rm -> rm.getInputs().stream())
                 .collect(Collectors.toCollection(TreeSet::new));
 
-        // C8/C9: CEP / temporal-pattern complexity — regex scan of DRL text
-        StaticTemporalMetrics temporal = analyzeTemporalPatterns(drlContent);
-
-        long windowTimeCount = temporal.windowTimeCount;
-        long windowLenCount = temporal.windowLengthCount;
-        long afterCount = temporal.afterCount;
-        long beforeCount = temporal.beforeCount;
-        long coincidesCount = temporal.coincidesCount;
-        long intervalOperatorCount = temporal.intervalOperatorCount();
-        long temporalOperatorCount = temporal.totalTemporalOperators();
-        long notCount = temporal.notCount;
-        long accumCount = temporal.accumulateCount;
-        long evalCount = temporal.evalCount;
-        long totalCepPatternCount = temporal.totalCepPatterns();
+        // C8/C9: Pattern complexity — regex scan of DRL text
+        long windowTimeCount = count(drlContent, "window:time");
+        long windowLenCount = count(drlContent, "window:length");
+        long afterCount = count(drlContent, "\\bafter\\b");
+        long notCount = count(drlContent, "\\bnot\\b");
+        long accumCount = count(drlContent, "\\baccumulate\\b");
+        long evalCount = count(drlContent, "\\beval\\b");
 
         // A5: Alpha sharing — count unique alpha patterns (EventType + condition
         // combos)
@@ -475,44 +257,12 @@ public class CharacterizationCollector {
         System.out.printf("  A2  Condition distribution:       %s%n", condHistogram);
         System.out.printf("  A5  Alpha sharing ratio (proxy):  %.3f%n", alphaSharingRatio);
         System.out.printf("  A6  Distinct input fact types:    %d  → %s%n", allInputTypes.size(), allInputTypes);
-        System.out.printf("  C8  event declarations:           %d%n", temporal.eventDeclarations);
-        System.out.printf("  C8  @expires annotations:         %d%n", temporal.expiresAnnotations);
-        System.out.printf("  C8  @timestamp annotations:       %d%n", temporal.timestampAnnotations);
-        System.out.printf("  C8  @duration annotations:        %d%n", temporal.durationAnnotations);
-        System.out.printf("  C8  window:time occurrences:      %d  (rules=%d)%n",
-                windowTimeCount, temporal.rulesWithWindowTime);
-        System.out.printf("  C8  window:length occurrences:    %d  (rules=%d)%n",
-                windowLenCount, temporal.rulesWithWindowLength);
+        System.out.printf("  C8  window:time rules:            %d%n", windowTimeCount);
+        System.out.printf("  C8  window:length rules:          %d%n", windowLenCount);
         System.out.printf("  C9  'after' patterns:             %d%n", afterCount);
-        System.out.printf("  C9  'before' patterns:            %d%n", beforeCount);
-        System.out.printf("  C9  'coincides' patterns:         %d%n", coincidesCount);
-        System.out.printf("  C9  interval temporal operators:  %d%n", intervalOperatorCount);
-        System.out.printf("  C9  all temporal operators:       %d  (rules=%d)%n",
-                temporalOperatorCount, temporal.rulesWithTemporalOperator);
         System.out.printf("  C9  negation 'not' patterns:      %d%n", notCount);
-        System.out.printf("  C9  negative temporal rules:      %d%n", temporal.rulesWithNegativeTemporal);
-        System.out.printf("  C9  'accumulate' patterns:        %d  (rules=%d)%n",
-                accumCount, temporal.rulesWithAccumulate);
-        System.out.printf("  C9  'eval' patterns:              %d%n", evalCount);
-        System.out.printf("  C9  total CEP pattern occurrences:%d  (rules=%d)%n",
-                totalCepPatternCount, temporal.rulesWithAnyCepPattern);
-        printMapInline("  C8  window:time args", temporal.windowTimeArguments);
-        printMapInline("  C8  window:length args", temporal.windowLengthArguments);
-        printMapInline("  C9  temporal op histogram", temporal.temporalOperatorHistogram);
-        printMapInline("  C9  accumulate functions",
-                new LinkedHashMap<String, Long>() {
-                    {
-                        put("count", temporal.accumulateCountFn);
-                        put("sum", temporal.accumulateSumFn);
-                        put("average", temporal.accumulateAverageFn);
-                        put("min", temporal.accumulateMinFn);
-                        put("max", temporal.accumulateMaxFn);
-                        put("collectList", temporal.accumulateCollectListFn);
-                        put("collectSet", temporal.accumulateCollectSetFn);
-                    }
-                });
-        printMapInline("  C8  event fact types", temporal.eventFactTypes);
-        printMapInline("  C9  top temporal rules", temporal.topTemporalRules);
+        System.out.printf("  C9  'accumulate' patterns:        %d%n", accumCount);
+        System.out.printf("  C9  'eval' temporal patterns:     %d%n", evalCount);
         System.out.println();
 
         // ── B: Dependency graph metrics ─────────────────────────────────────
@@ -554,13 +304,8 @@ public class CharacterizationCollector {
 
         // ── D: Dataset / domain properties ─────────────────────────────────
         System.out.println("── [D] Data / Domain Properties ─────────────────────────");
-        String dataFile;
-        if (args != null && args.length > 0) {
-            dataFile = EnvConfig.get(args[0]);
-        } else {
-            dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
-        }
-        List<RisMessage> allEvents = RipeRisBaselineBenchmark.loadEvents(dataFile, Long.MAX_VALUE);
+        String dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
+        List<RisMessage> allEvents = RipeRisBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
         Set<String> peers = allEvents.stream().map(RisMessage::getPeer).filter(Objects::nonNull)
                 .collect(Collectors.toCollection(TreeSet::new));
 
@@ -632,8 +377,7 @@ public class CharacterizationCollector {
         System.out.println("── [C] Runtime Metrics (full replay) ────────────────────");
         System.out.printf("  Replaying %,d events...%n", allEvents.size());
 
-        CepSessionFactory factory = new CepSessionFactory(
-                EnvConfig.get("RIPERIS_RULES_FILE"));
+        CepSessionFactory factory = new CepSessionFactory(EnvConfig.get("RIPERIS_RULES_FILE"));
         KieSession session = factory.createSession(true);
         AgendaMetrics agendaM = new AgendaMetrics();
         WMMetrics wmM = new WMMetrics(session);
@@ -722,20 +466,9 @@ public class CharacterizationCollector {
         System.out.printf("│ %-36s │ %-15d │%n", "C6  Peak conflict set size", agendaM.peakConflictSet);
         System.out.printf("│ %-36s │ %-15.2f │%n", "C7  Rules fired per event", (double) totalFired / allEvents.size());
         System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Rule coverage on dataset", coveragePct);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  Event declarations", temporal.eventDeclarations);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  @expires annotations", temporal.expiresAnnotations);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time occurrences", windowTimeCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", temporal.rulesWithWindowTime);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length occurrences", windowLenCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", temporal.rulesWithWindowLength);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  after patterns", afterCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  before patterns", beforeCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  coincides patterns", coincidesCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  interval operators", intervalOperatorCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  all temporal operators", temporalOperatorCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  accumulate patterns", accumCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  negative temporal rules", temporal.rulesWithNegativeTemporal);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  Total CEP patterns", totalCepPatternCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", windowTimeCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", windowLenCount);
+        System.out.printf("│ %-36s │ %-15d │%n", "C9  Temporal CEP patterns", afterCount + notCount + accumCount);
         System.out.printf("│ %-36s │ %-15s │%n", "D1  Dataset size (events)", String.format("%,d", allEvents.size()));
         System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct peers", distinctPeers);
         System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct event types", distinctEventTypes);

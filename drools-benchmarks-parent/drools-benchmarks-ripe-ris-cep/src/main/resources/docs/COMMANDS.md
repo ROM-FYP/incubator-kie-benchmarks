@@ -94,7 +94,7 @@ mvn exec:java `
 ```powershell
 mvn exec:java `
   "-Dexec.mainClass=org.kie.benchmark.cep.riperis.runner.RipeRisBaselineBenchmark" `
-  "-Dexec.args=data/riperis_stream_1,6M.jsonl" `
+  "-Dexec.args=RIPERIS_DATA_FILE_1_6M" `
   --no-transfer-progress
 ```
 
@@ -111,17 +111,17 @@ always reads from a local JSONL file via pseudo-clock replay.
 ### 7. JMH baseline — default data file (50 K events)
 
 ```powershell
-java -cp target\drools-benchmarks-ripe-ris-cep-1.0-SNAPSHOT-shaded.jar `
+java -cp target\drools-benchmarks-ripe-ris-cep.jar `
   org.openjdk.jmh.Main RipeRisBaselineJmhBenchmark `
-  -p "dataFile=data/riperis_stream_50K.jsonl"
+  -p "dataFile=RIPERIS_DEFAULT_DATA_FILE"
 ```
 
 ### 8. JMH baseline — 1.6 M event file
 
 ```powershell
-java -cp target\drools-benchmarks-ripe-ris-cep-1.0-SNAPSHOT-shaded.jar `
+java -cp target\drools-benchmarks-ripe-ris-cep.jar `
   org.openjdk.jmh.Main RipeRisBaselineJmhBenchmark `
-  -p "dataFile=data/riperis_stream_1,6M.jsonl"
+  -p "dataFile=RIPERIS_DATA_FILE_1_6M"
 ```
 
 #### Optional JMH flags
@@ -137,9 +137,9 @@ Example with custom JVM heap and result file:
 
 ```powershell
 java -Xms8g -Xmx8g `
-  -cp target\drools-benchmarks-ripe-ris-cep-1.0-SNAPSHOT-shaded.jar `
+  -cp target\drools-benchmarks-ripe-ris-cep.jar `
   org.openjdk.jmh.Main RipeRisBaselineJmhBenchmark `
-  -p "dataFile=data/riperis_stream_1,6M.jsonl" `
+  -p "dataFile=RIPERIS_DATA_FILE_1_6M" `
   -wi 2 -i 5 -f 1 `
   -rff jmh-result.json
 ```
@@ -264,7 +264,7 @@ mvn test-compile exec:java `
   --no-transfer-progress
 
 # 5. Run JMH baseline (full 50K dataset, default warmup/measurement)
-java -cp target\drools-benchmarks-ripe-ris-cep-1.0-SNAPSHOT-shaded.jar `
+java -cp target\drools-benchmarks-ripe-ris-cep.jar `
   org.openjdk.jmh.Main RipeRisBaselineJmhBenchmark `
   -p "dataFile=RIPERIS_DEFAULT_DATA_FILE"
 ```
