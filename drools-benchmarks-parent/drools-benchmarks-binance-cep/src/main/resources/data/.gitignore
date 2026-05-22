@@ -1,0 +1,6 @@
+# Large dataset files — copy manually to EC2, never commit.
+**/*.jsonl.gz
+**/*.jsonl
+split_*/
+!.gitignore
+!README.md
