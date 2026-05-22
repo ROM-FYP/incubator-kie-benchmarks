@@ -70,7 +70,7 @@ public class CepSessionFactory {
                 throw new RuntimeException("Build errors: " + kieBuilder.getResults().toString());
             }
 
-            // Create KieBase with STREAM mode for CEP
+            // Create KieBase with STREAM mode for CEP.
             org.kie.api.KieBaseConfiguration kieBaseConfig = kieServices.newKieBaseConfiguration();
             kieBaseConfig.setOption(EventProcessingOption.STREAM);
 
@@ -98,6 +98,12 @@ public class CepSessionFactory {
         if (pseudoClock) {
             sessionConfig.setOption(org.kie.api.runtime.conf.ClockTypeOption.get("pseudo"));
         }
+
+        // Disable the parallel ForkJoin agenda to prevent 20+ workers from
+        // each queuing propagation tuples independently, which causes OOM
+        // during large-dataset replays. ThreadSafeOption.NO disables the
+        // parallel agenda and forces single-threaded rule evaluation.
+        sessionConfig.setOption(org.kie.api.runtime.conf.ThreadSafeOption.NO);
 
         return kieBase.newKieSession(sessionConfig, null);
     }

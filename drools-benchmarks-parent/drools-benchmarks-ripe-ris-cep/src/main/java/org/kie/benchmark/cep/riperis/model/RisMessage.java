@@ -57,6 +57,7 @@ public class RisMessage implements Serializable {
     public void setId(String id) { this.id = id; }
     public double getTimestamp() { return timestamp; }
     public void setTimestamp(double timestamp) { this.timestamp = timestamp; }
+    public long getTimestampMs() { return (long) (timestamp * 1000); }
     public String getPeer() { return peer; }
     public void setPeer(String peer) { this.peer = peer; }
     public String getPeerAsn() { return peerAsn; }

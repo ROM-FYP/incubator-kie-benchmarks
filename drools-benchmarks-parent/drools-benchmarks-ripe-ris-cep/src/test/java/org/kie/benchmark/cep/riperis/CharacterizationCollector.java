@@ -39,6 +39,10 @@ import org.kie.benchmark.cep.riperis.runner.RipeRisBaselineBenchmark;
 import org.kie.benchmark.cep.riperis.util.CepSessionFactory;
 import org.kie.benchmark.cep.riperis.util.EnvConfig;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -63,6 +67,7 @@ import java.util.stream.Collectors;
  * -Dexec.classpathScope=test --no-transfer-progress
  */
 public class CharacterizationCollector {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // -----------------------------------------------------------------------
     // A) Agenda listener — coverage + conflict set + selectivity
@@ -75,18 +80,16 @@ public class CharacterizationCollector {
         long conflictSetSamples = 0L;
         long conflictSetSum = 0L;
         long peakConflictSet = 0L;
-        // Selectivity: set of event indices that triggered at least one rule
-        final Set<Long> selectiveEventTs = new HashSet<>();
-        // Current event timestamp being processed (set by replay loop)
-        long currentEventTs = -1;
+        // Selectivity: track if the current event triggered any match
+        long selectiveEventsCount = 0L;
+        boolean currentEventTriggered = false;
 
         @Override
         public void matchCreated(MatchCreatedEvent e) {
             currentConflictSet++;
             if (currentConflictSet > peakConflictSet)
                 peakConflictSet = currentConflictSet;
-            if (currentEventTs >= 0)
-                selectiveEventTs.add(currentEventTs);
+            currentEventTriggered = true;
         }
 
         @Override
@@ -304,78 +307,16 @@ public class CharacterizationCollector {
 
         // ── D: Dataset / domain properties ─────────────────────────────────
         System.out.println("── [D] Data / Domain Properties ─────────────────────────");
-        String dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
-        List<RisMessage> allEvents = RipeRisBaselineBenchmark.loadEvents(dataFile, Integer.MAX_VALUE);
-        Set<String> peers = allEvents.stream().map(RisMessage::getPeer).filter(Objects::nonNull)
-                .collect(Collectors.toCollection(TreeSet::new));
+        String dataFileKey = (args.length > 0) ? args[0] : "RIPERIS_DEFAULT_DATA_FILE";
+        String dataFile = EnvConfig.get(dataFileKey);
 
-        // D2: Attribute cardinality
-        long distinctPeers = peers.size();
-        long distinctEventTypes = allEvents.stream().map(RisMessage::getBgpType).filter(Objects::nonNull).distinct()
-                .count();
-
-        // D3 / C1 / C2: Temporal distribution and velocity profile.
-        // Sort by timestamp to find dataset wall-clock span.
-        // Use per-peer IAT to avoid cross-peer interleaving gaps skewing CV.
-        long[] timestamps = allEvents.stream().mapToLong(e -> (long) (e.getTimestamp() * 1000)).toArray();
-        Arrays.sort(timestamps);
-        long spanMs = timestamps.length > 0 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
-        // C1: arrival rate from dataset time span (how fast events arrive in real-time)
-        double arrivalRatePerSec = spanMs > 0 ? allEvents.size() * 1000.0 / spanMs : 0;
-
-        // C2: Compute per-peer IATs to get meaningful velocity profile.
-        // Cross-peer interleaving creates artificially large IAT gaps.
+        long eventCount = 0L;
+        Set<String> peers = new TreeSet<>();
+        Map<String, Long> eventTypeDist = new LinkedHashMap<>();
+        double minTimestamp = Double.MAX_VALUE;
+        double maxTimestamp = Double.MIN_VALUE;
         List<Double> allIATs = new ArrayList<>();
-        Map<String, List<Long>> perPeerTs = new LinkedHashMap<>();
-        for (RisMessage ev : allEvents) {
-            if (ev.getPeer() != null) {
-                perPeerTs.computeIfAbsent(ev.getPeer(), k -> new ArrayList<>()).add((long) (ev.getTimestamp() * 1000));
-            }
-        }
-        for (List<Long> tsList : perPeerTs.values()) {
-            Collections.sort(tsList);
-            for (int i = 1; i < tsList.size(); i++) {
-                allIATs.add((double) (tsList.get(i) - tsList.get(i - 1)));
-            }
-        }
-        Collections.sort(allIATs);
-        double medianIAT = allIATs.isEmpty() ? 0 : allIATs.get(allIATs.size() / 2);
-        double sumIAT = 0;
-        double sumIAT2 = 0;
-        for (double iat : allIATs) {
-            sumIAT += iat;
-            sumIAT2 += iat * iat;
-        }
-        double meanIAT = allIATs.isEmpty() ? 0 : sumIAT / allIATs.size();
-        double varIAT = allIATs.isEmpty() ? 0 : (sumIAT2 / allIATs.size()) - (meanIAT * meanIAT);
-        double stdIAT = Math.sqrt(Math.max(0, varIAT));
-        double cvIAT = meanIAT > 0 ? stdIAT / meanIAT : 0;
-        String velocityClass = cvIAT > 1.0 ? "BURSTY" : (cvIAT > 0.5 ? "MODERATE" : "STEADY/PERIODIC");
-
-        // Event type distribution
-        Map<String, Long> eventTypeDist = allEvents.stream()
-                .filter(e -> e.getBgpType() != null)
-                .collect(Collectors.groupingBy(RisMessage::getBgpType, Collectors.counting()));
-
-        System.out.printf("  D1  Total events in dataset:      %,d%n", allEvents.size());
-        System.out.printf("  D1  Time span:                    %,d ms (%.1f min)%n", spanMs, spanMs / 60000.0);
-        System.out.printf("  D2  Distinct peers:               %d → %s%n", distinctPeers, peers);
-        System.out.printf("  D2  Distinct event types:         %d%n", distinctEventTypes);
-        System.out.printf("  D3  Event type distribution:      %s%n",
-                eventTypeDist.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                        .map(e -> e.getKey() + "=" + String.format("%.1f%%", 100.0 * e.getValue() / allEvents.size()))
-                        .collect(Collectors.joining(", ")));
-        System.out.printf("  C1  Event arrival rate (dataset): %.0f events/sec%n", arrivalRatePerSec);
-        System.out.printf("  C2  Dataset wall-clock span:      %,d ms (%.1f min)%n", spanMs, spanMs / 60000.0);
-        System.out.printf("  C2  Mean per-peer IAT:            %.2f ms%n", meanIAT);
-        System.out.printf("  C2  Median per-peer IAT:          %.2f ms%n", medianIAT);
-        System.out.printf("  C2  IAT std dev (per-peer):       %.2f ms%n", stdIAT);
-        System.out.printf("  C2  Coeff of variation (CV):      %.3f → %s%n", cvIAT, velocityClass);
-        System.out.println();
-
-        // ── C: Runtime metrics (full replay) ───────────────────────────────
-        System.out.println("── [C] Runtime Metrics (full replay) ────────────────────");
-        System.out.printf("  Replaying %,d events...%n", allEvents.size());
+        Map<String, Long> lastTsPerPeer = new HashMap<>();
 
         CepSessionFactory factory = new CepSessionFactory(EnvConfig.get("RIPERIS_RULES_FILE"));
         KieSession session = factory.createSession(true);
@@ -390,22 +331,113 @@ public class CharacterizationCollector {
                 .map(Rule::getName)
                 .collect(Collectors.toCollection(TreeSet::new));
 
-        // Replay with per-event ts tracking for selectivity
         long t0 = System.currentTimeMillis();
-        // Manual replay to track per-event selectivity
         long totalFired = 0;
         org.drools.core.time.SessionPseudoClock clock = session.getSessionClock();
-        long prevTs = allEvents.isEmpty() ? 0L : (long) (allEvents.get(0).getTimestamp() * 1000);
-        for (RisMessage ev : allEvents) {
-            long evTs = (long) (ev.getTimestamp() * 1000);
-            if (evTs > prevTs) {
-                clock.advanceTime(evTs - prevTs, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        System.out.println("  Streaming and replaying events from: " + dataFile);
+        try (BufferedReader reader = new BufferedReader(new FileReader(new File(dataFile)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> envelope = MAPPER.readValue(line, Map.class);
+                    RisMessage ev = RisMessage.fromRisLiveEnvelope(envelope);
+                    if (ev != null) {
+                        eventCount++;
+
+                        // Dynamic statistics collection
+                        String peer = ev.getPeer();
+                        if (peer != null) {
+                            peers.add(peer);
+                            long currentTsMs = (long) (ev.getTimestamp() * 1000);
+                            Long lastTs = lastTsPerPeer.get(peer);
+                            if (lastTs != null) {
+                                allIATs.add((double) (currentTsMs - lastTs));
+                            }
+                            lastTsPerPeer.put(peer, currentTsMs);
+                        }
+
+                        String bgpType = ev.getBgpType();
+                        if (bgpType != null) {
+                            eventTypeDist.merge(bgpType, 1L, Long::sum);
+                        }
+
+                        double ts = ev.getTimestamp();
+                        if (ts < minTimestamp) {
+                            minTimestamp = ts;
+                        }
+                        if (ts > maxTimestamp) {
+                            maxTimestamp = ts;
+                        }
+
+                        // Replay into session
+                        long eventTimeMs = (long) (ts * 1000);
+                        long currentTime = clock.getCurrentTime();
+                        if (eventTimeMs > currentTime) {
+                            clock.advanceTime(eventTimeMs - currentTime, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        }
+
+                        agendaM.currentEventTriggered = false;
+                        session.insert(ev);
+                        totalFired += session.fireAllRules();
+                        if (agendaM.currentEventTriggered) {
+                            agendaM.selectiveEventsCount++;
+                        }
+
+                        if (eventCount % 100000 == 0) {
+                            System.out.printf("    %,d events processed...%n", eventCount);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Skip malformed lines
+                }
             }
-            prevTs = evTs;
-            agendaM.currentEventTs = evTs;
-            session.insert(ev);
-            totalFired += session.fireAllRules();
         }
+
+        long distinctPeers = peers.size();
+        long distinctEventTypes = eventTypeDist.size();
+        long spanMs = (eventCount > 0 && maxTimestamp >= minTimestamp) ? (long) ((maxTimestamp - minTimestamp) * 1000) : 0;
+        double arrivalRatePerSec = spanMs > 0 ? eventCount * 1000.0 / spanMs : 0;
+
+        Collections.sort(allIATs);
+        double medianIAT = allIATs.isEmpty() ? 0 : allIATs.get(allIATs.size() / 2);
+        double sumIAT = 0;
+        double sumIAT2 = 0;
+        for (double iat : allIATs) {
+            sumIAT += iat;
+            sumIAT2 += iat * iat;
+        }
+        double meanIAT = allIATs.isEmpty() ? 0 : sumIAT / allIATs.size();
+        double varIAT = allIATs.isEmpty() ? 0 : (sumIAT2 / allIATs.size()) - (meanIAT * meanIAT);
+        double stdIAT = Math.sqrt(Math.max(0, varIAT));
+        double cvIAT = meanIAT > 0 ? stdIAT / meanIAT : 0;
+        String velocityClass = cvIAT > 1.0 ? "BURSTY" : (cvIAT > 0.5 ? "MODERATE" : "STEADY/PERIODIC");
+
+        final long finalEventCount = eventCount;
+        System.out.printf("  D1  Total events in dataset:      %,d%n", eventCount);
+        System.out.printf("  D1  Time span:                    %,d ms (%.1f min)%n", spanMs, spanMs / 60000.0);
+        System.out.printf("  D2  Distinct peers:               %d → %s%n", distinctPeers, peers);
+        System.out.printf("  D2  Distinct event types:         %d%n", distinctEventTypes);
+        System.out.printf("  D3  Event type distribution:      %s%n",
+                eventTypeDist.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                        .map(e -> e.getKey() + "=" + String.format("%.1f%%", 100.0 * e.getValue() / finalEventCount))
+                        .collect(Collectors.joining(", ")));
+        System.out.printf("  C1  Event arrival rate (dataset): %.0f events/sec%n", arrivalRatePerSec);
+        System.out.printf("  C2  Dataset wall-clock span:      %,d ms (%.1f min)%n", spanMs, spanMs / 60000.0);
+        System.out.printf("  C2  Mean per-peer IAT:            %.2f ms%n", meanIAT);
+        System.out.printf("  C2  Median per-peer IAT:          %.2f ms%n", medianIAT);
+        System.out.printf("  C2  IAT std dev (per-peer):       %.2f ms%n", stdIAT);
+        System.out.printf("  C2  Coeff of variation (CV):      %.3f → %s%n", cvIAT, velocityClass);
+        System.out.println();
+
+        // ── C: Runtime metrics (full replay) ───────────────────────────────
+        System.out.println("── [C] Runtime Metrics (full replay) ────────────────────");
+        System.out.printf("  Replaying %,d events...%n", eventCount);
+
         long replayMs = System.currentTimeMillis() - t0;
         long peakWM = wmM.peakFactCount;
         long endWM = session.getFactCount();
@@ -414,25 +446,25 @@ public class CharacterizationCollector {
         Set<String> firedRuleNames = agendaM.fireCounts.keySet();
         long coveredCount = allRuleNames.stream().filter(firedRuleNames::contains).count();
         double coveragePct = allRuleNames.isEmpty() ? 0 : 100.0 * coveredCount / allRuleNames.size();
-        long selectiveEvents = agendaM.selectiveEventTs.size();
-        double selectivity = allEvents.isEmpty() ? 0 : 100.0 * selectiveEvents / allEvents.size();
+        long selectiveEvents = agendaM.selectiveEventsCount;
+        double selectivity = eventCount == 0 ? 0 : 100.0 * selectiveEvents / eventCount;
 
         System.out.printf("  C1  Replay throughput:            %.0f events/sec%n",
-                replayMs > 0 ? allEvents.size() * 1000.0 / replayMs : 0);
+                replayMs > 0 ? eventCount * 1000.0 / replayMs : 0);
         System.out.printf("  C3  Selectivity:                  %.1f%% of events trigger ≥1 rule (%,d/%,d)%n",
-                selectivity, selectiveEvents, allEvents.size());
+                selectivity, selectiveEvents, eventCount);
         System.out.printf("  C4  Peak WM size:                 %,d facts%n", peakWM);
         System.out.printf("  C4  End-of-replay WM size:        %,d facts%n", endWM);
         System.out.printf("  C4  Avg WM size (sampled):        %.1f facts%n", wmM.avgFactCount());
         System.out.printf("  C5  Total WM changes:             %,d (ins=%,d  ret=%,d  upd=%,d)%n",
                 wmM.totalWMChanges(), wmM.insertions.get(), wmM.retractions.get(), wmM.updates.get());
         System.out.printf("  C5  Avg WM changes/event:         %.2f%n",
-                allEvents.isEmpty() ? 0 : (double) wmM.totalWMChanges() / allEvents.size());
+                eventCount == 0 ? 0 : (double) wmM.totalWMChanges() / eventCount);
         System.out.printf("  C6  Avg conflict set size:        %.2f activations%n", agendaM.avgConflictSet());
         System.out.printf("  C6  Peak conflict set size:       %d activations%n", agendaM.peakConflictSet);
         System.out.printf("  C7  Total rule activations:       %,d%n", totalFired);
         System.out.printf("  C7  Rules fired per event:        %.2f%n",
-                allEvents.isEmpty() ? 0 : (double) totalFired / allEvents.size());
+                eventCount == 0 ? 0 : (double) totalFired / eventCount);
         System.out.printf("  C3  Rule coverage:                %.1f%% (%d/%d rules fired ≥1x)%n",
                 coveragePct, coveredCount, allRuleNames.size());
         System.out.println();
@@ -461,15 +493,15 @@ public class CharacterizationCollector {
         System.out.printf("│ %-36s │ %-15d │%n", "C4  Peak WM size (facts)", peakWM);
         System.out.printf("│ %-36s │ %-15.1f │%n", "C4  Avg WM size (facts)", wmM.avgFactCount());
         System.out.printf("│ %-36s │ %-15.2f │%n", "C5  Avg WM changes/event",
-                (double) wmM.totalWMChanges() / allEvents.size());
+                eventCount == 0 ? 0 : (double) wmM.totalWMChanges() / eventCount);
         System.out.printf("│ %-36s │ %-15.2f │%n", "C6  Avg conflict set size", agendaM.avgConflictSet());
         System.out.printf("│ %-36s │ %-15d │%n", "C6  Peak conflict set size", agendaM.peakConflictSet);
-        System.out.printf("│ %-36s │ %-15.2f │%n", "C7  Rules fired per event", (double) totalFired / allEvents.size());
+        System.out.printf("│ %-36s │ %-15.2f │%n", "C7  Rules fired per event", eventCount == 0 ? 0 : (double) totalFired / eventCount);
         System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Rule coverage on dataset", coveragePct);
         System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", windowTimeCount);
         System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", windowLenCount);
         System.out.printf("│ %-36s │ %-15d │%n", "C9  Temporal CEP patterns", afterCount + notCount + accumCount);
-        System.out.printf("│ %-36s │ %-15s │%n", "D1  Dataset size (events)", String.format("%,d", allEvents.size()));
+        System.out.printf("│ %-36s │ %-15s │%n", "D1  Dataset size (events)", String.format("%,d", eventCount));
         System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct peers", distinctPeers);
         System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct event types", distinctEventTypes);
         System.out.printf("│ %-36s │ %-15s │%n", "D4  Data provenance", "RIPE RIS Live");
@@ -522,7 +554,7 @@ public class CharacterizationCollector {
                 catFiredRules.merge(cat, 1L, Long::sum);
         }
 
-        long totalEvts = allEvents.size();
+        long totalEvts = eventCount;
         long totalActs = totalFired;
         System.out.printf("  %-35s  %6s  %8s  %10s  %8s  %8s%n",
                 "Category", "Rules", "Fired", "Activns", "P(fire)", "% of total");

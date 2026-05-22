@@ -48,10 +48,7 @@
       <groupId>org.kie</groupId>
       <artifactId>kie-internal</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.drools</groupId>
-      <artifactId>drools-tms</artifactId>
-    </dependency>
+
 
     <!-- Jackson for JSON parsing -->
     <dependency>

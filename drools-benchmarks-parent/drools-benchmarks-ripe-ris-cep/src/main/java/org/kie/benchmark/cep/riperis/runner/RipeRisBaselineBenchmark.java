@@ -57,51 +57,62 @@ public class RipeRisBaselineBenchmark {
             dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
         }
 
-        // 1. Load events
-        System.out.println("[Baseline] Loading events from: " + dataFile);
-        List<RisMessage> events = loadEvents(dataFile, maxEvents);
-        System.out.printf("[Baseline] Loaded %,d events%n", events.size());
-
-        // 2. Build session
+        // 1. Build session
         System.out.println("[Baseline] Initializing Drools session (pseudo-clock, STREAM mode)...");
         CepSessionFactory factory = new CepSessionFactory(DRL_PATH);
         KieSession session = factory.createSession(true);
 
-        // 3. Replay
-        System.out.printf("[Baseline] Ingesting %,d events...%n", events.size());
+        // 2. Replay
+        System.out.println("[Baseline] Ingesting events from: " + dataFile);
         long t0 = System.currentTimeMillis();
         long totalFirings = 0L;
+        long eventCount = 0L;
 
         SessionPseudoClock clock = session.getSessionClock();
 
-        for (int i = 0; i < events.size(); i++) {
-            RisMessage event = events.get(i);
+        try (BufferedReader reader = new BufferedReader(new FileReader(new File(dataFile)))) {
+            String line;
+            while ((line = reader.readLine()) != null && eventCount < maxEvents) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> envelope = MAPPER.readValue(line, Map.class);
+                    RisMessage event = RisMessage.fromRisLiveEnvelope(envelope);
+                    if (event != null) {
+                        eventCount++;
 
-            // Advance clock to event time (convert seconds to ms)
-            long eventTimeMs = (long) (event.getTimestamp() * 1000);
-            long currentTime = clock.getCurrentTime();
-            if (eventTimeMs > currentTime) {
-                clock.advanceTime(eventTimeMs - currentTime, TimeUnit.MILLISECONDS);
-            }
+                        // Advance clock to event time (convert seconds to ms)
+                        long eventTimeMs = (long) (event.getTimestamp() * 1000);
+                        long currentTime = clock.getCurrentTime();
+                        if (eventTimeMs > currentTime) {
+                            clock.advanceTime(eventTimeMs - currentTime, TimeUnit.MILLISECONDS);
+                        }
 
-            session.insert(event);
-            totalFirings += session.fireAllRules();
+                        session.insert(event);
+                        totalFirings += session.fireAllRules();
 
-            if ((i + 1) % 5000 == 0) {
-                System.out.printf("[Baseline]   %,d / %,d events ingested...%n", i + 1, events.size());
+                        if (eventCount % 5000 == 0) {
+                            System.out.printf("[Baseline]   %,d events ingested...%n", eventCount);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Skip malformed lines
+                }
             }
         }
 
         long elapsed = System.currentTimeMillis() - t0;
 
-        // 4. Report
+        // 3. Report
         System.out.println("========================================");
         System.out.println("RIPE RIS BASELINE BENCHMARK RESULTS");
         System.out.println("========================================");
-        System.out.printf("Events Ingested : %,d%n", events.size());
+        System.out.printf("Events Ingested : %,d%n", eventCount);
         System.out.printf("Rules Fired     : %,d%n", totalFirings);
         System.out.printf("Duration        : %,d ms (%.2f s)%n", elapsed, elapsed / 1000.0);
-        System.out.printf("Throughput      : %,.0f events/sec%n", events.size() / (elapsed / 1000.0));
+        System.out.printf("Throughput      : %,.0f events/sec%n", eventCount / (elapsed / 1000.0));
         System.out.printf("Cost/Rule       : %.2f µs/rule%n",
                 (elapsed * 1000.0) / Math.max(1, totalFirings));
         System.out.println("========================================");
