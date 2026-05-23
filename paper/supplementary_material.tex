@@ -1,0 +1,105 @@
+\documentclass{article}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{Supplementary Material: Validating Benchmark Regulatory Compliance}
+\date{}
+\author{}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This supplementary document provides the artifacts, data sources, and prompt methodologies used to derive and validate the domain-specific Complex Event Processing (CEP) benchmark rule sets presented in the main paper. It aims to ensure full reproducibility and transparency regarding the Large Language Model (LLM) assisted generation and semantic validation pipelines.
+
+\section{Repository and Data Access}
+\textbf{Main Repository:} \url{https://github.com/apache/incubator-kie-benchmarks} % Update if using a specific fork/branch
+
+\vspace{1em}
+\noindent\textbf{DRL Rule Sets:}
+The complete Drools Rule Language (DRL) files can be found in the following repository paths:
+\begin{itemize}
+    \item \textbf{Aviation (OpenSky):} \texttt{drools-benchmarks-parent/drools-benchmarks-opensky-airTrafficking/src/main/resources/rules/}
+    \item \textbf{Financial (Binance):} \texttt{drools-benchmarks-parent/drools-benchmarks-binance-cep/src/main/resources/rules/}
+    \item \textbf{Collaborative (Wikimedia):} \texttt{drools-benchmarks-parent/drools-benchmarks-cep-wikimedia/src/main/resources/rules/}
+\end{itemize}
+
+\vspace{1em}
+\noindent\textbf{Datasets:}
+The pre-collected event streams used to drive the replay engines are located at:
+\begin{itemize}
+    \item \texttt{[INSERT REPO PATH TO DATASETS HERE]}
+\end{itemize}
+
+\section{Dataset Metadata}
+Table~\ref{tab:metadata} outlines the properties of the datasets utilized to replay events through the CEP engine.
+
+\begin{table}[h]
+\centering
+\caption{Dataset characteristics used for benchmark replay.}\label{tab:metadata}
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Domain} & \textbf{Date Range / Duration} & \textbf{Event Count} & \textbf{File Size} \\
+\midrule
+Aviation (OpenSky) & [INSERT DATE RANGE] & [INSERT COUNT] & [INSERT SIZE] \\
+Financial (Binance) & [INSERT DATE RANGE] & [INSERT COUNT] & [INSERT SIZE] \\
+Collaborative (Wikimedia) & [INSERT DATE RANGE] & [INSERT COUNT] & [INSERT SIZE] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{LLM Prompting Methodology}
+The benchmark rule sets were initially generated and later semantically validated using LLM assistance. Below are the generalized prompt templates utilized in these processes.
+
+\subsection{Stage 1: Initial Rule Generation Prompt}
+The following prompt was used to guide the LLM in translating unstructured regulatory guidelines into a structured DRL skeleton.
+
+\begin{verbatim}
+You are an expert Drools (DRL) developer and domain architect. 
+I am providing you with the text of the following authoritative guideline: 
+[INSERT GUIDELINE DOCUMENT NAME/URL].
+
+Your task is to design a Complex Event Processing (CEP) rule set based EXACTLY 
+on the operational requirements, thresholds, and processing pipelines described 
+in this document.
+
+Follow these instructions:
+1. Identify the core risk-control pillars or operational workflows required.
+2. Define the necessary Java Fact types (events) and their temporal metadata 
+   (@Role(event), @Expires).
+3. Write DRL rules that implement the logic described in the guidelines.
+4. Structure the rules into a multi-stage pipeline using forward chaining 
+   (e.g., Detect -> Analyze -> Verify -> Enforce).
+5. Ensure you use Drools temporal operators (after, before, over window:time) 
+   where the guidelines specify time-based constraints or sliding windows.
+6. Provide brief comments above each rule citing the specific section of the 
+   guidelines it addresses.
+\end{verbatim}
+
+\subsection{Stage 2b: Semantic Validation Prompt}
+To validate the human-refined DRL against the original guidelines without relying solely on code coverage, the following prompt was used to conduct a semantic cross-reference audit.
+
+\begin{verbatim}
+Assume that you are a rigorous reviewer at the RuleML+RR conference. 
+Your task is to validate the claim that the provided DRL rule set was directly 
+derived from the following authoritative guideline: 
+[INSERT GUIDELINE DOCUMENT NAME/URL].
+
+I will provide you with the contents of the DRL file: [INSERT PATH TO DRL].
+
+Please conduct a thorough, systematic cross-reference audit:
+1. Extract the core requirements, mathematical models, and operational 
+   workflows from the provided guideline document.
+2. Map each requirement to the specific DRL rules that implement it.
+3. Verify that temporal constraints, mathematical formulas, and risk-control 
+   pillars (e.g., execution throttles, alerts, spatial bucketing) align 
+   semantically with the text.
+4. Identify any "Gaps" (guideline requirements missing from the code) or 
+   "Divergences" (code that contradicts the guidelines).
+5. Conclude with an overall assessment of whether the claim of derivation 
+   is substantiated.
+\end{verbatim}
+
+\end{document}

@@ -1,0 +1,58 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "org.kie.benchmark.binance.BinanceFullDatasetBenchmark.benchmarkFullReplay",
+        "mode" : "thrpt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/usr/lib/jvm/java-17-amazon-corretto/bin/java",
+        "jvmArgs" : [
+            "-Xms4g",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "17.0.19",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "17.0.19+10-LTS",
+        "warmupIterations" : 1,
+        "warmupTime" : "30 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "60 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "mode" : "baseline"
+        },
+        "primaryMetric" : {
+            "score" : 0.014699370309769727,
+            "scoreError" : 0.0010270002949463743,
+            "scoreConfidence" : [
+                0.013672370014823352,
+                0.0157263706047161
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.014650603118244804,
+                "50.0" : 0.014686534794714462,
+                "90.0" : 0.014760973016349913,
+                "95.0" : 0.014760973016349913,
+                "99.0" : 0.014760973016349913,
+                "99.9" : 0.014760973016349913,
+                "99.99" : 0.014760973016349913,
+                "99.999" : 0.014760973016349913,
+                "99.9999" : 0.014760973016349913,
+                "100.0" : 0.014760973016349913
+            },
+            "scoreUnit" : "ops/s",
+            "rawData" : [
+                [
+                    0.014760973016349913,
+                    0.014686534794714462,
+                    0.014650603118244804
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+

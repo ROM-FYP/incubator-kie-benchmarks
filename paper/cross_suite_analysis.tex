@@ -23,13 +23,9 @@ The inter-arrival time~(IAT) coefficient of variation (CV) is $\sigma_{\mathrm{I
 computed per entity (aircraft, symbol, or user) and then aggregated; CV~$>$~1 classifies the
 stream as \emph{bursty}.
 
-\emph{Runtime dynamics} (Table~\ref{tab:runtime}) are measured by replaying the full event dataset through a Drools stream-mode rule session whose internal clock is advanced to each event's original timestamp, preserving real-world inter-arrival patterns.
-Peak working memory size is the maximum number of facts held simultaneously in the session during replay.
-Rules fired per event is the average number of rule activations produced per incoming event.
-Rule coverage is the fraction of rules in the rule base that fire at least once during the full replay.
+\emph{Runtime dynamics and coverage-variant analysis} (Table~\ref{tab:runtime}) are measured by replaying the event dataset through a Drools stream-mode rule session whose internal clock is advanced to each event's original timestamp, preserving real-world inter-arrival patterns. This analysis is performed on the initial baseline dataset and two reduced-coverage dataset variants per domain, which are produced by modifying event field values to progressively suppress pipeline entry conditions while keeping the rule base and event count (${\sim}1.6$M) unchanged. We report peak working memory size (maximum facts held simultaneously), rules fired per event, throughput, latency, and rule coverage.
 
-\emph{Forward-chain depth activations} (Table~\ref{tab:depth}) assign each rule its depth $d$ in
-the dependency graph and report $P(d)$, the fraction of total activations at each depth.
+\emph{Forward-chain depth activations} (Table~\ref{tab:depth}) are measured for the initial baseline dataset only. We assign each rule its depth $d$ in the dependency graph and report $P(d)$, the fraction of total activations at each depth.
 
 \begin{table}[t]
 \centering
@@ -68,22 +64,6 @@ IAT coeff.\ of variation (CV) & 1.156       & 4.203       & 9.958       \\
 
 \begin{table}[t]
 \centering
-\caption{Runtime engine behaviour metrics.}\label{tab:runtime}
-\small
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-\textbf{Property} & \textbf{AirTraffic} & \textbf{Binance} & \textbf{Wikimedia} \\
-\midrule
-Replay throughput (ev/s)       & 551        & 18,824  & 14,426  \\
-Peak working memory (facts)    & 31,678,857 & 172     & 13,009  \\
-Rules fired / event            & 39.44      & 15.72   & 3.69    \\
-Rule coverage                  & 71.8\%     & 63.9\%  & 78.6\%  \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[t]
-\centering
 \caption{Forward-chain depth activation probability $P(d)$: fraction of depth-assigned
 activations at each depth. Cross-cutting WM monitors (R098, R099) are excluded from the
 AirTraffic distribution; Binance and Wikimedia terminate at depths~3 and~5
@@ -101,3 +81,31 @@ Wikimedia  & 69.3\% & 29.8\% & 0.22\% & 0.22\%& 0.22\%& 0.22\%& ---    & ---   \
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{table}[t]
+\caption{Runtime dynamics and coverage-variant analysis. All variants preserve ${\sim}1.6$M events.}\label{tab:runtime}\label{sec:coverage-analysis}
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{l rrr rrr rrr}
+\toprule
+ & \multicolumn{3}{c}{\textbf{AirTraffic}}
+ & \multicolumn{3}{c}{\textbf{Binance}}
+ & \multicolumn{3}{c}{\textbf{Wikimedia}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+Metric & Base & Med & Low & Base & Med & Low & Base & Med & Low \\
+\midrule
+Coverage (\%)       & 71.8 & 68.9 & 28.2 & 63.9 & 56.5 & 44.4 & 78.6 & 57.1 & 24.3 \\
+Rules fired\,/\,evt & 39.4 & 11.5 & 18.4 & 15.7 & 3.59 & 3.35 & 3.69 & 2.63 & 0.07 \\
+Peak WM (facts)     & 31.7M & 12.0M & 18.7M & 172 & 172 & 162 & 13K & 12.3K & 6.3K \\
+Throughput (ev/s)   & 2,636 & 7,127 & 13,147 & 23,515 & 23,821 & 23,518 & 1,891 & 44,297 & 76,812 \\
+Latency (s)         & 607.0 & 224.5 & 121.7 & 68.0 & 67.2 & 68.0 & 845.9 & 36.1 & 20.8 \\
+Peak Heap (MB)      & 16,286 & 2,872 & {---} & 73 & 73 & 73 & 73 & 73 & 73 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three observations emerge.
+First, \textbf{coverage is driven by stream diversity, not volume}: in Binance, removing TRADE events (88.5\% of the dataset) reduces coverage by only 7.4\,pp, whereas the additional 1.1\% MARK events account for a further 12.1\,pp reduction.
+Second, \textbf{cross-pipeline starvation cascades} are visible: in Wikimedia, disabling the Content pipeline eliminates \texttt{ArticleQuality} join partners required by five Vandalism-verification rules at depths~2--3, causing coverage loss beyond the directly disabled pipeline.
+Third, \textbf{irreducible structural cores} define per-domain coverage floors: the Binance DEPTH backbone alone sustains 44.4\% coverage (48\,/\,108 rules), representing the minimum achievable without degrading the benchmark's architectural integrity.

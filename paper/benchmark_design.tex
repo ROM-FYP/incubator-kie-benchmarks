@@ -37,9 +37,12 @@ Collaborative   & ORES revision quality~\cite{halfaker2020ores}
 Generated rules were manually corrected: temporal operators were aligned with domain semantics, numeric thresholds adjusted to guideline values, chaining paths restructured into multi-level derivation pipelines, and deduplication/retraction logic added for realistic WM management.
 
 \textbf{Stage~2b: Validation.}
-After each refinement cycle, the rule set was replayed against pre-collected data dumps using the characterisation collector.
-Validation criteria included: chaining depth matching the expected pipeline topology, rule coverage $>$60\%, temporal operators present across categories, and stable memory under 400K+ events.
-Failure on any criterion returned the process to Stage~2a.
+Following human refinement, the rule sets underwent an LLM-assisted semantic validation against their respective authoritative guidelines.
+Rather than relying on structural or coverage metrics, this process focused on ensuring semantic correctness.
+The LLM was tasked with performing a systematic cross-reference audit, directly mapping the implemented DRL logic---such as temporal constraints, mathematical models, and processing pipelines---back to the core pillars and operational workflows defined in the source documents.
+Any semantic divergence, missing regulatory constraints, or misaligned domain logic identified during this audit returned the process to Stage~2a for further correction.
+
+To study how input-stream composition affects rule activation, we also produced two additional dataset variants per domain by selectively modifying event field values --- leaving the rule base unchanged --- so that progressively fewer pipeline entry conditions are satisfied, while keeping the event count at ${\sim}1.6$M (Section~\ref{sec:coverage-analysis}).
 
 \begin{figure}[t]
   \centering
@@ -57,21 +60,19 @@ The three benchmark domains are drawn from real-world operational contexts in wh
 Fig.~\ref{fig:taxonomy} presents the processing taxonomy for each rule set.
 
 \textbf{Aviation surveillance.}
-Models an STCA system based on EUROCONTROL guidelines~\cite{eurocontrol_stca} and uses data sourced from the OpenSky Network~\cite{schafer2014opensky}.
-ADS-B data is refined through quality filtering, kinematic anomaly detection, grid-based pair generation, Closest Point of Approach (CPA) computation --- which estimates the minimum separation distance and the time at which two aircraft will be closest --- severity classification with persistence-based hysteresis, and an alerting policy layer.
-Stress profile: \emph{deep forward chaining} --- a single state-vector event triggers derived-fact cascades across all six processing phases.
+Models an STCA system per EUROCONTROL guidelines~\cite{eurocontrol_stca} using OpenSky Network data~\cite{schafer2014opensky}.
+ADS-B events pass through quality filtering, kinematic anomaly detection, spatial pair generation, Closest Point of Approach (CPA) computation, and alert classification.
+Stress profile: \emph{deep forward chaining}---single events trigger derived-fact cascades across all processing phases.
 
 \textbf{Financial market risk.}
-Implements a market-data risk engine for crypto-asset futures, modelled on the algorithmic trading oversight principles of MiFID~II and RTS~6~\cite{esma_mifid2_art17, eu_rts6_2017}, ingesting order-book depth, trades, mark-price, and liquidation streams.
+Implements a crypto-asset risk engine based on MiFID~II and RTS~6 principles~\cite{esma_mifid2_art17, eu_rts6_2017}, ingesting order-book, trade, and liquidation streams.
 Sliding-window rules detect trade-rate bursts and liquidation cascades.
-Stress profile: \emph{high-frequency state management} --- derived analytics are singleton facts per symbol, generating intensive WM updates under bursty arrival.
+Stress profile: \emph{high-frequency state management}---intensive WM updates via singleton facts per symbol.
 
 \textbf{Collaborative editing moderation.}
-Models a real-time anti-vandalism and bot-governance pipeline for Wikipedia, based on the ORES framework~\cite{halfaker2020ores}.
-Five independent processing pipelines --- vandalism, bot activity, content addition, minor-edit, and discussion --- each progress through detection, analysis, verification, enforcement, and output stages.
-Vandalism detection is join-intensive: a single suspected edit must be matched against deletion-size tiers, user reputation history, and article quality scores simultaneously.
-In addition, a higher-level layer detects coordinated patterns by combining outcomes from across the independent pipelines --- for example, identifying users who trigger both vandalism and bot anomaly signals within the same time window.
-Stress profile: \emph{join-intensive multi-pattern evaluation} with cross-pipeline correlation.
+Models a Wikipedia anti-vandalism system based on the ORES framework~\cite{halfaker2020ores}.
+Five parallel pipelines evaluate edits, while a higher-level layer correlates cross-pipeline outcomes (e.g., concurrent vandalism and bot anomalies).
+Stress profile: \emph{join-intensive multi-pattern evaluation}---single edits are simultaneously matched against deletion tiers, user histories, and article quality scores.
 
 \begin{figure*}[t]
   \centering
@@ -95,4 +96,9 @@ Stress profile: \emph{join-intensive multi-pattern evaluation} with cross-pipeli
 \subsection{Benchmarking Infrastructure}\label{sec:infra}
 
 Each benchmark is driven by a replay engine that feeds a pre-collected event dump into a streaming-mode rule session with a controllable pseudo-clock, advanced to each event's original timestamp to preserve real-world inter-arrival patterns.
-Benchmarks are implemented as JMH microbenchmarks within the Apache KIE \texttt{incubator-kie-benchmarks} repository, replaying the full event sequence to measure end-to-end throughput under controlled warm-up and iteration parameters.
+Benchmarks are implemented as JMH microbenchmarks within the Apache KIE \texttt{incubator-kie-benchmarks} repository, replaying the full event sequence to measure end-to-end throughput.
+
+All experiments were executed on an AWS EC2 \texttt{m7i-flex.large} instance (2 vCPUs, 4th Generation Intel Xeon Scalable processors at 3.2 GHz, 8 GiB RAM) running Red Hat Enterprise Linux. 
+The benchmarks utilized Java Development Kit (JDK) 17 and the Drools/KIE engine main development branch (version \texttt{999-SNAPSHOT}, corresponding to the upcoming Apache KIE 10 release).
+The Java Microbenchmark Harness (JMH) was configured for \texttt{SingleShotTime} execution mode, capturing throughput over 30 warmup iterations and 20 measurement iterations.
+The complete data collection scripts, data artifacts, and benchmark source code are available within the repository.

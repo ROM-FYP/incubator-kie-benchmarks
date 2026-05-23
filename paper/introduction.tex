@@ -4,17 +4,18 @@
 % References resolved from references.bib
 % ============================================================
 
+
 \section{Introduction}\label{sec:intro}
 
-Rule-based systems are widely deployed in high-stakes domains --- air traffic control, financial surveillance, and clinical decision support --- yet the benchmarking literature has not kept pace with their use in streaming contexts. Existing performance evaluations for production rule engines such as Drools rely predominantly on classical workloads designed for static, in-memory reasoning. When temporal operators, event expiration, and stream-mode execution are introduced, systematic and reproducible evaluation becomes difficult due to the absence of suitable benchmark suites.
+Rule-based systems are widely deployed in high-stakes domains such as air traffic control, financial surveillance, and clinical decision support, yet existing benchmarks for production rule engines such as Drools target static, in-memory workloads. No benchmark simultaneously provides: (i)~a \emph{real-world} streaming dataset, (ii)~a domain-derived rule set, (iii)~native temporal CEP operators, and (iv)~a structural characterisation of the rule base. Dayarathna and Perera~\cite{dayarathna2018event} note the absence of agreed-upon streaming benchmarks --- a gap that remains open today.
 
-When we examined the existing landscape --- rule-engine benchmarks, CEP system comparisons, and stream-processing suites --- we found no benchmark that simultaneously addresses all four of the following: (i)~a \emph{real-world} streaming dataset, (ii)~a domain-derived, semantically grounded rule set, (iii)~native temporal CEP operators, and (iv)~a structural characterisation of the rule base itself. Each existing effort covers at most two of these dimensions. This gap is well-documented: Dayarathna and Perera~\cite{dayarathna2018event} conclude that ``there are few widely agreed-upon benchmarks for EP,'' and Bizarro et al.~\cite{bizarro2011bicep} note ``no agreed-upon benchmarks in the CEP community'' --- observations that remain valid today.
-
-This paper presents a multi-domain CEP benchmark suite covering three application domains --- financial trading (Binance cryptocurrency order-book), collaborative knowledge editing (Wikimedia recent-changes stream), and aviation surveillance (OpenSky Network ADS-B transponders) --- evaluated on Apache Drools with STREAM-mode execution. Our contributions are:
+This paper presents a multi-domain CEP benchmark suite covering financial trading (Binance), collaborative editing (Wikimedia), and aviation surveillance (OpenSky), evaluated on Apache Drools in STREAM mode. Our contributions are:
 
 \begin{enumerate}
   \item \textbf{A benchmark suite spanning three real-world domains}, each comprising a rule set derived from domain standards or operational practice, data collectors for obtaining real-world streaming data from public APIs, and a reproducible replay harness.
-  \item \textbf{An empirical cross-suite characterisation} covering static rule-base properties and dynamic runtime metrics, demonstrating how domain characteristics --- event arrival regularity, join complexity, and forward-chaining depth --- produce measurable and systematic differences in engine behaviour.
+  \item \textbf{An empirical cross-suite characterisation} covering static rule-base properties and dynamic runtime metrics, including controlled coverage-variation experiments, demonstrating how domain characteristics --- event arrival regularity, join complexity, and forward-chaining depth --- produce measurable differences in engine behaviour.
 \end{enumerate}
 
-The remainder of this paper is organised as follows. Section~\ref{sec:related} surveys related work and positions the proposed suite relative to prior benchmarks. Section~3 describes the benchmark design and creation process, covering the publicly available domain guidelines used to derive each rule set and the shared replay architecture. Section~4 presents the cross-suite analysis, reporting characterisation metrics, execution time, and throughput across all three domains. Section~5 discusses directions for future work and concludes.
+Section~\ref{sec:related} surveys related work; Section~3 describes benchmark design; Section~4 presents the cross-suite analysis including coverage-variant experiments; Section~5 concludes.
+
+

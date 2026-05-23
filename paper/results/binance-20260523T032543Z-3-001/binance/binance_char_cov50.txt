@@ -1,0 +1,236 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] --------------< org.drools:drools-benchmarks-binance-cep >--------------
+[INFO] Building Drools :: Benchmarks :: Binance CEP 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.6.3:java (default-cli) @ drools-benchmarks-binance-cep ---
+╔══════════════════════════════════════════════════════╗
+║  Binance CEP Benchmark — Characterization Collector  ║
+╚══════════════════════════════════════════════════════╝
+
+── [A] Static Rule-Base Properties ─────────────────────
+  A1  Total rules (R):              108
+  A2  Avg conditions/rule:          2.02  (max=4, min=1)
+  A2  Condition distribution:       {1 cond=21, 2 cond=69, 3 cond=13, 4+ cond=5}
+  A5  Alpha sharing ratio (proxy):  0.899
+  A6  Distinct input fact types:    22  → [BestBidAsk, DepthState, DepthUpdateTick, DislocationEscalation, FeedHealth, ImbalanceState, LiquidationStats, MarkDivergencePulsar, MarkIndexState, MarkPriceTick, MarketEvent, MicroVolatilityRisk, MicrostructureStress, ModeState, Number, RiskConfig, SignificantTrade, SpreadState, SpreadVelocityState, TradeStats, TradeSweepImpact, VolState]
+  C8  window:time rules:            3
+  C8  window:length rules:          0
+  C9  'after' patterns:             0
+  C9  negation 'not' patterns:      18
+  C9  'accumulate' patterns:        3
+  C9  'eval' temporal patterns:     27
+
+── [B] Dependency / Structural Properties ───────────────
+  B1  Dependency graph density:     0.0755
+  B2  Largest connected component:  100.0%
+  B3  Connected components:         1
+  B4  Max chaining depth:           5
+
+── [D] Data / Domain Properties ─────────────────────────
+In an eval expression [( $bid + $ask ) > 0 && $mark > 0] : '$ask' comes from previous pattern 'BestBidAsk'. '$bid' comes from previous pattern 'BestBidAsk'. '$mark' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [( $t - System.currentTimeMillis() ) > $f || ( System.currentTimeMillis() - $t ) > $p] : '$f' comes from previous pattern 'RiskConfig'. '$p' comes from previous pattern 'RiskConfig'. '$t' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$bid >= $ask] : '$ask' comes from previous pattern 'MarketEvent'. '$bid' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lt > 0 && ( System.currentTimeMillis() - $lb ) > $bookStale] : '$bookStale' comes from previous pattern 'RiskConfig'. '$lb' comes from previous pattern 'FeedHealth'. '$lt' comes from previous pattern 'FeedHealth'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [( $bid + $ask ) > 0 && $mark > 0] : '$ask' comes from previous pattern 'BestBidAsk'. '$bid' comes from previous pattern 'BestBidAsk'. '$mark' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lb > 0 && ( System.currentTimeMillis() - $lt ) > $tradeStale] : '$lb' comes from previous pattern 'FeedHealth'. '$lt' comes from previous pattern 'FeedHealth'. '$tradeStale' comes from previous pattern 'RiskConfig'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$lm > 0 && ( System.currentTimeMillis() - $lm ) > $ms] : '$lm' comes from previous pattern 'FeedHealth'. '$ms' comes from previous pattern 'RiskConfig'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$li > 0 && ( System.currentTimeMillis() - $li ) > $is] : '$is' comes from previous pattern 'RiskConfig'. '$li' comes from previous pattern 'FeedHealth'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$h.getLastBookTsMs() > 0 && $t < $h.getLastBookTsMs()] : '$h' comes from previous pattern 'FeedHealth'. '$t' comes from previous pattern 'MarketEvent'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+In an eval expression [$last > 0 && ( System.currentTimeMillis() - $last ) > $hb] : '$hb' comes from previous pattern 'RiskConfig'. '$last' comes from previous pattern 'FeedHealth'. Consider placing the constraint in the pattern and removing the eval if possible, as eval is not performance-efficient.
+More eval warnings will be suppressed...
+Loaded rules from: /rules/taxonomy.drl [mode=baseline]
+Loaded 1600000 events from dataset: split_1600k_cov50
+  D1  Total events in dataset:      1,600,000
+  D1  Time span:                    1,775,422 ms (29.6 min)
+  D2  Distinct symbols:             10 → [ADAUSDT, ARBUSDT, AVAXUSDT, BNBUSDT, BTCUSDT, DOGEUSDT, ETHUSDT, LINKUSDT, SOLUSDT, XRPUSDT]
+  D2  Distinct event types:         3
+  D2  Distinct p1 values (×100):    7,858 (near-continuous)
+  D3  Event type distribution:      NEUTRAL=88.6%, DEPTH=10.3%, MARK=1.1%
+  C1  Event arrival rate (dataset): 901 events/sec
+  C2  Dataset wall-clock span:      1,775,422 ms (29.6 min)
+  C2  Mean per-symbol IAT:          11.10 ms
+  C2  Median per-symbol IAT:        0.00 ms
+  C2  IAT std dev (per-symbol):     46.95 ms
+  C2  Coeff of variation (CV):      4.232 → BURSTY
+
+── [C] Runtime Metrics (full replay) ────────────────────
+  Replaying 1,600,000 events...
+  C1  Replay throughput:            67530 events/sec
+  C3  Selectivity:                  23.5% of events trigger ≥1 rule (376,604/1,600,000)
+  C4  Peak WM size:                 172 facts
+  C4  End-of-replay WM size:        170 facts
+  C4  Avg WM size (sampled):        170.8 facts
+  C5  Total WM changes:             5,620,932 (ins=1,780,181  ret=1,780,011  upd=2,060,740)
+  C5  Avg WM changes/event:         3.51
+  C6  Avg conflict set size:        5.15 activations
+  C6  Peak conflict set size:       150 activations
+  C7  Total rule activations:       5,745,792
+  C7  Rules fired per event:        3.59
+  C3  Rule coverage:                56.5% (61/108 rules fired ≥1x)
+
+╔══════════════════════════════════════════════════════╗
+║         CHARACTERIZATION TABLE (Paper-ready)         ║
+╚══════════════════════════════════════════════════════╝
+│ Property                             │ Binance CEP     │
+├──────────────────────────────────────┼─────────────────┤
+│ A1  Rules (R)                        │ 108             │
+│ A2  Avg conditions/rule              │ 2.02            │
+│ A2  Max conditions/rule              │ 4               │
+│ A6  Distinct input fact types        │ 22              │
+│ A5  Alpha sharing ratio (proxy)      │ 0.899           │
+│ B1  Dep. graph density               │ 0.0755          │
+│ B2  Largest connected component      │ 100.0         % │
+│ B3  Connected components             │ 1               │
+│ B4  Max chaining depth               │ 5               │
+│ C1  Event arrival rate (ev/s)        │ 901             │
+│ C2  IAT coeff of variation (CV)      │ 4.232           │
+│ C2  Velocity class                   │ BURSTY          │
+│ C3  Selectivity                      │ 23.5          % │
+│ C4  Peak WM size (facts)             │ 172             │
+│ C4  Avg WM size (facts)              │ 170.8           │
+│ C5  Avg WM changes/event             │ 3.51            │
+│ C6  Avg conflict set size            │ 5.15            │
+│ C6  Peak conflict set size           │ 150             │
+│ C7  Rules fired per event            │ 3.59            │
+│ C3  Rule coverage on dataset         │ 56.5          % │
+│ C8  window:time rules                │ 3               │
+│ C8  window:length rules              │ 0               │
+│ C9  Temporal CEP patterns            │ 21              │
+│ D1  Dataset size (events)            │ 1,600,000       │
+│ D2  Distinct symbols                 │ 10              │
+│ D2  Distinct event types             │ 3               │
+│ D4  Data provenance                  │ Binance WebSocket │
+└──────────────────────────────────────┴─────────────────┘
+
+── Per-Rule Activation Counts (top 20) ─────────────────
+  A08_UnexpectedMessageType                                1,416,930
+  A03_TimestampSkewBound                                     183,070
+  B16_LateEventRateHigh                                      183,070
+  CLEANUP_RetractProcessedEvent                              183,070
+  G56_DislocationPlusThinBook                                172,573
+  UPD_LastSeen_Depth                                         165,470
+  B13_BookActiveTradeSilent                                  165,470
+  C25_BookAgeStale                                           165,470
+  F52_RegimeNormalizationEligibility                         162,431
+  E34_DepthTiering                                           162,421
+  F43_VolTiering                                             162,421
+  K77_Beta_AssessMicroVolRisk                                162,421
+  K78_Beta_EmitMicroVolSignal                                162,421
+  DERIVE_BestBidAsk_Update                                   162,411
+  DERIVE_DepthState_Update                                   162,411
+  UPD_VolSpreadProxy                                         162,411
+  E33_SpreadComputeAndTier_Update                            162,411
+  E38_ImbalanceComputeTier_Update                            162,411
+  K75_Alpha_DepthUpdate                                      162,411
+  K76_Beta_SpreadVelocity                                    162,411
+
+── Rules That NEVER Fired ───────────────────────────────
+  ❌ A01_MissingRequiredFields
+  ❌ A02_InvalidNumerics
+  ❌ A04_SymbolAllowlist
+  ❌ A05_MonotonicPerStreamDetect
+  ❌ A07_DecodeErrorsQuarantine
+  ❌ B09_HeartbeatMissing
+  ❌ B10_ReconnectStorm
+  ❌ B11_StreamSilenceButOpen
+  ❌ B12_TradeActiveBookSilent
+  ❌ B15_StaleIndex
+  ❌ B17_OutOfOrderBurst
+  ❌ B18_PersistentBookGaps
+  ❌ BOOTSTRAP_FeedHealth
+  ❌ BOOTSTRAP_ModeState
+  ❌ C19_CrossedBook
+  ❌ C20_NegativeOrZeroSpreadPersistent
+  ❌ C26_BookSequenceDiscontinuityUnrecovered
+  ❌ CLEANUP_RetractSignificantTrade
+  ❌ D27_TradePriceOutOfBandVsMid
+  ❌ D28_TradeSizeOutlier
+  ❌ D29_TradeTimestampRegression
+  ❌ D32_TradesWhileBookStale
+  ❌ E39_ImbalancePersistence
+  ❌ F47_VolSpike
+  ❌ F48_VolPersistenceHigh
+  ❌ F50_BookDrivenMove
+  ❌ F51_RegimeShiftToSafe
+  ❌ G58_IndexStaleButMarkMoving
+  ❌ G59_MarkStaleButMarketActive
+  ❌ H62_LiqBurstJump
+  ❌ H66_CascadePersistenceEscalate
+  ❌ I70_EnterHalted_KillSwitchLatch
+  ❌ J71_Alpha_SignificantTrade
+  ❌ J72_Beta_ComputeSweepImpact
+  ❌ J73_Beta_AssessMicrostructureStress
+  ❌ J74_Beta_EmitStressSignal
+  ❌ M83_SignificantTradeDuringSpreadVelocity
+  ❌ M85_TradeBurstCountWindow
+  ❌ M87_CompoundSystemicRisk
+  ❌ N88_CompoundLiquidityTripleThreat
+  ❌ N89_DislocationVolatilityConvergence
+  ❌ N90_LiquidationStorm
+  ❌ RECOVERY_ExitSafeToThrottled
+  ❌ RECOVERY_ExitThrottledToNormal
+  ❌ UPD_LastSeen_Heartbeat
+  ❌ UPD_LastSeen_Index
+  ❌ UPD_LastSeen_Trade
+
+── [E] Category Activations per Event ───────────────────
+  Acts/Evt = category_activations / total_events
+
+  Category                              Rules     Fired     Activns  Acts/Evt  % of total
+  ----------------------------------------------------------------------------------
+  A  Ingestion & Schema                     8         3   1,601,018    1.0006    27.86%
+  E  Derived Metrics (Spread/Depth)        11        10   1,084,311    0.6777    18.87%
+  INFRA / LIFECYCLE                        29        21   1,033,514    0.6459    17.99%
+  K  Forward Chain (Micro-Vol)              4         4     649,664    0.4060    11.31%
+  B  Feed Health & Connectivity            10         3     366,140    0.2288     6.37%
+  F  Volatility Regime                      6         2     324,852    0.2030     5.65%
+  C  Order Book Validity                    5         2     250,352    0.1565     4.36%
+  G  Mark/Index Dislocation                 8         6     207,618    0.1298     3.61%
+  M  Temporal CEP Sequences                 5         2     158,093    0.0988     2.75%
+  L  Forward Chain (Mark Diverge)           4         4      70,420    0.0440     1.23%
+  H  Liquidation Cascade                    4         2          30    0.0000     0.00%
+  D  Trade Tape Sanity                      5         1          10    0.0000     0.00%
+  I  Policy FSM (Mode Control)              2         1          10    0.0000     0.00%
+  J  Forward Chain (Trade Sweep)            4         0           0    0.0000     0.00%
+  N  Compound Systemic Risk                 3         0           0    0.0000     0.00%
+
+── [F] Forward Chain Depth Activations per Event ────────
+  Entry point: MarketEvent (externally inserted by Java replay loop)
+  Acts/Evt = activations_at_depth_d / total_events
+
+  Depth     Rules   Fired     Activations   Acts/Evt  Ratio(D0)
+  ------------------------------------------------------------
+  Depth 0        7         2     1,600,000    1.0000     1.0000
+  Depth 1       28        14     1,400,572    0.8754     0.8754
+  Depth 2       26        14     1,097,667    0.6860     0.6860
+  Depth 3       29        18     1,287,641    0.8048     0.8048
+  Depth 4       10         7       360,092    0.2251     0.2251
+  Depth 5        1         0             0    0.0000     0.0000
+  Other          7         6            60    0.0000        N/A
+
+  Depth-level rule membership:
+  Depth 0: A01_MissingRequiredFields, A02_InvalidNumerics, A04_SymbolAllowlist, A07_DecodeErrorsQuarantine, A08_UnexpectedMessageType, B10_ReconnectStorm, CLEANUP_RetractProcessedEvent
+  Depth 1: A03_TimestampSkewBound, A05_MonotonicPerStreamDetect, A06_PriceQtyPrecisionBounds, B09_HeartbeatMissing, B12_TradeActiveBookSilent, B13_BookActiveTradeSilent, B14_StaleMark, B15_StaleIndex, B16_LateEventRateHigh, B17_OutOfOrderBurst, BOOTSTRAP_DepthState, BOOTSTRAP_FeedHealth, C19_CrossedBook, C26_BookSequenceDiscontinuityUnrecovered, D28_TradeSizeOutlier, D29_TradeTimestampRegression, DERIVE_BestBidAsk_New, DERIVE_BestBidAsk_Update, DERIVE_DepthState_Update, E34_DepthTiering, J71_Alpha_SignificantTrade, K75_Alpha_DepthUpdate, L79_Alpha_MarkPriceUpdate, UPD_LastSeen_Depth, UPD_LastSeen_Heartbeat, UPD_LastSeen_Index, UPD_LastSeen_Mark, UPD_LastSeen_Trade
+  Depth 2: B11_StreamSilenceButOpen, B18_PersistentBookGaps, BOOTSTRAP_ModeState, BOOTSTRAP_VolState, C20_NegativeOrZeroSpreadPersistent, C21_TopJumpNoTrades, C25_BookAgeStale, CLEANUP_RetractDepthUpdateTick, CLEANUP_RetractMarkPriceTick, CLEANUP_RetractSignificantTrade, D27_TradePriceOutOfBandVsMid, D32_TradesWhileBookStale, E33_SpreadComputeAndTier_New, E33_SpreadComputeAndTier_Update, E38_ImbalanceComputeTier_New, E38_ImbalanceComputeTier_Update, F43_VolTiering, G53_MarkIndexDivergence_New, G53_MarkIndexDivergence_Update, G58_IndexStaleButMarkMoving, G59_MarkStaleButMarketActive, I68_EnterThrottled_OnDegraded, I70_EnterHalted_KillSwitchLatch, RECOVERY_ExitSafeToThrottled, RECOVERY_ExitThrottledToNormal, UPD_VolSpreadProxy
+  Depth 3: BOOTSTRAP_MarkDivergencePulsar, BOOTSTRAP_SpreadVelocityState, BOOTSTRAP_TradeSweepImpact, E35_DepthCollapse, E36_SpreadBlowout, E37_PersistentThinLiquidity, E39_ImbalancePersistence, E40_ImbalanceFlipFlop, E41_LiquidityStressCombine, F47_VolSpike, F48_VolPersistenceHigh, F50_BookDrivenMove, F51_RegimeShiftToSafe, F52_RegimeNormalizationEligibility, G54_ComputeMarkMidDivergence, G55_DislocationPersistence, G56_DislocationPlusThinBook, G60_SuddenDivergenceReversalFlag, H66_CascadePersistenceEscalate, H67_CascadeCooldownEligibility, J72_Beta_ComputeSweepImpact, K76_Beta_SpreadVelocity, L80_Beta_MarkDivergence, M84_DepthCollapseAfterSpreadBlowout, M85_TradeBurstCountWindow, M86_PersistentMarkDislocationNoRecovery, N88_CompoundLiquidityTripleThreat, N89_DislocationVolatilityConvergence, N90_LiquidationStorm
+  Depth 4: BOOTSTRAP_DislocationEscalation, BOOTSTRAP_MicroVolatilityRisk, BOOTSTRAP_MicrostructureStress, J73_Beta_AssessMicrostructureStress, J74_Beta_EmitStressSignal, K77_Beta_AssessMicroVolRisk, K78_Beta_EmitMicroVolSignal, L81_Beta_AssessDislocation, L82_Beta_EmitDislocationSignal, M83_SignificantTradeDuringSpreadVelocity
+  Depth 5: M87_CompoundSystemicRisk
+[WARNING] thread Thread[#29,ForkJoinPool-1-worker-1,5,org.kie.benchmark.binance.CharacterizationCollector] was interrupted but is still alive after waiting at least 15000msecs
+[WARNING] thread Thread[#29,ForkJoinPool-1-worker-1,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#30,ForkJoinPool-1-worker-2,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#31,ForkJoinPool-1-worker-3,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#32,ForkJoinPool-1-worker-4,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#33,drools-worker-1,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#34,drools-worker-2,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#35,drools-worker-3,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#36,drools-worker-4,5,org.kie.benchmark.binance.CharacterizationCollector] will linger despite being asked to die via interruption
+[WARNING] NOTE: 8 thread(s) did not finish despite being asked to via interruption. This is not a problem with exec:java, it is a problem with the running code. Although not serious, it should be remedied.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:00 min
+[INFO] Finished at: 2026-05-22T20:36:05Z
+[INFO] ------------------------------------------------------------------------

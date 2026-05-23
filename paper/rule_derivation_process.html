@@ -31,7 +31,7 @@
 
     .subtitle {
       text-align: center;
-      font-size: 0.78rem;
+      font-size: 1.00rem;
       color: #64748b;
       margin-bottom: 2rem;
     }
@@ -46,15 +46,19 @@
 
     /* nodes */
     .node {
-      width: 155px;
+      width: 180px;
+      height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       border-radius: 10px;
-      padding: 0.85rem 0.75rem;
+      padding: 0.85rem 0.4rem;
       text-align: center;
       position: relative;
     }
 
     .node .num {
-      font-size: 0.58rem;
+      font-size: 0.72rem;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -62,16 +66,16 @@
     }
 
     .node .title {
-      font-size: 0.82rem;
+      font-size: 0.95rem;
       font-weight: 700;
-      line-height: 1.2;
+      line-height: 1.25;
       margin-bottom: 0.3rem;
     }
 
     .node .desc {
-      font-size: 0.66rem;
-      line-height: 1.4;
-      color: #374151;
+      font-size: 1.00rem;
+      line-height: 1.45;
+      color: #1f2937;
     }
 
     .node-input {
@@ -138,6 +142,9 @@
     .node-output {
       background: #fff;
       border: 2px solid #16a34a;
+      border-radius: 2px;
+      box-shadow: 3px 3px 0 -1px #fff, 3px 3px 0 1px #16a34a,
+        6px 6px 0 -1px #fff, 6px 6px 0 1px #16a34a;
     }
 
     .node-output .title {
@@ -149,9 +156,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       width: 64px;
-      padding-top: 2rem;
+      padding-top: 90px;
       overflow: visible;
     }
 
@@ -174,9 +181,9 @@
     }
 
     .arrow-text {
-      font-size: 0.58rem;
-      color: #475569;
-      font-weight: 500;
+      font-size: 0.82rem;
+      color: #1e293b;
+      font-weight: 600;
       margin-top: 0.2rem;
       text-align: center;
       line-height: 1.25;
@@ -220,7 +227,7 @@
     }
 
     .details li {
-      font-size: 0.6rem;
+      font-size: 0.75rem;
       color: #475569;
       line-height: 1.45;
       list-style: none;
@@ -288,27 +295,17 @@
 
   <div class="flow">
 
-    <!-- Input -->
-    <div class="node node-input">
-      <div class="title">Public Domain Guidelines</div>
-      <div class="desc">Authoritative references per application domain</div>
-    </div>
-
-    <div class="arrow-h">
-      <div class="arrow-line"></div>
-      <div class="arrow-text">guidelines +<br>constraints</div>
-    </div>
 
     <!-- Stage 1: Source ID + LLM Generation (merged) -->
-    <div class="node node-s1" style="width:180px;">
+    <div class="node node-s1">
       <div class="num">Stage 1</div>
       <div class="title">Source Identification &amp; LLM Generation</div>
-      <div class="desc">Domain guidelines fed as structured prompt context to produce an initial DRL rule set</div>
+      <div class="desc">Domain guidelines provided for LLM-assisted DRL generation</div>
     </div>
 
     <div class="arrow-h">
       <div class="arrow-line"></div>
-      <div class="arrow-text">initial DRL<br>(approximate)</div>
+      <div class="arrow-text">initial<br>DRL</div>
     </div>
 
     <!-- Stages 3a + 3b with loop -->
@@ -319,19 +316,19 @@
         <div class="node node-s3a">
           <div class="num">Stage 2a</div>
           <div class="title">Human Refinement</div>
-          <div class="desc">Manual correction of temporal operators, thresholds, and chaining structure</div>
+          <div class="desc">Correct temporal operators, thresholds, and chaining depth</div>
         </div>
 
-        <div class="arrow-h" style="padding-top:2rem;">
+        <div class="arrow-h">
           <div class="arrow-line"></div>
-          <div class="arrow-text">revised DRL</div>
+          <div class="arrow-text">revised<br>DRL</div>
         </div>
 
         <!-- Stage 2b: Validation -->
         <div class="node node-s3b">
           <div class="num">Stage 2b</div>
           <div class="title">Validation</div>
-          <div class="desc">Rules replayed against collected data dumps; structural targets verified by characterisation collector</div>
+          <div class="desc">Replay against collected data; verify structural targets</div>
         </div>
 
       </div>
@@ -348,7 +345,7 @@
           <!-- arrowhead pointing up -->
           <polygon points="50,0 44,8 56,8" fill="#7b1fa2" />
           <!-- label -->
-          <text x="180" y="32" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" font-weight="600"
+          <text x="180" y="32" text-anchor="middle" font-family="Inter,sans-serif" font-size="15" font-weight="600"
             fill="#7b1fa2">fail → refine &amp; re-validate</text>
         </svg>
       </div>
@@ -362,7 +359,7 @@
     <!-- Output -->
     <div class="node node-output">
       <div class="title">Final DRL Rule Sets</div>
-      <div class="desc">Production-grade, structurally characterised</div>
+      <div class="desc">Validated, structurally characterised</div>
     </div>
 
   </div>

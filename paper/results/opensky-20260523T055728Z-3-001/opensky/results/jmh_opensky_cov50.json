@@ -1,0 +1,59 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "bench.opensky.benchmark.OpenSkyFullReplayBenchmark.fullReplay",
+        "mode" : "ss",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/usr/lib/jvm/java-17-amazon-corretto/bin/java",
+        "jvmArgs" : [
+            "-Xms4g",
+            "-Xmx24g"
+        ],
+        "jdkVersion" : "17.0.19",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "17.0.19+10-LTS",
+        "warmupIterations" : 1,
+        "warmupTime" : "single-shot",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "single-shot",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dataFile" : "src/main/resources/data/data/split_1600k_cov50.jsonl",
+            "mode" : "baseline"
+        },
+        "primaryMetric" : {
+            "score" : 224530.62316566668,
+            "scoreError" : 61179.44975665843,
+            "scoreConfidence" : [
+                163351.17340900825,
+                285710.0729223251
+            ],
+            "scorePercentiles" : {
+                "0.0" : 222168.712062,
+                "50.0" : 223054.197898,
+                "90.0" : 228368.959537,
+                "95.0" : 228368.959537,
+                "99.0" : 228368.959537,
+                "99.9" : 228368.959537,
+                "99.99" : 228368.959537,
+                "99.999" : 228368.959537,
+                "99.9999" : 228368.959537,
+                "100.0" : 228368.959537
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    222168.712062,
+                    223054.197898,
+                    228368.959537
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+

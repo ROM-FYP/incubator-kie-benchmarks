@@ -4,8 +4,6 @@
 
 \section{Conclusion and Future Work}\label{sec:conclusion}
 
-We introduced a multi-domain CEP benchmark suite covering aviation, financial trading, and collaborative editing. Each benchmark pairs a rule set---derived from domain guidelines via a semi-automated pipeline---with a real-world stream of approximately 1.6~million events. Built on the \texttt{incubator-kie-benchmarks} infrastructure, the suite ensures reproducible performance evaluation.
-
-The cross-suite characterisation reveals that the three domains naturally exhibit different workload profiles --- join-heavy, chain-deep, and pipeline-sequential --- providing diverse and realistic conditions for evaluating rule engine behaviour. Furthermore, high rule coverage ($>$63\%) across domains validates that the real-world streams effectively exercise the rule sets.
+We presented a multi-domain CEP benchmark suite covering aviation, financial trading, and collaborative editing, each pairing a domain-derived rule set with ${\sim}1.6$M real-world events and a reproducible replay harness built on \texttt{incubator-kie-benchmarks}. The suite's three domains naturally exhibit different workload profiles --- join-heavy, chain-deep, and pipeline-sequential --- with high baseline rule coverage ($>$63\%) validating that real-world streams effectively exercise the rule sets. Coverage-variant analysis further shows that activation depth is governed by stream diversity rather than event volume.
 
 Future work includes scaling the rule bases to larger rule counts to study how engine performance degrades with increasing rule-base complexity, and conducting cross-engine comparisons using these benchmarks to evaluate how different production rule engines handle identical CEP workloads.
