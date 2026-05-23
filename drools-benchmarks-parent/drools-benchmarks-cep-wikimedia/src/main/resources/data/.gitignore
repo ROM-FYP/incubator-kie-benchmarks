@@ -1,0 +1,12 @@
+# Large dataset files - not tracked in git.
+# Copy these manually to the EC2 instance or generate via dataset builder.
+#
+# Expected layout:
+#   data/split_1600k.jsonl
+#   data/split_1600k_cov25.jsonl
+#   data/split_1600k_cov50.jsonl
+#
+*.jsonl
+*.jsonl.bak
+*.log
+data/
