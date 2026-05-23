@@ -194,20 +194,20 @@ public class CharacterizationCollector {
     // Main
     // -----------------------------------------------------------------------
     public static void main(String[] args) throws Exception {
-        System.out.println("╔══════════════════════════════════════════════════════╗");
-        System.out.println("║ Ripe RIS CEP Benchmark — Characterization Collector  ║");
-        System.out.println("╚══════════════════════════════════════════════════════╝");
+        System.out.println("+======================================================+");
+        System.out.println("| Ripe RIS CEP Benchmark - Characterization Collector  |");
+        System.out.println("+======================================================+");
         System.out.println();
 
-        // ── Load DRL text for static analysis ──────────────────────────────
+        // -- Load DRL text for static analysis ------------------------------
         String drlContent;
         try (InputStream is = CharacterizationCollector.class
                 .getResourceAsStream("/" + EnvConfig.get("RIPERIS_RULES_FILE"))) {
             drlContent = new String(Objects.requireNonNull(is).readAllBytes(), StandardCharsets.UTF_8);
         }
 
-        // ── A: Static rule-base properties ─────────────────────────────────
-        System.out.println("── [A] Static Rule-Base Properties ─────────────────────");
+        // -- A: Static rule-base properties ---------------------------------
+        System.out.println("== [A] Static Rule-Base Properties =====================");
         DrlRuleParser parser = new DrlRuleParser();
         List<RuleMeta> ruleMetas;
         try {
@@ -268,8 +268,8 @@ public class CharacterizationCollector {
         System.out.printf("  C9  'eval' temporal patterns:     %d%n", evalCount);
         System.out.println();
 
-        // ── B: Dependency graph metrics ─────────────────────────────────────
-        System.out.println("── [B] Dependency / Structural Properties ───────────────");
+        // -- B: Dependency graph metrics -------------------------------------
+        System.out.println("== [B] Dependency / Structural Properties ===============");
         double graphDensity = 0;
         long numComponents = 0L;
         double lccPct = 0;
@@ -305,8 +305,8 @@ public class CharacterizationCollector {
         System.out.printf("  B4  Max chaining depth:           %d%n", maxChainDepth);
         System.out.println();
 
-        // ── D: Dataset / domain properties ─────────────────────────────────
-        System.out.println("── [D] Data / Domain Properties ─────────────────────────");
+        // -- D: Dataset / domain properties ---------------------------------
+        System.out.println("== [D] Data / Domain Properties =========================");
         String dataFileKey = (args.length > 0) ? args[0] : "RIPERIS_DEFAULT_DATA_FILE";
         String dataFile = EnvConfig.get(dataFileKey);
 
@@ -434,8 +434,8 @@ public class CharacterizationCollector {
         System.out.printf("  C2  Coeff of variation (CV):      %.3f → %s%n", cvIAT, velocityClass);
         System.out.println();
 
-        // ── C: Runtime metrics (full replay) ───────────────────────────────
-        System.out.println("── [C] Runtime Metrics (full replay) ────────────────────");
+        // -- C: Runtime metrics (full replay) -------------------------------
+        System.out.println("== [C] Runtime Metrics (full replay) ====================");
         System.out.printf("  Replaying %,d events...%n", eventCount);
 
         long replayMs = System.currentTimeMillis() - t0;
@@ -471,62 +471,62 @@ public class CharacterizationCollector {
 
         session.dispose();
 
-        // ── Full characterization table ─────────────────────────────────────
-        System.out.println("╔══════════════════════════════════════════════════════╗");
-        System.out.println("║         CHARACTERIZATION TABLE (Paper-ready)         ║");
-        System.out.println("╚══════════════════════════════════════════════════════╝");
-        System.out.printf("│ %-36s │ %-15s │%n", "Property", "Ripe RIS CEP");
-        System.out.println("├──────────────────────────────────────┼─────────────────┤");
-        System.out.printf("│ %-36s │ %-15d │%n", "A1  Rules (R)", ruleCount);
-        System.out.printf("│ %-36s │ %-15.2f │%n", "A2  Avg conditions/rule", condStats.getAverage());
-        System.out.printf("│ %-36s │ %-15d │%n", "A2  Max conditions/rule", condStats.getMax());
-        System.out.printf("│ %-36s │ %-15d │%n", "A6  Distinct input fact types", allInputTypes.size());
-        System.out.printf("│ %-36s │ %-15.3f │%n", "A5  Alpha sharing ratio (proxy)", alphaSharingRatio);
-        System.out.printf("│ %-36s │ %-15.4f │%n", "B1  Dep. graph density", graphDensity);
-        System.out.printf("│ %-36s │ %-14.1f%% │%n", "B2  Largest connected component", lccPct);
-        System.out.printf("│ %-36s │ %-15d │%n", "B3  Connected components", numComponents);
-        System.out.printf("│ %-36s │ %-15d │%n", "B4  Max chaining depth", maxChainDepth);
-        System.out.printf("│ %-36s │ %-15.0f │%n", "C1  Event arrival rate (ev/s)", arrivalRatePerSec);
-        System.out.printf("│ %-36s │ %-15.3f │%n", "C2  IAT coeff of variation (CV)", cvIAT);
-        System.out.printf("│ %-36s │ %-15s │%n", "C2  Velocity class", velocityClass);
-        System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Selectivity", selectivity);
-        System.out.printf("│ %-36s │ %-15d │%n", "C4  Peak WM size (facts)", peakWM);
-        System.out.printf("│ %-36s │ %-15.1f │%n", "C4  Avg WM size (facts)", wmM.avgFactCount());
-        System.out.printf("│ %-36s │ %-15.2f │%n", "C5  Avg WM changes/event",
+        // -- Full characterization table -------------------------------------
+        System.out.println("+======================================================+");
+        System.out.println("|         CHARACTERIZATION TABLE (Paper-ready)         |");
+        System.out.println("+======================================================+");
+        System.out.printf("| %-36s | %-15s |%n", "Property", "Ripe RIS CEP");
+        System.out.println("+--------------------------------------+-----------------+");
+        System.out.printf("| %-36s | %-15d |%n", "A1  Rules (R)", ruleCount);
+        System.out.printf("| %-36s | %-15.2f |%n", "A2  Avg conditions/rule", condStats.getAverage());
+        System.out.printf("| %-36s | %-15d |%n", "A2  Max conditions/rule", condStats.getMax());
+        System.out.printf("| %-36s | %-15d |%n", "A6  Distinct input fact types", allInputTypes.size());
+        System.out.printf("| %-36s | %-15.3f |%n", "A5  Alpha sharing ratio (proxy)", alphaSharingRatio);
+        System.out.printf("| %-36s | %-15.4f |%n", "B1  Dep. graph density", graphDensity);
+        System.out.printf("| %-36s | %-14.1f%% |%n", "B2  Largest connected component", lccPct);
+        System.out.printf("| %-36s | %-15d |%n", "B3  Connected components", numComponents);
+        System.out.printf("| %-36s | %-15d |%n", "B4  Max chaining depth", maxChainDepth);
+        System.out.printf("| %-36s | %-15.0f |%n", "C1  Event arrival rate (ev/s)", arrivalRatePerSec);
+        System.out.printf("| %-36s | %-15.3f |%n", "C2  IAT coeff of variation (CV)", cvIAT);
+        System.out.printf("| %-36s | %-15s |%n", "C2  Velocity class", velocityClass);
+        System.out.printf("| %-36s | %-14.1f%% |%n", "C3  Selectivity", selectivity);
+        System.out.printf("| %-36s | %-15d |%n", "C4  Peak WM size (facts)", peakWM);
+        System.out.printf("| %-36s | %-15.1f |%n", "C4  Avg WM size (facts)", wmM.avgFactCount());
+        System.out.printf("| %-36s | %-15.2f |%n", "C5  Avg WM changes/event",
                 eventCount == 0 ? 0 : (double) wmM.totalWMChanges() / eventCount);
-        System.out.printf("│ %-36s │ %-15.2f │%n", "C6  Avg conflict set size", agendaM.avgConflictSet());
-        System.out.printf("│ %-36s │ %-15d │%n", "C6  Peak conflict set size", agendaM.peakConflictSet);
-        System.out.printf("│ %-36s │ %-15.2f │%n", "C7  Rules fired per event", eventCount == 0 ? 0 : (double) totalFired / eventCount);
-        System.out.printf("│ %-36s │ %-14.1f%% │%n", "C3  Rule coverage on dataset", coveragePct);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:time rules", windowTimeCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C8  window:length rules", windowLenCount);
-        System.out.printf("│ %-36s │ %-15d │%n", "C9  Temporal CEP patterns", afterCount + notCount + accumCount);
-        System.out.printf("│ %-36s │ %-15s │%n", "D1  Dataset size (events)", String.format("%,d", eventCount));
-        System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct peers", distinctPeers);
-        System.out.printf("│ %-36s │ %-15d │%n", "D2  Distinct event types", distinctEventTypes);
-        System.out.printf("│ %-36s │ %-15s │%n", "D4  Data provenance", "RIPE RIS Live");
-        System.out.println("└──────────────────────────────────────┴─────────────────┘");
+        System.out.printf("| %-36s | %-15.2f |%n", "C6  Avg conflict set size", agendaM.avgConflictSet());
+        System.out.printf("| %-36s | %-15d |%n", "C6  Peak conflict set size", agendaM.peakConflictSet);
+        System.out.printf("| %-36s | %-15.2f |%n", "C7  Rules fired per event", eventCount == 0 ? 0 : (double) totalFired / eventCount);
+        System.out.printf("| %-36s | %-14.1f%% |%n", "C3  Rule coverage on dataset", coveragePct);
+        System.out.printf("| %-36s | %-15d |%n", "C8  window:time rules", windowTimeCount);
+        System.out.printf("| %-36s | %-15d |%n", "C8  window:length rules", windowLenCount);
+        System.out.printf("| %-36s | %-15d |%n", "C9  Temporal CEP patterns", afterCount + notCount + accumCount);
+        System.out.printf("| %-36s | %-15s |%n", "D1  Dataset size (events)", String.format("%,d", eventCount));
+        System.out.printf("| %-36s | %-15d |%n", "D2  Distinct peers", distinctPeers);
+        System.out.printf("| %-36s | %-15d |%n", "D2  Distinct event types", distinctEventTypes);
+        System.out.printf("| %-36s | %-15s |%n", "D4  Data provenance", "RIPE RIS Live");
+        System.out.println("+--------------------------------------+-----------------+");
 
         // Per-rule fire counts (top 20)
         System.out.println();
-        System.out.println("── Per-Rule Activation Counts (top 20) ─────────────────");
+        System.out.println("== Per-Rule Activation Counts (top 20) =================");
         agendaM.fireCounts.entrySet().stream()
                 .sorted((a, b) -> b.getValue().get() - a.getValue().get())
                 .limit(20)
                 .forEach(e -> System.out.printf("  %-55s %,10d%n", e.getKey(), e.getValue().get()));
 
         System.out.println();
-        System.out.println("── Rules That NEVER Fired ───────────────────────────────");
+        System.out.println("== Rules That NEVER Fired ===============================");
         allRuleNames.stream()
                 .filter(r -> !firedRuleNames.contains(r))
                 .sorted()
-                .forEach(r -> System.out.println("  ❌ " + r));
+                .forEach(r -> System.out.println("  [X] " + r));
 
-        // ── Section E: Category firing probabilities ────────────────────────
+        // -- Section E: Category firing probabilities ------------------------
         // P(category fires | event arrives) = category_activations / total_events
         // Categories derived from rule name prefix (section letter A-N + INFRA).
         System.out.println();
-        System.out.println("── [E] Category Firing Probabilities ────────────────────");
+        System.out.println("== [E] Category Firing Probabilities ====================");
         System.out.println("  P(category fires | event) = category_activations / total_events");
         System.out.println();
 
@@ -573,13 +573,13 @@ public class CharacterizationCollector {
                             String.format("%,d", acts), prob, pct);
                 });
 
-        // ── Section F: Chain-depth firing probabilities ─────────────────────
+        // -- Section F: Chain-depth firing probabilities ---------------------
         // Uses ForwardChainFinder BFS from RisMessage (the external entry fact).
         // Depth 0 = rules directly consuming RisMessage (alpha filters).
         // Depth 1 = rules consuming facts PRODUCED by depth-0 rules, etc.
         // P(depth-d fires | event) = sum(activations at depth d) / total_events
         System.out.println();
-        System.out.println("── [F] Forward Chain Depth Firing Probabilities ─────────");
+        System.out.println("== [F] Forward Chain Depth Firing Probabilities =========");
         System.out.println("  Entry point: RisMessage (externally inserted by Java replay loop)");
         System.out.println("  P(depth-d fires | event) = activations_at_depth_d / total_events");
         System.out.println();
