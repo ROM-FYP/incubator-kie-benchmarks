@@ -73,7 +73,7 @@ public class OpenSkyFullReplayBenchmark {
     // -------------------------------------------------------------------------
 
     /** Classpath-relative path to the JSONL dataset file. */
-    @Param({"src/main/resources/data/opensky_states_20260314_143703_flat.jsonl"})
+    @Param({"src/main/resources/data/data/split_1600k.jsonl"})
     private String dataFile;
 
     /**

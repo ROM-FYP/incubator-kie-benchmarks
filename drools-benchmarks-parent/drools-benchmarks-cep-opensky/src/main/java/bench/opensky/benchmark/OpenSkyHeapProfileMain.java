@@ -45,7 +45,7 @@ import java.util.*;
  * <p>Usage:
  * <pre>
  *   mvn exec:java -Dexec.mainClass=bench.opensky.benchmark.OpenSkyHeapProfileMain \
- *       -Dexec.args="--dataset src/main/resources/data/opensky_states_20260314_143703_flat.jsonl \
+ *       -Dexec.args="--dataset src/main/resources/data/data/split_1600k.jsonl \
  *                    --mode baseline --trials 3 \
  *                    --output output/heap_opensky_baseline.json"
  * </pre>

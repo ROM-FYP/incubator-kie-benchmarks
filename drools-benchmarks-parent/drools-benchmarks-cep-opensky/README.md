@@ -1,26 +1,48 @@
-# Drools Benchmark CEP — OpenSky Air Traffic
+# Drools CEP Benchmark — OpenSky Air Traffic
 
-This module contains the **OpenSky Air Traffic** benchmark suite for the Drools Complex Event Processing (CEP) engine. This benchmark evaluates Drools' capability to process high-frequency geospatial state vectors representing live aircraft positions and telemetry.
+JMH benchmark replaying **1.6 M recorded OpenSky Air Traffic state vectors** through
+the Drools KIE session (`airTraffick_rules.drl`) to measure 
+event throughput and peak heap memory under three execution modes.
 
-## Dataset
+---
 
-The dataset consists of flat JSONL records representing aircraft state vectors from the OpenSky Network. The dataset contains fields such as `icao24`, `callsign`, `originCountry`, `timePosition`, `lastContact`, `longitude`, `latitude`, `baroAltitude`, `geoAltitude`, `velocity`, `trueTrack`, `verticalRate`, `onGround`, `spi`, `positionSource`, etc.
+## Module Structure
 
-The dataset must be placed in `src/main/resources/data/`.
-By default, the benchmark looks for `src/main/resources/data/opensky_states_20260314_143703_flat.jsonl`.
+```
+src/main/java/bench/opensky/
+  benchmark/
+    OpenSkyFullReplayBenchmark.java  ← primary JMH benchmark
+    OpenSkyHeapProfileMain.java      ← heap memory profiling utility
+  model/                             ← POJO fact types (OpenSkyStateVector, Alert, etc.)
+  replay/                            ← JSONL parsers and ReplayEngine
+  util/                              ← Rule math utility functions
 
-*Note: The `data/` directory is excluded from Git and the shaded JAR to prevent repository bloat and build-time `OutOfMemoryError`s.*
+src/main/resources/
+  rules/airTraffick_rules.drl        ← Drools CEP rules for air traffic monitoring
+  data/                              ← NOT in git — must be present at runtime
+    data/split_1600k.jsonl           ← baseline dataset (1,600,000 events)
+    data/split_1600k_cov25.jsonl     ← ~25% rule coverage variant
+    data/split_1600k_cov50.jsonl     ← ~50% rule coverage variant
+```
 
-## Setup & Build
+> **Dataset files are not version-controlled** (files exceed 100 MB).
+> Ensure the `data/` directory is populated before running benchmarks.
 
-Build the shaded benchmark JAR from the module directory:
+---
+
+## Build
 
 ```bash
-cd drools-benchmarks-cep-opensky
+# From drools-benchmarks-parent/
+mvn clean install -DskipTests -pl drools-benchmarks-common,drools-benchmarks-cep-opensky -am
+
+# Or from this module directory (after common is installed):
 mvn clean package -DskipTests
 ```
 
-This generates `target/drools-benchmarks-cep-opensky.jar`.
+Output: `target/drools-benchmarks-cep-opensky.jar` (self-contained shaded JAR)
+
+---
 
 ## Execution Modes
 
@@ -34,6 +56,16 @@ This generates `target/drools-benchmarks-cep-opensky.jar`.
 
 ## 1. Throughput Measurement
 
+### Smoke test — verify dataset and session setup (using 400k subset)
+```bash
+java -Xms4g -Xmx24g \
+  -jar target/drools-benchmarks-cep-opensky.jar \
+  OpenSkyFullReplayBenchmark \
+  -p mode=baseline \
+  -p dataFile=src/main/resources/data/data/split_400k.jsonl \
+  -wi 0 -i 1 -f 0
+```
+
 ### Standard run — baseline dataset
 ```bash
 mkdir -p results
@@ -42,31 +74,116 @@ java -Xms4g -Xmx24g \
   -jar target/drools-benchmarks-cep-opensky.jar \
   OpenSkyFullReplayBenchmark \
   -p mode=baseline \
-  -p dataFile=src/main/resources/data/opensky_states_20260314_143703_flat.jsonl \
   -wi 1 -i 3 -f 1 \
   -rff results/jmh_opensky_baseline.json -rf json
 ```
 
-## 2. Peak Heap Measurement
-
-The peak heap footprint is measured using a specialized runner that injects `-XX:+PrintGCDetails` (or equivalent GC logs).
-
-### Run GC Profiler
+### Standard run — cov50 dataset
 ```bash
-mkdir -p results
+java -Xms4g -Xmx24g \
+  -jar target/drools-benchmarks-cep-opensky.jar \
+  OpenSkyFullReplayBenchmark \
+  -p mode=baseline \
+  -p dataFile=src/main/resources/data/data/split_1600k_cov50.jsonl \
+  -wi 1 -i 3 -f 1 \
+  -rff results/jmh_opensky_cov50.json -rf json
+```
+
+### Standard run — cov25 dataset
+```bash
+java -Xms4g -Xmx24g \
+  -jar target/drools-benchmarks-cep-opensky.jar \
+  OpenSkyFullReplayBenchmark \
+  -p mode=baseline \
+  -p dataFile=src/main/resources/data/data/split_1600k_cov25.jsonl \
+  -wi 1 -i 3 -f 1 \
+  -rff results/jmh_opensky_cov25.json -rf json
+```
+
+### Interpreting results
+
+JMH reports **ops/sec** or **ms/op** (complete dataset replays per second/millisecond).
+
+```
+events/sec = 1,600,000 / (reported_ms_per_op / 1000)
+```
+
+Per-invocation throughput is also logged directly to stdout:
+```
+[baseline Invocation 1] Events: 1,600,000 | Rules fired: X | Duration: Y ms | Throughput: Z events/sec
+```
+
+---
+
+## 2. Peak Heap Memory
+
+Run with JVM GC logging enabled. The maximum live-set value recorded across
+all GC cycles represents the true peak heap working set.
+
+### baseline dataset
+```bash
+mkdir -p results/gc
 
 java -Xms4g -Xmx24g \
-  -Xlog:gc*=info:file=results/gc_opensky_baseline.log:time,uptime,level,tags \
-  -cp target/drools-benchmarks-cep-opensky.jar \
-  bench.opensky.benchmark.OpenSkyHeapProfileMain \
-  src/main/resources/data/opensky_states_20260314_143703_flat.jsonl
+  -Xlog:gc*:file=results/gc/gc_opensky_baseline.log:time,uptime,tags \
+  -jar target/drools-benchmarks-cep-opensky.jar \
+  OpenSkyFullReplayBenchmark \
+  -p mode=baseline \
+  -wi 1 -i 3 -f 1
 ```
 
-### Analyze GC Logs
+### cov50 dataset
+```bash
+java -Xms4g -Xmx24g \
+  -Xlog:gc*:file=results/gc/gc_opensky_cov50.log:time,uptime,tags \
+  -jar target/drools-benchmarks-cep-opensky.jar \
+  OpenSkyFullReplayBenchmark \
+  -p mode=baseline \
+  -p dataFile=src/main/resources/data/data/split_1600k_cov50.jsonl \
+  -wi 1 -i 3 -f 1
+```
 
-After execution, parse the log to find the maximum memory consumption (peak heap) post-garbage collection.
+### cov25 dataset
+```bash
+java -Xms4g -Xmx24g \
+  -Xlog:gc*:file=results/gc/gc_opensky_cov25.log:time,uptime,tags \
+  -jar target/drools-benchmarks-cep-opensky.jar \
+  OpenSkyFullReplayBenchmark \
+  -p mode=baseline \
+  -p dataFile=src/main/resources/data/data/split_1600k_cov25.jsonl \
+  -wi 1 -i 3 -f 1
+```
+
+### Extract peak heap from GC log
+```bash
+# Returns peak live heap in MB
+grep -oP '\d+M->\K\d+(?=M\(\d)' results/gc/gc_opensky_baseline.log \
+  | sort -n | tail -1
+```
+
+---
+
+## Dataset Selection
+
+The active dataset is controlled via the `dataFile` JMH parameter.
+
+| Dataset | Param value (`-p dataFile=...`) | Event count |
+|---------|---------------------------------|-------------|
+| Baseline | `src/main/resources/data/data/split_1600k.jsonl` *(default)* | 1,600,000 |
+| 50% coverage | `src/main/resources/data/data/split_1600k_cov50.jsonl` | 1,600,000 |
+| 25% coverage | `src/main/resources/data/data/split_1600k_cov25.jsonl` | 1,600,000 |
 
 ```bash
-grep "Pause Full" results/gc_opensky_baseline.log
+# Example: select cov50 dataset
+java -jar target/drools-benchmarks-cep-opensky.jar OpenSkyFullReplayBenchmark -p dataFile=src/main/resources/data/data/split_1600k_cov50.jsonl ...
 ```
-Look for lines indicating the heap size after full GC (e.g., `2100M->1500M(24000M)`), where the second number represents the live dataset retention.
+
+---
+
+## Results
+
+| Dataset | Throughput (events/sec) | Peak Heap (MB) |
+|---------|------------------------|----------------|
+| split_1600k | — | — |
+| split_1600k_cov50 | — | — |
+| split_1600k_cov25 | — | — |
