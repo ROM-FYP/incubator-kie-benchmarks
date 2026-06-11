@@ -98,7 +98,7 @@ Stress profile: \emph{join-intensive multi-pattern evaluation}---single edits ar
 Each benchmark is driven by a replay engine that feeds a pre-collected event dump into a streaming-mode rule session with a controllable pseudo-clock, advanced to each event's original timestamp to preserve real-world inter-arrival patterns.
 Benchmarks are implemented as JMH microbenchmarks within the Apache KIE \texttt{incubator-kie-benchmarks} repository, replaying the full event sequence to measure end-to-end throughput.
 
-All experiments were executed on an AWS EC2 \texttt{m7i-flex.large} instance (2 vCPUs, 4th Generation Intel Xeon Scalable processors at 3.2 GHz, 8 GiB RAM) running Red Hat Enterprise Linux. 
-The benchmarks utilized Java Development Kit (JDK) 17 and the Drools/KIE engine main development branch (version \texttt{999-SNAPSHOT}, corresponding to the upcoming Apache KIE 10 release).
-The Java Microbenchmark Harness (JMH) was configured for \texttt{SingleShotTime} execution mode, capturing throughput over 30 warmup iterations and 20 measurement iterations.
+All experiments were executed using the Java Microbenchmark Harness (JMH) on an AWS \texttt{r5.xlarge} instance running Red Hat Enterprise Linux 10 (HVM) (Intel Xeon Platinum 8259CL CPU at 2.50\,GHz, x86\_64, 4 vCPUs, 35.8\,MiB L3 cache, 32\,GiB RAM, and a 90\,GB gp3 EBS volume at 3,000 IOPS). 
+The benchmarks utilized Amazon Corretto JDK 17.0.19 with heap boundaries configured at \texttt{-Xms4g} and \texttt{-Xmx24g}, evaluating the Drools engine main development branch (version \texttt{999-SNAPSHOT}, corresponding to the Apache KIE 10 release).
+JMH was configured to measure throughput (\texttt{thrpt} mode) with one 30-second warmup iteration and three 60-second measurement iterations.
 The complete data collection scripts, data artifacts, and benchmark source code are available within the repository.
