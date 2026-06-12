@@ -42,8 +42,10 @@ import org.kie.internal.builder.conf.LanguageLevelOption;
  * Uses {@link org.drools.drl.parser.DrlParser} to parse the DRL content
  * and extracts information about each rule including:
  * <ul>
- * <li><b>inputs</b>: object types found in the LHS (Left Hand Side) patterns</li>
- * <li><b>outputs</b>: object types that are inserted/modified/deleted in the RHS (Right Hand Side)</li>
+ * <li><b>inputs</b>: object types found in the LHS (Left Hand Side)
+ * patterns</li>
+ * <li><b>outputs</b>: object types that are inserted/modified/deleted in the
+ * RHS (Right Hand Side)</li>
  * </ul>
  * 
  * RHS analysis uses regex heuristics to detect:

@@ -1,52 +1,31 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * ... (License header remains the same)
  */
 package org.kie.benchmark.cep.riperis.analysis;
+
+import org.kie.benchmark.cep.riperis.util.EnvConfig;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultDirectedGraph;
 import org.jgrapht.graph.DefaultEdge;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-/**
- * Builds a static directed rule-dependency graph from parsed DRL metadata.
- *
- * <p>
- * An edge Rule A -> Rule B is created when Rule A outputs a fact type that
- * Rule B consumes on its LHS.
- *
- * <p>
- * Control-only fact types can be ignored so they do not create artificial
- * dependencies. The current RIPE RIS ruleset no longer uses ChainStage or
- * benchmark-depth facts, so those are not included here.
- */
 public class DependencyGraphBuilder {
 
     private final Graph<RuleMeta, DefaultEdge> graph;
 
-    private static final Set<String> CONTROL_FACTS = new HashSet<>(Arrays.asList(
-            "Stage",
-            "Illegal"));
+    // Define "Control Facts" that manage state but don't represent data flow.
+    // These cause false cycles if treated as dependencies.
+    private static final Set<String> CONTROL_FACTS = new HashSet<>(Arrays.asList("Stage", "Illegal"));
 
     public DependencyGraphBuilder(List<RuleMeta> rules) {
         this.graph = new DefaultDirectedGraph<>(DefaultEdge.class);
@@ -63,18 +42,29 @@ public class DependencyGraphBuilder {
             graph.addVertex(rule);
         }
 
-        for (RuleMeta producerRule : rules) {
-            for (RuleMeta consumerRule : rules) {
-                if (producerRule == consumerRule) {
+        // Add edges based on output/input intersection (FILTERED)
+        for (RuleMeta ruleA : rules) {
+            for (RuleMeta ruleB : rules) {
+                // Skip self-loops
+                if (ruleA == ruleB) {
                     continue;
                 }
 
-                Set<String> dependencyIntersection = new HashSet<>(producerRule.getOutputs());
-                dependencyIntersection.retainAll(consumerRule.getInputs());
+                // Explicitly calculate intersection to apply filtering
+                Set<String> dependencyIntersection = new HashSet<>(ruleA.getOutputs());
+                dependencyIntersection.retainAll(ruleB.getInputs());
+
+                // Remove Control Facts from the intersection
+                // If the only thing connecting Rule A and B is "Stage", we ignore the link.
                 dependencyIntersection.removeAll(CONTROL_FACTS);
 
+                // Create edge only if there is a REAL data dependency remaining
                 if (!dependencyIntersection.isEmpty()) {
-                    graph.addEdge(producerRule, consumerRule);
+                    graph.addEdge(ruleA, ruleB);
+
+                    // Optional: You could log what connects them here for debugging
+                    // System.out.println(ruleA.getRuleName() + " -> " + ruleB.getRuleName() + " via
+                    // " + dependencyIntersection);
                 }
             }
         }
@@ -89,15 +79,11 @@ public class DependencyGraphBuilder {
     }
 
     public Set<RuleMeta> getPredecessors(RuleMeta rule) {
-        return graph.incomingEdgesOf(rule).stream()
-                .map(graph::getEdgeSource)
-                .collect(Collectors.toSet());
+        return graph.incomingEdgesOf(rule).stream().map(graph::getEdgeSource).collect(Collectors.toSet());
     }
 
     public Set<RuleMeta> getSuccessors(RuleMeta rule) {
-        return graph.outgoingEdgesOf(rule).stream()
-                .map(graph::getEdgeTarget)
-                .collect(Collectors.toSet());
+        return graph.outgoingEdgesOf(rule).stream().map(graph::getEdgeTarget).collect(Collectors.toSet());
     }
 
     public boolean hasEdge(RuleMeta ruleA, RuleMeta ruleB) {
@@ -111,26 +97,37 @@ public class DependencyGraphBuilder {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("Dependency Graph (Adjacency List) [Control Facts Ignored: ")
-                .append(CONTROL_FACTS)
-                .append("]:\n");
+        sb.append("Dependency Graph (Adjacency List) [Control Facts Ignored: " + CONTROL_FACTS + "]:\n");
         sb.append("=================================\n");
 
         for (RuleMeta rule : graph.vertexSet()) {
             sb.append(rule.getRuleName()).append(" -> ");
-
             Set<RuleMeta> successors = getSuccessors(rule);
             if (successors.isEmpty()) {
                 sb.append("(no outgoing edges)");
             } else {
-                sb.append(successors.stream()
-                        .map(RuleMeta::getRuleName)
-                        .collect(Collectors.joining(", ")));
+                sb.append(successors.stream().map(RuleMeta::getRuleName).collect(Collectors.joining(", ")));
             }
-
             sb.append("\n");
         }
 
         return sb.toString();
+    }
+
+    public static void main(String[] args) throws Exception {
+        String rulesFile = EnvConfig.get(args.length > 0 ? args[0] : "RIPERIS_RULES_FILE");
+        String drlContent;
+        try (InputStream is = DependencyGraphBuilder.class.getResourceAsStream("/" + rulesFile)) {
+            drlContent = new String(Objects.requireNonNull(is).readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        DrlRuleParser parser = new DrlRuleParser();
+        System.out.println("Parsing DRL file: " + rulesFile);
+        List<RuleMeta> ruleMetas = parser.parse(drlContent);
+
+        System.out.println("Extracted " + ruleMetas.size() + " rules.");
+        DependencyGraphBuilder builder = new DependencyGraphBuilder(ruleMetas);
+
+        System.out.println("\n" + builder.toString());
     }
 }

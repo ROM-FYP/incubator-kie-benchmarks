@@ -1,0 +1,539 @@
+
+╔════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                                ║
+║   ██████╗ ██████╗ ██╗         █████╗ ███╗   ██╗ █████╗ ██╗  ██╗   ██╗███████╗███████╗██████╗   ║
+║   ██╔══██╗██╔══██╗██║        ██╔══██╗████╗  ██║██╔══██╗██║  ╚██╗ ██╔╝╚══███╔╝██╔════╝██╔══██╗  ║
+║   ██║  ██║██████╔╝██║        ███████║██╔██╗ ██║███████║██║   ╚████╔╝   ███╔╝ █████╗  ██████╔╝  ║
+║   ██║  ██║██╔══██╗██║        ██╔══██║██║╚██╗██║██╔══██║██║    ╚██╔╝   ███╔╝  ██╔══╝  ██╔══██╗  ║
+║   ██████╔╝██║  ██║███████╗   ██║  ██║██║ ╚████║██║  ██║███████╗██║   ███████╗███████╗██║  ██║  ║
+║   ╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝   ╚══════╝╚══════╝╚═╝  ╚═╝  ║
+║                                                                                                ║
+║   Rule Dependency Graph & Phase Stratification Tool                                            ║
+║   Static analysis for Drools Rule Language (DRL) files                                         ║
+║                                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  📂 LOADING DRL FILE                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  File Path: rules/ripe_rfc4271_benchmark_79_rules.drl
+  Size: 37.2 KB
+  Lines: 1029
+  ✓ File loaded successfully!
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🔍 PARSING RULES                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  ✓ Parsed 79 rules successfully!
+
+  Total Rules: 79
+  Unique Input Types: 15
+  Unique Output Types: 21
+
+  Input Types:  RouteWithdrawal, RouteScore, RibEvent, NormalizedRisMessage, RisMessage, OriginFact, RouteCandidate, RouteAnnouncement, Number, PrefixFact, BgpUpdateFact, NextHopFact, RouteDecision, RouteValidationResult, BgpPath
+    Output Types: RouteWithdrawal, RouteScore, RibEvent, AggregationHint, MedFact, AggregatorFact, NormalizedRisMessage, TimeBucketFact, RouteAnomaly, PeerSessionFact, OriginFact, RouteCandidate, RouteAnnouncement, PrefixFact, BgpUpdateFact, CollectorFact, NextHopFact, RouteDecision, CommunityFact, RouteValidationResult, BgpPath
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🔗 BUILDING DEPENDENCY GRAPH                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Vertices (Rules): 79
+  Edges (Dependencies): 194
+  Isolated Rules: 1
+
+  ⚠ Isolated rules (no dependencies):
+    • 002_detect_non_ris_envelope
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  📊 STRATIFYING RULES INTO PHASES                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  ⚠ Cycles detected in dependency graph!
+    Rules in cycles are grouped in the same phase.
+
+  Total Phases: 10
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 1 (2 rules)                                                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 002_detect_non_ris_envelope                                          │
+  │  - 001_normalize_ris_message                                            │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 2 (2 rules)                                                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 004_classify_non_update_ris_message                                  │
+  │  - 003_create_bgp_update_fact                                           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 3 (19 rules)                                                     │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 007_create_time_bucket                                               │
+  │  - 008_detect_missing_peer_asn                                          │
+  │  - 011_detect_update_with_announcement_payload                          │
+  │  - 012_detect_update_with_withdrawal_payload                            │
+  │  - 013_detect_mixed_announcement_and_withdrawal                         │
+  │  - 014_detect_missing_path_on_announcement_update                       │
+  │  - 015_detect_missing_origin_on_announcement_update                     │
+  │  - 016_detect_community_presence                                        │
+  │  - 018_detect_aggregator_presence                                       │
+  │  - 019_extract_route_announcements                                      │
+  │  - 022_extract_origin_from_update                                       │
+  │  - 076_accumulate_peer_update_burst                                     │
+  │  - 020_extract_route_withdrawals                                        │
+  │  - 005_extract_peer_session                                             │
+  │  - 009_detect_missing_peer_ip                                           │
+  │  - 006_extract_collector                                                │
+  │  - 017_detect_empty_community                                           │
+  │  - 010_classify_update_without_route_payload                            │
+  │  - 021_extract_bgp_path_from_update                                     │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 4 (23 rules)                                                     │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 025_extract_next_hop_from_announcement                               │
+  │  - 027_detect_announcement_with_missing_next_hop                        │
+  │  - 028_detect_announcement_with_missing_prefix                          │
+  │  - 039_validate_med_presence                                            │
+  │  - 051_validate_complete_route_shape                                    │
+  │  - 052_detect_incomplete_route_shape                                    │
+  │  - 037_validate_origin_attribute                                        │
+  │  - 038_detect_invalid_origin_attribute                                  │
+  │  - 077_accumulate_prefix_announcement_burst                             │
+  │  - 026_extract_prefix_from_withdrawal                                   │
+  │  - 078_detect_withdrawal_after_announcement_same_peer_prefix            │
+  │  - 024_extract_prefix_from_announcement                                 │
+  │  - 040_detect_negative_med                                              │
+  │  - 023_extract_med_from_update                                          │
+  │  - 029_validate_as_path_present                                         │
+  │  - 030_detect_empty_as_path                                             │
+  │  - 031_detect_as_set_in_path                                            │
+  │  - 032_observe_non_adjacent_repeated_asn_in_path                        │
+  │  - 033_detect_as_path_prepending                                        │
+  │  - 034_observe_private_asn_in_path                                      │
+  │  - 035_validate_first_as_matches_peer_asn                               │
+  │  - 036_detect_first_as_peer_mismatch                                    │
+  │  - 079_detect_announcement_after_withdrawal_same_peer_prefix            │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 5 (11 rules)                                                     │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 045_validate_next_hop_syntax                                         │
+  │  - 048_detect_multi_value_next_hop                                      │
+  │  - 047_detect_next_hop_equal_peer                                       │
+  │  - 046_detect_invalid_next_hop                                          │
+  │  - 041_validate_prefix_syntax_for_announcement                          │
+  │  - 049_observe_ipv4_specific_cidr_prefix                                │
+  │  - 050_observe_ipv6_specific_cidr_prefix                                │
+  │  - 064_create_withdrawal_adj_rib_event                                  │
+  │  - 042_detect_invalid_announcement_prefix                               │
+  │  - 044_detect_invalid_withdrawal_prefix                                 │
+  │  - 043_validate_prefix_syntax_for_withdrawal                            │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 6 (6 rules)                                                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 060_observe_missing_med_candidates                                   │
+  │  - 053_create_feasible_route_candidate                                  │
+  │  - 057_observe_long_as_path_candidate                                   │
+  │  - 058_observe_incomplete_origin_candidate                              │
+  │  - 059_accumulate_med_candidate_presence                                │
+  │  - 054_create_infeasible_route_candidate                                │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 7 (8 rules)                                                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 055_score_feasible_candidate                                         │
+  │  - 056_detect_infeasible_candidate                                      │
+  │  - 061_create_adj_rib_in_event_for_candidate                            │
+  │  - 067_decide_lower_origin_rank                                         │
+  │  - 068_decide_lower_med_same_neighbor                                   │
+  │  - 073_hint_identical_as_path_aggregation_candidate                     │
+  │  - 074_hint_same_origin_aggregation_candidate                           │
+  │  - 075_detect_med_blocks_aggregation                                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 8 (4 rules)                                                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 062_create_loc_rib_event_for_scored_candidate                        │
+  │  - 066_decide_shorter_as_path                                           │
+  │  - 069_decide_lower_composite_score                                     │
+  │  - 070_decide_tie_same_score_lower_message_id                           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 9 (1 rules)                                                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 071_create_best_path_rib_event                                       │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  PHASE 10 (3 rules)                                                     │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │  - 065_create_withdrawal_loc_rib_event                                  │
+  │  - 063_create_adj_rib_out_candidate_event                               │
+  │  - 072_create_advertisable_rib_event                                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ℹ Phase Dependency: Phase N can only execute after Phases 1..(N-1) complete.
+  ℹ Rules within the same phase can potentially execute in parallel.
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  📋 DETAILED RULE METADATA                                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  📋 Showing ALL 79 rules (verbose mode):
+
+  1. 001_normalize_ris_message
+     Inputs:  NormalizedRisMessage, RisMessage
+     Outputs: NormalizedRisMessage
+
+  2. 002_detect_non_ris_envelope
+     Inputs:  RisMessage
+     Outputs: RouteAnomaly
+
+  3. 003_create_bgp_update_fact
+     Inputs:  NormalizedRisMessage, BgpUpdateFact
+     Outputs: BgpUpdateFact
+
+  4. 004_classify_non_update_ris_message
+     Inputs:  NormalizedRisMessage
+     Outputs: RouteValidationResult
+
+  5. 005_extract_peer_session
+     Inputs:  BgpUpdateFact
+     Outputs: PeerSessionFact
+
+  6. 006_extract_collector
+     Inputs:  BgpUpdateFact
+     Outputs: CollectorFact
+
+  7. 007_create_time_bucket
+     Inputs:  BgpUpdateFact
+     Outputs: TimeBucketFact
+
+  8. 008_detect_missing_peer_asn
+     Inputs:  BgpUpdateFact
+     Outputs: RouteAnomaly
+
+  9. 009_detect_missing_peer_ip
+     Inputs:  BgpUpdateFact
+     Outputs: RouteAnomaly
+
+  10. 010_classify_update_without_route_payload
+     Inputs:  BgpUpdateFact
+     Outputs: RouteValidationResult
+
+  11. 011_detect_update_with_announcement_payload
+     Inputs:  BgpUpdateFact
+     Outputs: RouteValidationResult
+
+  12. 012_detect_update_with_withdrawal_payload
+     Inputs:  BgpUpdateFact
+     Outputs: RouteValidationResult
+
+  13. 013_detect_mixed_announcement_and_withdrawal
+     Inputs:  BgpUpdateFact
+     Outputs: RouteValidationResult
+
+  14. 014_detect_missing_path_on_announcement_update
+     Inputs:  BgpUpdateFact
+     Outputs: RouteAnomaly
+
+  15. 015_detect_missing_origin_on_announcement_update
+     Inputs:  BgpUpdateFact
+     Outputs: RouteAnomaly
+
+  16. 016_detect_community_presence
+     Inputs:  BgpUpdateFact
+     Outputs: CommunityFact
+
+  17. 017_detect_empty_community
+     Inputs:  BgpUpdateFact
+     Outputs: CommunityFact
+
+  18. 018_detect_aggregator_presence
+     Inputs:  BgpUpdateFact
+     Outputs: AggregatorFact
+
+  19. 019_extract_route_announcements
+     Inputs:  BgpUpdateFact
+     Outputs: RouteAnnouncement
+
+  20. 020_extract_route_withdrawals
+     Inputs:  BgpUpdateFact
+     Outputs: RouteWithdrawal
+
+  21. 021_extract_bgp_path_from_update
+     Inputs:  BgpUpdateFact
+     Outputs: BgpPath
+
+  22. 022_extract_origin_from_update
+     Inputs:  BgpUpdateFact
+     Outputs: OriginFact
+
+  23. 023_extract_med_from_update
+     Inputs:  BgpUpdateFact, BgpPath
+     Outputs: MedFact
+
+  24. 024_extract_prefix_from_announcement
+     Inputs:  RouteAnnouncement
+     Outputs: PrefixFact
+
+  25. 025_extract_next_hop_from_announcement
+     Inputs:  RouteAnnouncement
+     Outputs: NextHopFact
+
+  26. 026_extract_prefix_from_withdrawal
+     Inputs:  RouteWithdrawal
+     Outputs: PrefixFact
+
+  27. 027_detect_announcement_with_missing_next_hop
+     Inputs:  RouteAnnouncement
+     Outputs: RouteAnomaly
+
+  28. 028_detect_announcement_with_missing_prefix
+     Inputs:  RouteAnnouncement
+     Outputs: RouteAnomaly
+
+  29. 029_validate_as_path_present
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteValidationResult
+
+  30. 030_detect_empty_as_path
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteAnomaly
+
+  31. 031_detect_as_set_in_path
+     Inputs:  BgpPath
+     Outputs: RouteValidationResult
+
+  32. 032_observe_non_adjacent_repeated_asn_in_path
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteValidationResult
+
+  33. 033_detect_as_path_prepending
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteValidationResult
+
+  34. 034_observe_private_asn_in_path
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteValidationResult
+
+  35. 035_validate_first_as_matches_peer_asn
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteValidationResult
+
+  36. 036_detect_first_as_peer_mismatch
+     Inputs:  RouteAnnouncement, BgpPath
+     Outputs: RouteAnomaly
+
+  37. 037_validate_origin_attribute
+     Inputs:  RouteAnnouncement, OriginFact
+     Outputs: RouteValidationResult
+
+  38. 038_detect_invalid_origin_attribute
+     Inputs:  RouteAnnouncement, OriginFact
+     Outputs: RouteAnomaly
+
+  39. 039_validate_med_presence
+     Inputs:  RouteAnnouncement
+     Outputs: RouteValidationResult
+
+  40. 040_detect_negative_med
+     Inputs:  RouteAnnouncement
+     Outputs: RouteAnomaly
+
+  41. 041_validate_prefix_syntax_for_announcement
+     Inputs:  PrefixFact
+     Outputs: RouteValidationResult
+
+  42. 042_detect_invalid_announcement_prefix
+     Inputs:  PrefixFact
+     Outputs: RouteAnomaly
+
+  43. 043_validate_prefix_syntax_for_withdrawal
+     Inputs:  PrefixFact
+     Outputs: RouteValidationResult
+
+  44. 044_detect_invalid_withdrawal_prefix
+     Inputs:  PrefixFact
+     Outputs: RouteAnomaly
+
+  45. 045_validate_next_hop_syntax
+     Inputs:  NextHopFact
+     Outputs: RouteValidationResult
+
+  46. 046_detect_invalid_next_hop
+     Inputs:  NextHopFact
+     Outputs: RouteAnomaly
+
+  47. 047_detect_next_hop_equal_peer
+     Inputs:  RouteAnnouncement, NextHopFact
+     Outputs: RouteValidationResult
+
+  48. 048_detect_multi_value_next_hop
+     Inputs:  NextHopFact
+     Outputs: RouteAnomaly
+
+  49. 049_observe_ipv4_specific_cidr_prefix
+     Inputs:  PrefixFact
+     Outputs: RouteValidationResult
+
+  50. 050_observe_ipv6_specific_cidr_prefix
+     Inputs:  PrefixFact
+     Outputs: RouteValidationResult
+
+  51. 051_validate_complete_route_shape
+     Inputs:  RouteAnnouncement, Number
+     Outputs: RouteValidationResult
+
+  52. 052_detect_incomplete_route_shape
+     Inputs:  RouteAnnouncement, Number
+     Outputs: RouteValidationResult
+
+  53. 053_create_feasible_route_candidate
+     Inputs:  RouteCandidate, RouteAnnouncement, NextHopFact, RouteValidationResult, BgpPath, OriginFact
+     Outputs: RouteCandidate
+
+  54. 054_create_infeasible_route_candidate
+     Inputs:  RouteCandidate, RouteAnnouncement, NextHopFact, RouteValidationResult, BgpPath, OriginFact
+     Outputs: RouteCandidate
+
+  55. 055_score_feasible_candidate
+     Inputs:  RouteScore, RouteCandidate
+     Outputs: RouteScore
+
+  56. 056_detect_infeasible_candidate
+     Inputs:  RouteCandidate
+     Outputs: RouteAnomaly
+
+  57. 057_observe_long_as_path_candidate
+     Inputs:  RouteCandidate
+     Outputs: RouteValidationResult
+
+  58. 058_observe_incomplete_origin_candidate
+     Inputs:  RouteCandidate
+     Outputs: RouteValidationResult
+
+  59. 059_accumulate_med_candidate_presence
+     Inputs:  RouteCandidate, Number
+     Outputs: RouteValidationResult
+
+  60. 060_observe_missing_med_candidates
+     Inputs:  RouteCandidate
+     Outputs: RouteValidationResult
+
+  61. 061_create_adj_rib_in_event_for_candidate
+     Inputs:  RouteCandidate
+     Outputs: RibEvent
+
+  62. 062_create_loc_rib_event_for_scored_candidate
+     Inputs:  RouteScore
+     Outputs: RibEvent
+
+  63. 063_create_adj_rib_out_candidate_event
+     Inputs:  RouteScore, RibEvent
+     Outputs: RibEvent
+
+  64. 064_create_withdrawal_adj_rib_event
+     Inputs:  RouteWithdrawal, PrefixFact
+     Outputs: RibEvent
+
+  65. 065_create_withdrawal_loc_rib_event
+     Inputs:  RouteWithdrawal, RibEvent
+     Outputs: RibEvent
+
+  66. 066_decide_shorter_as_path
+     Inputs:  RouteScore
+     Outputs: RouteDecision
+
+  67. 067_decide_lower_origin_rank
+     Inputs:  RouteCandidate
+     Outputs: RouteDecision
+
+  68. 068_decide_lower_med_same_neighbor
+     Inputs:  RouteCandidate
+     Outputs: RouteDecision
+
+  69. 069_decide_lower_composite_score
+     Inputs:  RouteScore
+     Outputs: RouteDecision
+
+  70. 070_decide_tie_same_score_lower_message_id
+     Inputs:  RouteScore
+     Outputs: RouteDecision
+
+  71. 071_create_best_path_rib_event
+     Inputs:  RouteScore, RouteDecision
+     Outputs: RibEvent
+
+  72. 072_create_advertisable_rib_event
+     Inputs:  RibEvent, RouteCandidate
+     Outputs: RibEvent
+
+  73. 073_hint_identical_as_path_aggregation_candidate
+     Inputs:  RouteCandidate
+     Outputs: AggregationHint
+
+  74. 074_hint_same_origin_aggregation_candidate
+     Inputs:  RouteCandidate
+     Outputs: AggregationHint
+
+  75. 075_detect_med_blocks_aggregation
+     Inputs:  RouteCandidate
+     Outputs: AggregationHint
+
+  76. 076_accumulate_peer_update_burst
+     Inputs:  Number, BgpUpdateFact
+     Outputs: RouteValidationResult
+
+  77. 077_accumulate_prefix_announcement_burst
+     Inputs:  RouteAnnouncement, Number
+     Outputs: AggregationHint
+
+  78. 078_detect_withdrawal_after_announcement_same_peer_prefix
+     Inputs:  RouteWithdrawal, RouteAnnouncement
+     Outputs: AggregationHint
+
+  79. 079_detect_announcement_after_withdrawal_same_peer_prefix
+     Inputs:  RouteWithdrawal, RouteAnnouncement
+     Outputs: AggregationHint
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                              ANALYSIS COMPLETE                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  📊 Summary:
+     • Total rules parsed:      79
+     • Dependency edges:        194
+     • Execution phases:        10
+     • Contains cycles:         Yes
+
+  📈 Phase Breakdown:
+     Phase  1: ████ 2 rules
+     Phase  2: ████ 2 rules
+     Phase  3: ██████████████████████████████████████ 19 rules
+     Phase  4: ████████████████████████████████████████ 23 rules
+     Phase  5: ██████████████████████ 11 rules
+     Phase  6: ████████████ 6 rules
+     Phase  7: ████████████████ 8 rules
+     Phase  8: ████████ 4 rules
+     Phase  9: ██ 1 rules
+     Phase 10: ██████ 3 rules
+
+  ⚡ Parallelization Potential:
+     • Max rules per phase:     23
+     • Sequential phases:       10
+
