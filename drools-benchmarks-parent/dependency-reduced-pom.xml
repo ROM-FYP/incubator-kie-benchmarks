@@ -67,9 +67,13 @@
     <module>drools-benchmarks</module>
     <module>drools-benchmarks-module</module>
     <module>drools-benchmarks-reliability</module>
+<<<<<<< HEAD
     <module>drools-benchmarks-binance-cep</module>
     <module>drools-benchmarks-opensky-airTrafficking</module>
     <module>drools-benchmarks-cep-wikimedia</module>
+=======
+    <module>drools-benchmarks-ripe-ris-cep</module>
+>>>>>>> origin/ripe-ris-stream
   </modules>
   <dependencyManagement>
     <dependencies>

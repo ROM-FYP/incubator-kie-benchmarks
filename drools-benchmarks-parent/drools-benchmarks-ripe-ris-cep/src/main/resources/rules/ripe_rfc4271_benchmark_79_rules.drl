@@ -1,0 +1,1047 @@
+package org.kie.benchmark.cep.riperis.rules
+
+import java.util.List;
+import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.kie.benchmark.cep.riperis.model.*;
+
+dialect "java"
+
+declare RisMessage
+    @role(event)
+    @expires(5s)
+end
+
+declare NormalizedRisMessage
+    @role(event)
+    @expires(5s)
+end
+
+declare BgpUpdateFact
+    @role(event)
+    @expires(5s)
+end
+
+declare PeerSessionFact
+    @role(event)
+    @expires(5s)
+end
+
+declare CollectorFact
+    @role(event)
+    @expires(5s)
+end
+
+declare TimeBucketFact
+    @role(event)
+    @expires(5s)
+end
+
+declare BgpPath
+    @role(event)
+    @expires(5s)
+end
+
+declare OriginFact
+    @role(event)
+    @expires(5s)
+end
+
+declare MedFact
+    @role(event)
+    @expires(5s)
+end
+
+declare AggregatorFact
+    @role(event)
+    @expires(5s)
+end
+
+declare CommunityFact
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteAnnouncement
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteWithdrawal
+    @role(event)
+    @expires(5s)
+end
+
+declare PrefixFact
+    @role(event)
+    @expires(5s)
+end
+
+declare NextHopFact
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteValidationResult
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteCandidate
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteScore
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteDecision
+    @role(event)
+    @expires(5s)
+end
+
+declare RibEvent
+    @role(event)
+    @expires(5s)
+end
+
+declare RouteAnomaly
+    @role(event)
+    @expires(5s)
+end
+
+declare AggregationHint
+    @role(event)
+    @expires(5s)
+end
+
+// RFC 4271 + RIS Live only.
+// No Cisco WEIGHT, Cisco LOCAL_PREF defaults, router-local IGP metric, oldest eBGP, or Cisco multipath rules.
+// No artificial depth metrics. Forward-chain depth must be measured by the benchmark from real rule causality.
+
+function boolean hasText(String s) {
+    return s != null && s.trim().length() > 0;
+}
+
+function String norm(String s) {
+    return s == null ? "" : s.trim().toUpperCase();
+}
+
+function boolean nonEmpty(List v) {
+    return v != null && !v.isEmpty();
+}
+
+function int asPathLength(List path) {
+    return path == null ? 0 : path.size();
+}
+
+function String firstAsn(List path) {
+    if (path == null || path.isEmpty()) return null;
+    Object first = path.get(0);
+    if (first instanceof List) {
+        List set = (List) first;
+        return set.isEmpty() ? null : String.valueOf(set.get(0));
+    }
+    return String.valueOf(first);
+}
+
+function String originAsn(List path) {
+    if (path == null || path.isEmpty()) return null;
+    Object last = path.get(path.size() - 1);
+    if (last instanceof List) {
+        List set = (List) last;
+        return set.isEmpty() ? null : String.valueOf(set.get(set.size() - 1));
+    }
+    return String.valueOf(last);
+}
+
+function boolean containsAsSet(List path) {
+    if (path == null) return false;
+    for (Object item : path) if (item instanceof List) return true;
+    return false;
+}
+
+function boolean hasDuplicateAsn(List path) {
+    if (path == null) return false;
+    Set seen = new HashSet();
+    for (Object item : path) {
+        if (item instanceof List) {
+            for (Object asn : (List) item) {
+                String s = String.valueOf(asn);
+                if (seen.contains(s)) return true;
+                seen.add(s);
+            }
+        } else {
+            String s = String.valueOf(item);
+            if (seen.contains(s)) return true;
+            seen.add(s);
+        }
+    }
+    return false;
+}
+
+function boolean hasAdjacentPrepend(List path) {
+    if (path == null || path.size() < 2) return false;
+    Object previous = null;
+    for (Object item : path) {
+        if (item instanceof List) {
+            previous = null;
+        } else {
+            if (previous != null && String.valueOf(previous).equals(String.valueOf(item))) return true;
+            previous = item;
+        }
+    }
+    return false;
+}
+
+function boolean isPrivateAsn(String asnText) {
+    try {
+        long asn = Long.parseLong(asnText);
+        return (asn >= 64512L && asn <= 65534L) || (asn >= 4200000000L && asn <= 4294967294L);
+    } catch (Exception e) {
+        return false;
+    }
+}
+
+function boolean hasPrivateAsn(List path) {
+    if (path == null) return false;
+    for (Object item : path) {
+        if (item instanceof List) {
+            for (Object asn : (List) item) if (isPrivateAsn(String.valueOf(asn))) return true;
+        } else if (isPrivateAsn(String.valueOf(item))) return true;
+    }
+    return false;
+}
+
+function int originRank(String origin) {
+    String o = norm(origin);
+    if ("IGP".equals(o)) return 0;
+    if ("EGP".equals(o)) return 1;
+    if ("INCOMPLETE".equals(o)) return 2;
+    return 9;
+}
+
+function int safeMed(Integer med) {
+    return med == null ? 0 : med.intValue();
+}
+
+function boolean isIPv6Text(String s) {
+    return s != null && s.indexOf(':') >= 0;
+}
+
+function boolean isIPv4Text(String s) {
+    return s != null && s.indexOf('.') >= 0 && s.indexOf(':') < 0;
+}
+
+function String prefixFamily(String prefix) {
+    if (isIPv6Text(prefix)) return "IPv6";
+    if (isIPv4Text(prefix)) return "IPv4";
+    return "UNKNOWN";
+}
+
+function int prefixLength(String prefix) {
+    if (prefix == null || prefix.indexOf('/') < 0) return -1;
+    try { return Integer.parseInt(prefix.substring(prefix.indexOf('/') + 1)); }
+    catch (Exception e) { return -1; }
+}
+
+function String firstNextHop(String nextHop) {
+    if (nextHop == null) return null;
+    int i = nextHop.indexOf(',');
+    return i >= 0 ? nextHop.substring(0, i).trim() : nextHop.trim();
+}
+
+function boolean multiNextHop(String nextHop) {
+    return nextHop != null && nextHop.indexOf(',') >= 0;
+}
+
+function boolean validPrefix(String prefix) {
+    int len = prefixLength(prefix);
+    String fam = prefixFamily(prefix);
+    return ("IPv4".equals(fam) && len >= 0 && len <= 32) || ("IPv6".equals(fam) && len >= 0 && len <= 128);
+}
+
+function boolean less(String a, String b) {
+    if (a == null || b == null) return false;
+    return a.compareTo(b) < 0;
+}
+
+rule "001_normalize_ris_message"
+salience 1000
+when
+    $m : RisMessage( id != null ) over window:time(3s)
+    not NormalizedRisMessage( id == $m.id )
+then
+    insert(new NormalizedRisMessage($m.getId(), $m.getTimestamp(), $m.getPeer(), $m.getPeerAsn(), $m.getHost(), $m.getBgpType(), $m.getPath(), $m.getCommunity(), $m.getOrigin(), $m.getMed(), $m.getAggregator(), $m.getAnnouncements(), $m.getWithdrawals()));
+end
+
+rule "002_detect_non_ris_envelope"
+salience 995
+when
+    $m : RisMessage( id != null, envelopeType != null, envelopeType != "ris_message" ) over window:length(50)
+then
+    insert(new RouteAnomaly($m.getId(), null, "NON_RIS_ENVELOPE", "Outer message type differs from ris_message"));
+end
+
+rule "003_create_bgp_update_fact"
+salience 990
+when
+    $n : NormalizedRisMessage( id != null, bgpType != null, eval("UPDATE".equals(norm($n.getBgpType()))) ) over window:time(3s)
+    not BgpUpdateFact( messageId == $n.id )
+then
+    insert(new BgpUpdateFact($n.getId(), $n.getPeer(), $n.getPeerAsn(), $n.getHost(), $n.getTimestamp(), $n.getPath(), $n.getCommunity(), $n.getOrigin(), $n.getMed(), $n.getAggregator(), $n.getAnnouncements(), $n.getWithdrawals()));
+end
+
+rule "004_detect_non_update_message"
+salience 960
+when
+    $n : NormalizedRisMessage(
+        id != null,
+        bgpType != null
+    ) over window:length(50)
+    eval( "UPDATE".equals(norm($n.getBgpType())) == false )
+then
+    insert(new RouteAnomaly(
+        $n.getId(),
+        null,
+        "NON_UPDATE_MESSAGE",
+        "RIS message is a non-UPDATE BGP/RIS message; route extraction is outside route extraction scope"
+    ));
+end
+
+rule "005_extract_peer_session"
+salience 980
+when
+    $u : BgpUpdateFact( messageId != null, peer != null, peerAsn != null ) over window:time(3s)
+then
+    insert(new PeerSessionFact($u.getMessageId(), $u.getPeer(), $u.getPeerAsn(), $u.getHost(), $u.getTimestamp()));
+end
+
+rule "006_extract_collector"
+salience 979
+when
+    $u : BgpUpdateFact( messageId != null, host != null ) over window:length(50)
+then
+    insert(new CollectorFact($u.getMessageId(), $u.getHost()));
+end
+
+rule "007_create_time_bucket"
+salience 978
+when
+    $u : BgpUpdateFact( messageId != null ) over window:time(3s)
+then
+    insert(new TimeBucketFact($u.getMessageId(), Math.floor($u.getTimestamp() / 60.0d) * 60.0d));
+end
+
+rule "008_detect_missing_peer_asn"
+salience 977
+when
+    $u : BgpUpdateFact( messageId != null, eval(!hasText($u.getPeerAsn())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($u.getMessageId(), null, "MISSING_PEER_ASN", "RIS UPDATE has no peer_asn"));
+end
+
+rule "009_detect_missing_peer_ip"
+salience 976
+when
+    $u : BgpUpdateFact( messageId != null, eval(!hasText($u.getPeer())) ) over window:time(3s)
+then
+    insert(new RouteAnomaly($u.getMessageId(), null, "MISSING_PEER_IP", "RIS UPDATE has no peer IP"));
+end
+
+rule "010_detect_update_without_route_payload"
+salience 975
+when
+    $u : BgpUpdateFact( messageId != null, eval(!nonEmpty($u.getAnnouncements()) && !nonEmpty($u.getWithdrawals())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($u.getMessageId(), null, "EMPTY_UPDATE_PAYLOAD", "UPDATE has neither announcements nor withdrawals"));
+end
+
+rule "011_detect_update_with_announcement_payload"
+salience 974
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getAnnouncements())) ) over window:time(3s)
+then
+    insert(new RouteValidationResult($u.getMessageId(), null, true, "UPDATE_HAS_ANNOUNCEMENTS", "UPDATE carries announcement objects"));
+end
+
+rule "012_detect_update_with_withdrawal_payload"
+salience 973
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getWithdrawals())) ) over window:time(3s)
+then
+    insert(new RouteValidationResult($u.getMessageId(), null, true, "UPDATE_HAS_WITHDRAWALS", "UPDATE carries withdrawals"));
+end
+
+rule "013_detect_mixed_announcement_and_withdrawal"
+salience 972
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getAnnouncements()) && nonEmpty($u.getWithdrawals())) ) over window:length(50)
+then
+    insert(new RouteValidationResult($u.getMessageId(), null, true, "MIXED_UPDATE", "UPDATE contains both feasible and withdrawn routes"));
+end
+
+rule "014_detect_missing_path_on_announcement_update"
+salience 971
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getAnnouncements()) && !nonEmpty($u.getPath())) ) over window:time(3s)
+then
+    insert(new RouteAnomaly($u.getMessageId(), null, "ANNOUNCEMENT_WITHOUT_AS_PATH", "Announcement UPDATE has no AS_PATH"));
+end
+
+rule "015_detect_missing_origin_on_announcement_update"
+salience 970
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getAnnouncements()) && !hasText($u.getOrigin())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($u.getMessageId(), null, "ANNOUNCEMENT_WITHOUT_ORIGIN", "Announcement UPDATE has no ORIGIN attribute"));
+end
+
+rule "016_detect_community_presence"
+salience 969
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getCommunity())) ) over window:time(3s)
+then
+    insert(new CommunityFact($u.getMessageId(), "PRESENT", $u.getCommunity().size()));
+end
+
+rule "017_detect_empty_community"
+salience 968
+when
+    $u : BgpUpdateFact( messageId != null, eval(!nonEmpty($u.getCommunity())) ) over window:length(50)
+then
+    insert(new CommunityFact($u.getMessageId(), "ABSENT", 0));
+end
+
+rule "018_detect_aggregator_presence"
+salience 967
+when
+    $u : BgpUpdateFact( messageId != null, aggregator != null ) over window:time(3s)
+then
+    insert(new AggregatorFact($u.getMessageId(), $u.getAggregator()));
+end
+
+rule "019_extract_route_announcements"
+salience 960
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getAnnouncements())) ) over window:time(3s)
+then
+    for (Object obj : $u.getAnnouncements()) {
+        if (obj instanceof Map) {
+            Map ann = (Map) obj;
+            Object nh = ann.get("next_hop");
+            Object prefixesObj = ann.get("prefixes");
+            if (prefixesObj instanceof List) {
+                for (Object p : (List) prefixesObj) {
+                    String prefix = p == null ? null : String.valueOf(p);
+                    if (prefix != null) {
+                        insert(new RouteAnnouncement($u.getMessageId(), $u.getPeer(), $u.getPeerAsn(), $u.getHost(), $u.getTimestamp(), prefix, nh == null ? null : String.valueOf(nh), $u.getPath(), $u.getOrigin(), $u.getMed(), $u.getAggregator(), $u.getCommunity()));
+                    }
+                }
+            }
+        }
+    }
+end
+
+rule "020_extract_route_withdrawals"
+salience 959
+when
+    $u : BgpUpdateFact( messageId != null, eval(nonEmpty($u.getWithdrawals())) ) over window:time(3s)
+then
+    for (Object p : $u.getWithdrawals()) {
+        String prefix = p == null ? null : String.valueOf(p);
+        if (prefix != null) {
+            insert(new RouteWithdrawal($u.getMessageId(), $u.getPeer(), $u.getPeerAsn(), $u.getHost(), $u.getTimestamp(), prefix));
+        }
+    }
+end
+
+rule "021_extract_bgp_path_from_announcement"
+salience 950
+when
+    $a : RouteAnnouncement( messageId != null, path != null ) over window:time(3s)
+then
+    insert(new BgpPath($a.getMessageId(), $a.getPeerAsn(), $a.getPath(), asPathLength($a.getPath()), firstAsn($a.getPath()), originAsn($a.getPath()), containsAsSet($a.getPath())));
+end
+
+rule "022_extract_origin_from_announcement"
+salience 949
+when
+    $a : RouteAnnouncement( messageId != null ) over window:length(50)
+then
+    insert(new OriginFact($a.getMessageId(), $a.getOrigin(), originRank($a.getOrigin())));
+end
+
+rule "023_extract_med_from_announcement"
+salience 948
+when
+    $a : RouteAnnouncement( messageId != null ) over window:length(50)
+    $p : BgpPath( this coincides[1s] $a, messageId == $a.messageId ) over window:length(50)
+then
+    insert(new MedFact($a.getMessageId(), $a.getMed(), $p.getFirstAsn()));
+end
+
+rule "024_extract_prefix_from_announcement"
+salience 947
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+then
+    insert(new PrefixFact($a.getMessageId(), $a.getPrefix(), prefixFamily($a.getPrefix()), prefixLength($a.getPrefix()), "ANNOUNCEMENT"));
+end
+
+rule "025_extract_next_hop_from_announcement"
+salience 946
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+then
+    insert(new NextHopFact($a.getMessageId(), $a.getPrefix(), $a.getNextHop(), firstNextHop($a.getNextHop()), prefixFamily(firstNextHop($a.getNextHop())), multiNextHop($a.getNextHop())));
+end
+
+rule "026_extract_prefix_from_withdrawal"
+salience 945
+when
+    $w : RouteWithdrawal( messageId != null, prefix != null ) over window:time(3s)
+then
+    insert(new PrefixFact($w.getMessageId(), $w.getPrefix(), prefixFamily($w.getPrefix()), prefixLength($w.getPrefix()), "WITHDRAWAL"));
+end
+
+rule "027_detect_announcement_with_missing_next_hop"
+salience 944
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null, eval(!hasText($a.getNextHop())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "MISSING_NEXT_HOP", "Announcement has no NEXT_HOP"));
+end
+
+rule "028_detect_announcement_with_missing_prefix"
+salience 943
+when
+    $a : RouteAnnouncement( messageId != null, eval(!hasText($a.getPrefix())) ) over window:time(3s)
+then
+    insert(new RouteAnomaly($a.getMessageId(), null, "MISSING_PREFIX", "Announcement has no NLRI prefix"));
+end
+
+rule "029_validate_as_path_present"
+salience 930
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, $pathLen : pathLength ) over window:length(50)
+    eval( $pathLen > 0 )
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "AS_PATH_PRESENT", "AS_PATH is present for feasible route"));
+end
+
+rule "030_detect_empty_as_path"
+salience 929
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, pathLength == 0 ) over window:length(50)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "EMPTY_AS_PATH", "Feasible route has empty AS_PATH in external observation"));
+end
+
+rule "031_detect_as_set_in_path"
+salience 928
+when
+    $p : BgpPath( messageId != null, hasAsSet == true ) over window:length(50)
+then
+    insert(new RouteValidationResult($p.getMessageId(), null, true, "AS_SET_PRESENT", "AS_PATH contains AS_SET information"));
+end
+
+rule "032_detect_duplicate_asn_in_path"
+salience 927
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, eval(hasDuplicateAsn($p.getPath())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "DUPLICATE_ASN_IN_PATH", "AS_PATH contains repeated ASN values"));
+end
+
+rule "033_detect_as_path_prepending"
+salience 926
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, eval(hasAdjacentPrepend($p.getPath())) ) over window:length(50)
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "AS_PREPEND_OBSERVED", "Adjacent repeated ASNs indicate AS path prepending"));
+end
+
+rule "034_detect_private_asn_in_path"
+salience 925
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, eval(hasPrivateAsn($p.getPath())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "PRIVATE_ASN_IN_PATH", "AS_PATH contains private-use ASN"));
+end
+
+rule "035_validate_first_as_matches_peer_asn"
+salience 924
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, firstAsn != null, firstAsn == $a.peerAsn ) over window:length(50)
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "FIRST_AS_MATCHES_PEER", "Leftmost AS matches the RIS peer ASN"));
+end
+
+rule "036_detect_first_as_peer_mismatch"
+salience 923
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null, peerAsn != null )
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId, firstAsn != null, firstAsn != $a.peerAsn ) over window:length(50)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "FIRST_AS_PEER_MISMATCH", "Leftmost AS does not match peer_asn"));
+end
+
+rule "037_validate_origin_attribute"
+salience 922
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $o : OriginFact( this after[0s,3s] $a, messageId == $a.messageId, rank >= 0, rank <= 2 ) over window:length(50)
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "ORIGIN_VALID", "ORIGIN is IGP, EGP, or INCOMPLETE"));
+end
+
+rule "038_detect_invalid_origin_attribute"
+salience 921
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $o : OriginFact( this after[0s,3s] $a, messageId == $a.messageId, rank == 9 ) over window:length(50)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "INVALID_ORIGIN", "ORIGIN is not IGP, EGP, or INCOMPLETE"));
+end
+
+rule "039_validate_med_presence"
+salience 920
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null, med != null ) over window:length(50)
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "MED_PRESENT", "MULTI_EXIT_DISC attribute is present"));
+end
+
+rule "040_detect_negative_med"
+salience 919
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null, med != null, med < 0 ) over window:time(3s)
+then
+    insert(new RouteAnomaly($a.getMessageId(), $a.getPrefix(), "NEGATIVE_MED", "MED should be an unsigned value"));
+end
+
+rule "041_validate_prefix_syntax_for_announcement"
+salience 918
+when
+    $p : PrefixFact( messageId != null, prefix != null, kind == "ANNOUNCEMENT", eval(validPrefix($p.getPrefix())) ) over window:time(3s)
+then
+    insert(new RouteValidationResult($p.getMessageId(), $p.getPrefix(), true, "ANNOUNCEMENT_PREFIX_VALID", "Announcement prefix syntax and length are valid"));
+end
+
+rule "042_detect_invalid_announcement_prefix"
+salience 917
+when
+    $p : PrefixFact( messageId != null, prefix != null, kind == "ANNOUNCEMENT", eval(!validPrefix($p.getPrefix())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($p.getMessageId(), $p.getPrefix(), "INVALID_ANNOUNCEMENT_PREFIX", "Announcement prefix is syntactically invalid"));
+end
+
+rule "043_validate_prefix_syntax_for_withdrawal"
+salience 916
+when
+    $p : PrefixFact( messageId != null, prefix != null, kind == "WITHDRAWAL", eval(validPrefix($p.getPrefix())) ) over window:time(3s)
+then
+    insert(new RouteValidationResult($p.getMessageId(), $p.getPrefix(), true, "WITHDRAWAL_PREFIX_VALID", "Withdrawal prefix syntax and length are valid"));
+end
+
+rule "044_detect_invalid_withdrawal_prefix"
+salience 915
+when
+    $p : PrefixFact( messageId != null, prefix != null, kind == "WITHDRAWAL", eval(!validPrefix($p.getPrefix())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($p.getMessageId(), $p.getPrefix(), "INVALID_WITHDRAWAL_PREFIX", "Withdrawal prefix is syntactically invalid"));
+end
+
+rule "045_validate_next_hop_syntax"
+salience 914
+when
+    $n : NextHopFact( messageId != null, prefix != null, primaryNextHop != null, family != "UNKNOWN" ) over window:time(3s)
+then
+    insert(new RouteValidationResult($n.getMessageId(), $n.getPrefix(), true, "NEXT_HOP_VALID", "NEXT_HOP has recognizable IP family"));
+end
+
+rule "046_detect_invalid_next_hop"
+salience 913
+when
+    $n : NextHopFact( messageId != null, prefix != null, eval(!hasText($n.getPrimaryNextHop()) || "UNKNOWN".equals($n.getFamily())) ) over window:length(50)
+then
+    insert(new RouteAnomaly($n.getMessageId(), $n.getPrefix(), "INVALID_NEXT_HOP", "NEXT_HOP is missing or not an IP-like value"));
+end
+
+rule "047_detect_next_hop_equal_peer"
+salience 912
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null, peer != null )
+    $n : NextHopFact( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix, primaryNextHop == $a.peer ) over window:length(50)
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "NEXT_HOP_IS_PEER", "NEXT_HOP equals the observed peer address"));
+end
+
+rule "048_detect_multi_value_next_hop"
+salience 911
+when
+    $n : NextHopFact( messageId != null, prefix != null, multiValue == true ) over window:time(3s)
+then
+    insert(new RouteValidationResult($n.getMessageId(), $n.getPrefix(), true, "MULTI_VALUE_NEXT_HOP", "NEXT_HOP field contains multiple values"));
+end
+
+rule "049_detect_ipv4_more_specific_prefix"
+salience 690
+when
+    $p : PrefixFact(
+        $messageId : messageId,
+        $prefix : prefix,
+        family == "IPv4",
+        $len : prefixLength
+    )
+    eval( $len > 24 )
+then
+    insert(new RouteAnomaly(
+        $messageId,
+        $prefix,
+        "IPV4_MORE_SPECIFIC_PREFIX",
+        "IPv4 prefix is more specific than /24"
+    ));
+end
+
+rule "050_detect_ipv6_more_specific_prefix"
+salience 680
+when
+    $p : PrefixFact(
+        $messageId : messageId,
+        $prefix : prefix,
+        family == "IPv6",
+        $len : prefixLength
+    )
+    eval( $len > 48 )
+then
+    insert(new RouteAnomaly(
+        $messageId,
+        $prefix,
+        "IPV6_MORE_SPECIFIC_PREFIX",
+        "IPv6 prefix is more specific than /48"
+    ));
+end
+
+rule "051_validate_complete_route_shape"
+salience 900
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $count : Number( intValue >= 4 ) from accumulate(
+        $v : RouteValidationResult( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix, valid == true,
+             eval("AS_PATH_PRESENT".equals($v.getValidationType()) || "ORIGIN_VALID".equals($v.getValidationType()) || "ANNOUNCEMENT_PREFIX_VALID".equals($v.getValidationType()) || "NEXT_HOP_VALID".equals($v.getValidationType())) ) over window:time(3s),
+        count($v)
+    )
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), true, "COMPLETE_ROUTE_SHAPE", "Route has observable RFC-required path, origin, prefix, and next-hop data in the recent CEP window"));
+end
+
+rule "052_detect_incomplete_route_shape"
+salience 899
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $count : Number( intValue >= 1 ) from accumulate(
+        $ra : RouteAnomaly( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix,
+             eval("MISSING_NEXT_HOP".equals($ra.getCode()) || "INVALID_NEXT_HOP".equals($ra.getCode()) || "INVALID_ANNOUNCEMENT_PREFIX".equals($ra.getCode()) || "INVALID_ORIGIN".equals($ra.getCode())) ) over window:length(50),
+        count($ra)
+    )
+then
+    insert(new RouteValidationResult($a.getMessageId(), $a.getPrefix(), false, "INCOMPLETE_ROUTE_SHAPE", "Route failed at least one observable validation check in the recent CEP window"));
+end
+
+rule "053_create_feasible_route_candidate"
+salience 890
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId ) over window:length(50)
+    $o : OriginFact( this after[0s,3s] $a, messageId == $a.messageId ) over window:length(50)
+    $n : NextHopFact( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix ) over window:length(50)
+    RouteValidationResult( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix, validationType == "COMPLETE_ROUTE_SHAPE", valid == true ) over window:time(3s)
+    not RouteCandidate( messageId == $a.messageId, prefix == $a.prefix )
+then
+    insert(new RouteCandidate($a.getMessageId(), $a.getPrefix(), $a.getPeer(), $a.getPeerAsn(), $a.getHost(), $a.getTimestamp(), $p.getPath(), $p.getPathLength(), $p.getFirstAsn(), $p.getOriginAsn(), $o.getOrigin(), $o.getRank(), $a.getMed(), $n.getPrimaryNextHop(), true));
+end
+
+rule "054_create_infeasible_route_candidate"
+salience 889
+when
+    $a : RouteAnnouncement( messageId != null, prefix != null ) over window:time(3s)
+    $p : BgpPath( this after[0s,3s] $a, messageId == $a.messageId ) over window:length(50)
+    $o : OriginFact( this after[0s,3s] $a, messageId == $a.messageId ) over window:length(50)
+    $n : NextHopFact( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix ) over window:length(50)
+    RouteValidationResult( this after[0s,3s] $a, messageId == $a.messageId, prefix == $a.prefix, validationType == "INCOMPLETE_ROUTE_SHAPE", valid == false ) over window:time(3s)
+    not RouteCandidate( messageId == $a.messageId, prefix == $a.prefix )
+then
+    insert(new RouteCandidate($a.getMessageId(), $a.getPrefix(), $a.getPeer(), $a.getPeerAsn(), $a.getHost(), $a.getTimestamp(), $p.getPath(), $p.getPathLength(), $p.getFirstAsn(), $p.getOriginAsn(), $o.getOrigin(), $o.getRank(), $a.getMed(), $n.getPrimaryNextHop(), false));
+end
+
+rule "055_score_feasible_candidate"
+salience 880
+when
+    $c : RouteCandidate( messageId != null, prefix != null, feasible == true ) over window:time(3s)
+    not RouteScore( messageId == $c.messageId, prefix == $c.prefix )
+then
+    int score = ($c.getPathLength() * 1000) + ($c.getOriginRank() * 100) + safeMed($c.getMed());
+    insert(new RouteScore($c.getMessageId(), $c.getPrefix(), $c.getPeer(), $c.getPathLength(), $c.getOriginRank(), safeMed($c.getMed()), score));
+end
+
+rule "056_detect_infeasible_candidate"
+salience 879
+when
+    $c : RouteCandidate( messageId != null, prefix != null, feasible == false ) over window:length(50)
+then
+    insert(new RouteAnomaly($c.getMessageId(), $c.getPrefix(), "INFEASIBLE_CANDIDATE", "Candidate route failed observable feasibility validation"));
+end
+
+rule "057_accumulate_long_as_path_pressure"
+salience 878
+when
+    $seed : RouteCandidate( $prefix : prefix, $messageId : messageId, $len : pathLength ) over window:length(50)
+    eval( $len > 8 )
+    $count : Number( intValue >= 1 ) from accumulate(
+        $c : RouteCandidate( prefix == $prefix, $pl : pathLength, eval($pl > 8) ) over window:time(3s),
+        count($c)
+    )
+    not RouteAnomaly( messageId == $messageId, prefix == $prefix, code == "LONG_AS_PATH_WINDOW" )
+then
+    insert(new RouteAnomaly($messageId, $prefix, "LONG_AS_PATH_WINDOW", "At least one long AS_PATH candidate was observed for the prefix in the recent CEP window"));
+end
+
+rule "058_accumulate_incomplete_origin_candidates"
+salience 877
+when
+    $seed : RouteCandidate( $peer : peer, $messageId : messageId, $prefix : prefix, $rank : originRank ) over window:length(50)
+    eval( $rank == 2 )
+    $count : Number( intValue >= 1 ) from accumulate(
+        $c : RouteCandidate( peer == $peer, $r : originRank, eval($r == 2) ) over window:time(3s),
+        count($c)
+    )
+    not RouteAnomaly( messageId == $messageId, prefix == $prefix, code == "INCOMPLETE_ORIGIN_CANDIDATE_WINDOW" )
+then
+    insert(new RouteAnomaly($messageId, $prefix, "INCOMPLETE_ORIGIN_CANDIDATE_WINDOW", "INCOMPLETE origin candidates were observed for the same peer in a recent CEP window"));
+end
+
+rule "059_accumulate_med_candidate_presence"
+salience 876
+when
+    $seed : RouteCandidate( $asn : firstAsn, $messageId : messageId, $prefix : prefix, med != null ) over window:length(50)
+    $count : Number( intValue >= 1 ) from accumulate(
+        $c : RouteCandidate( firstAsn == $asn, med != null ) over window:time(3s),
+        count($c)
+    )
+    not RouteValidationResult( messageId == $messageId, prefix == $prefix, validationType == "CANDIDATE_MED_PRESENT_WINDOW" )
+then
+    insert(new RouteValidationResult($messageId, $prefix, true, "CANDIDATE_MED_PRESENT_WINDOW", "MED-bearing candidates were observed for the same neighboring AS in the recent CEP window"));
+end
+
+rule "060_accumulate_missing_med_candidates"
+salience 875
+when
+    $seed : RouteCandidate( $prefix : prefix, $messageId : messageId, med == null ) over window:length(50)
+    $count : Number( intValue >= 1 ) from accumulate(
+        $c : RouteCandidate( prefix == $prefix, med == null ) over window:time(3s),
+        count($c)
+    )
+    not RouteValidationResult( messageId == $messageId, prefix == $prefix, validationType == "CANDIDATE_MED_ABSENT_WINDOW" )
+then
+    insert(new RouteValidationResult($messageId, $prefix, true, "CANDIDATE_MED_ABSENT_WINDOW", "Candidates without MED were observed for the prefix in the recent CEP window"));
+end
+
+rule "061_create_adj_rib_in_event_for_candidate"
+salience 860
+when
+    $c : RouteCandidate( messageId != null, prefix != null, feasible == true ) over window:time(3s)
+then
+    insert(new RibEvent($c.getMessageId(), $c.getPrefix(), "Adj-RIB-In", "Feasible route is available as input to the decision process"));
+end
+
+rule "062_create_loc_rib_event_for_scored_candidate"
+salience 859
+when
+    $s : RouteScore( messageId != null, prefix != null ) over window:time(3s)
+then
+    insert(new RibEvent($s.getMessageId(), $s.getPrefix(), "Loc-RIB-Candidate", "Scored candidate may participate in local route selection"));
+end
+
+rule "063_create_adj_rib_out_candidate_event"
+salience 858
+when
+    $s : RouteScore( messageId != null, prefix != null ) over window:time(3s)
+    RibEvent( this after[0s,3s] $s, messageId == $s.messageId, prefix == $s.prefix, rib == "Loc-RIB-Candidate" ) over window:length(50)
+then
+    insert(new RibEvent($s.getMessageId(), $s.getPrefix(), "Adj-RIB-Out-Candidate", "Candidate route could be organized for advertisement"));
+end
+
+rule "064_create_withdrawal_adj_rib_event"
+salience 857
+when
+    $w : RouteWithdrawal( messageId != null, prefix != null ) over window:time(3s)
+    PrefixFact( this after[0s,3s] $w, messageId == $w.messageId, prefix == $w.prefix, kind == "WITHDRAWAL" ) over window:length(50)
+then
+    insert(new RibEvent($w.getMessageId(), $w.getPrefix(), "Adj-RIB-In-Withdrawal", "Withdrawn route observed in inbound UPDATE"));
+end
+
+rule "065_create_withdrawal_loc_rib_event"
+salience 856
+when
+    $w : RouteWithdrawal( messageId != null, prefix != null ) over window:time(3s)
+    RibEvent( this after[0s,3s] $w, messageId == $w.messageId, prefix == $w.prefix, rib == "Adj-RIB-In-Withdrawal" ) over window:length(50)
+then
+    insert(new RibEvent($w.getMessageId(), $w.getPrefix(), "Loc-RIB-Invalidation", "Withdrawal may invalidate a selected route"));
+end
+
+rule "066_decide_shorter_as_path"
+salience 850
+when
+    $a : RouteScore( $prefix : prefix, $peer : peer, $winner : messageId, $lenA : pathLength ) over window:time(3s)
+    $b : RouteScore( this after[0s,3s] $a, prefix == $prefix, peer == $peer, messageId != $winner, $loser : messageId, $lenB : pathLength ) over window:length(25)
+    eval( $lenB > $lenA )
+then
+    insert(new RouteDecision($prefix, $winner, $loser, "SHORTER_AS_PATH_RECENT_WINDOW"));
+end
+
+rule "067_decide_lower_origin_rank"
+salience 849
+when
+    $a : RouteCandidate( feasible == true, $prefix : prefix, $peer : peer, $winnerId : messageId, $originA : originRank ) over window:time(3s)
+    $b : RouteCandidate( this after[0s,3s] $a, feasible == true, prefix == $prefix, peer == $peer, messageId != $winnerId, $loserId : messageId, $originB : originRank ) over window:length(25)
+    eval( $originB > $originA )
+then
+    insert(new RouteDecision($prefix, $winnerId, $loserId, "LOWER_ORIGIN_RANK_RECENT_WINDOW"));
+end
+
+rule "068_decide_lower_med_same_neighbor"
+salience 848
+when
+    $a : RouteCandidate( feasible == true, med != null, firstAsn != null, $prefix : prefix, $peer : peer, $winnerId : messageId, $neighbor : firstAsn, $medA : med ) over window:time(3s)
+    $b : RouteCandidate( this after[0s,3s] $a, feasible == true, med != null, prefix == $prefix, peer == $peer, firstAsn == $neighbor, messageId != $winnerId, $loserId : messageId, $medB : med ) over window:length(25)
+    eval( $medB.intValue() > $medA.intValue() )
+then
+    insert(new RouteDecision($prefix, $winnerId, $loserId, "LOWER_MED_SAME_NEIGHBOR_AS"));
+end
+
+rule "069_decide_lower_composite_score"
+salience 847
+when
+    $a : RouteScore( $prefix : prefix, $peer : peer, $winner : messageId, $scoreA : score ) over window:time(3s)
+    $b : RouteScore( this after[0s,3s] $a, prefix == $prefix, peer == $peer, messageId != $winner, $loser : messageId, $scoreB : score ) over window:length(25)
+    eval( $scoreB > $scoreA )
+then
+    insert(new RouteDecision($prefix, $winner, $loser, "LOWER_COMPOSITE_SCORE_RECENT_WINDOW"));
+end
+
+rule "070_decide_tie_same_score_lower_message_id"
+salience 846
+when
+    $a : RouteScore( $prefix : prefix, $peer : peer, $winner : messageId, $score : score ) over window:time(3s)
+    $b : RouteScore( this after[0s,3s] $a, prefix == $prefix, peer == $peer, messageId != $winner, $loser : messageId, score == $score ) over window:length(25)
+    eval( less($winner, $loser) )
+then
+    insert(new RouteDecision($prefix, $winner, $loser, "DETERMINISTIC_MESSAGE_ID_TIE_RECENT_WINDOW"));
+end
+
+rule "071_create_best_path_rib_event"
+salience 845
+when
+    $d : RouteDecision( prefix != null, winnerMessageId != null ) over window:time(3s)
+    $s : RouteScore( messageId == $d.winnerMessageId, prefix == $d.prefix ) over window:length(50)
+then
+    insert(new RibEvent($d.getWinnerMessageId(), $d.getPrefix(), "Loc-RIB-Selected", "Recent candidate selected over an alternative by " + $d.getReason()));
+end
+
+rule "072_create_advertisable_rib_event"
+salience 844
+when
+    $r : RibEvent( messageId != null, prefix != null, rib == "Loc-RIB-Selected" ) over window:time(3s)
+    $c : RouteCandidate( this coincides[15s] $r, messageId == $r.messageId, prefix == $r.prefix, feasible == true ) over window:length(50)
+then
+    insert(new RibEvent($r.getMessageId(), $r.getPrefix(), "Adj-RIB-Out-Selected", "Selected route is eligible for outbound organization subject to policy"));
+end
+
+rule "073_hint_identical_as_path_aggregation_candidate"
+salience 830
+when
+    $a : RouteCandidate( feasible == true, $prefix : prefix, $peer : peer, $left : messageId, $path : path ) over window:time(3s)
+    $b : RouteCandidate( this after[0s,3s] $a, prefix == $prefix, peer == $peer, messageId != $left, feasible == true, path == $path, $right : messageId ) over window:length(25)
+    eval( less($left, $right) )
+then
+    insert(new AggregationHint($left, $right, "IDENTICAL_AS_PATH_WINDOW", "Recent routes have identical AS_PATH attributes and may be considered for aggregation"));
+end
+
+rule "074_hint_same_origin_aggregation_candidate"
+salience 829
+when
+    $a : RouteCandidate( feasible == true, origin != null, $prefix : prefix, $peer : peer, $left : messageId, $origin : origin ) over window:time(3s)
+    $b : RouteCandidate( this after[0s,3s] $a, prefix == $prefix, peer == $peer, messageId != $left, feasible == true, origin == $origin, $right : messageId ) over window:length(25)
+    eval( less($left, $right) )
+then
+    insert(new AggregationHint($left, $right, "SAME_ORIGIN_WINDOW", "Recent routes share the same ORIGIN attribute"));
+end
+
+rule "075_detect_med_blocks_aggregation"
+salience 828
+when
+    $a : RouteCandidate( feasible == true, med != null, firstAsn != null, $prefix : prefix, $peer : peer, $left : messageId, $neighbor : firstAsn, $medA : med ) over window:time(3s)
+    $b : RouteCandidate( this after[0s,3s] $a, prefix == $prefix, peer == $peer, firstAsn == $neighbor, messageId != $left, feasible == true, med != null, $right : messageId, $medB : med ) over window:length(25)
+    eval( $medB.intValue() != $medA.intValue() )
+    eval( less($left, $right) )
+then
+    insert(new AggregationHint($left, $right, "MED_DIFF_BLOCKS_AGGREGATION_WINDOW", "RFC 4271 aggregation guard: recent routes with different MED values should avoid aggregation"));
+end
+
+rule "076_accumulate_peer_update_burst"
+salience 827
+when
+    $seed : BgpUpdateFact( $peer : peer, $messageId : messageId ) over window:length(50)
+    $count : Number( intValue >= 5 ) from accumulate(
+        $u : BgpUpdateFact( peer == $peer ) over window:time(3s),
+        count($u)
+    )
+    not RouteValidationResult( messageId == $messageId, validationType == "PEER_UPDATE_BURST" )
+then
+    insert(new RouteValidationResult($messageId, null, true, "PEER_UPDATE_BURST", "At least five UPDATE messages from the same peer were observed within a short CEP window"));
+end
+
+rule "077_accumulate_prefix_announcement_burst"
+salience 826
+when
+    $seed : RouteAnnouncement( $prefix : prefix, $messageId : messageId ) over window:length(50)
+    $count : Number( intValue >= 3 ) from accumulate(
+        $a : RouteAnnouncement( prefix == $prefix ) over window:time(3s),
+        count($a)
+    )
+    not AggregationHint( leftMessageId == $messageId, kind == "PREFIX_ANNOUNCEMENT_BURST" )
+then
+    insert(new AggregationHint($messageId, String.valueOf($count), "PREFIX_ANNOUNCEMENT_BURST", "Multiple announcements for the same prefix were observed in a short CEP time window"));
+end
+
+rule "078_detect_withdrawal_after_announcement_same_peer_prefix"
+salience 825
+when
+    $w : RouteWithdrawal( $right : messageId, $peer : peer, $prefix : prefix ) over window:time(3s)
+    $a : RouteAnnouncement( this before[0s,3s] $w, $left : messageId, peer == $peer, prefix == $prefix, messageId != $right ) over window:length(50)
+    not AggregationHint( leftMessageId == $left, rightMessageId == $right, kind == "WITHDRAWAL_AFTER_ANNOUNCEMENT_TEMPORAL" )
+then
+    insert(new AggregationHint($left, $right, "WITHDRAWAL_AFTER_ANNOUNCEMENT_TEMPORAL", "A route announced by the peer was withdrawn afterwards in the observed CEP stream"));
+end
+
+rule "079_detect_announcement_after_withdrawal_same_peer_prefix"
+salience 824
+when
+    $a : RouteAnnouncement( $right : messageId, $peer : peer, $prefix : prefix ) over window:time(3s)
+    $w : RouteWithdrawal( this before[0s,3s] $a, $left : messageId, peer == $peer, prefix == $prefix, messageId != $right ) over window:length(50)
+    not AggregationHint( leftMessageId == $left, rightMessageId == $right, kind == "ANNOUNCEMENT_AFTER_WITHDRAWAL_TEMPORAL" )
+then
+    insert(new AggregationHint($left, $right, "ANNOUNCEMENT_AFTER_WITHDRAWAL_TEMPORAL", "A withdrawn route reappeared later as an announcement in the observed CEP stream"));
+end
