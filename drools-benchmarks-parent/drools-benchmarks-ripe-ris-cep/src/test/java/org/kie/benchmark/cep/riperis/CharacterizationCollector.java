@@ -557,6 +557,9 @@ public class CharacterizationCollector {
         String dataFile;
         if (args != null && args.length > 0) {
             dataFile = EnvConfig.get(args[0]);
+            if (dataFile == null) {
+                dataFile = args[0];
+            }
         } else {
             dataFile = EnvConfig.get("RIPERIS_DEFAULT_DATA_FILE");
         }

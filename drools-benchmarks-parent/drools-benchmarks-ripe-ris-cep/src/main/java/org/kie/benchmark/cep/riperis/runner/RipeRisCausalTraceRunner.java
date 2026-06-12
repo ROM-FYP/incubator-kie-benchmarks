@@ -43,6 +43,9 @@ public class RipeRisCausalTraceRunner {
             System.exit(1);
         }
         String dataFile = EnvConfig.get(args[0]);
+        if (dataFile == null) {
+            dataFile = args[0];
+        }
         String traceDir = EnvConfig.get("RIPERIS_RECORDED_TRACE_DIR");
         String defaultOutput = traceDir + "/riperis_causal_trace.jsonl";
         String outputFile = args.length > 1 ? args[1] : defaultOutput;

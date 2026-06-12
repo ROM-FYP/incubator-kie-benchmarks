@@ -34,31 +34,25 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Parallel rule execution engine for Ripe RIS CEP.
- * 
- * TODO: The routing logic in {@code replayEvents} currently broadcasts all events
- * to all clusters because the specific alpha-filter routing for RIPE RIS
- * has not been defined yet. You need to implement your own routing logic.
+ * Alpha-filter routed 3-cluster parallel rule execution engine for RIPE RIS CEP.
+ *
+ * <p>Architecture: routed model — each {@link RisMessage} is sent to exactly one
+ * session based on its payload type (see {@link RipeRisEventRouter}):
+ *
+ * <ul>
+ *   <li>C1 = General / Non-UPDATE (19 rules) — receives: events with no announcement
+ *       or withdrawal payload</li>
+ *   <li>C2 = Announcement Pipeline (68 rules, incl. 3 duplicated) — receives: events
+ *       with non-empty announcements (including mixed ann+wd events)</li>
+ *   <li>C3 = Withdrawal Pipeline (27 rules, incl. 4 duplicated) — receives: events
+ *       with non-empty withdrawals AND empty announcements</li>
+ * </ul>
  */
 public class RipeRisClusterOrchestrator {
 
-    // Use a special RisMessage as poison pill.
-    // Assuming constructor RisMessage(String id, double timestamp, ...) exists or we can use a dummy.
-    // If not, we might need a different mechanism or a specific field.
-    // Let's use a dummy RisMessage if possible, or just check for a specific ID.
-    private static final RisMessage POISON_PILL;
-    
-    static {
-        // Create a dummy message as poison pill. 
-        // We assume we can construct it or we will use a special check.
-        // Let's create a message with a specific ID that is unlikely to occur.
-        Map<String, Object> dummyEnvelope = new HashMap<>();
-        dummyEnvelope.put("id", "__STOP__");
-        dummyEnvelope.put("timestamp", -1.0);
-        POISON_PILL = RisMessage.fromRisLiveEnvelope(dummyEnvelope);
-        // If fromRisLiveEnvelope returns null for missing fields, we might need to populate it more.
-        // Let's assume it works or we can check for null or specific ID.
-    }
+    private static final RisMessage POISON_PILL =
+            new RisMessage("__STOP__", "__STOP__", -1.0, null, null, null,
+                    null, null, null, null, null, null, null, null);
 
     private static final int POOL_SIZE = RipeRisClusterDrlGenerator.getClusterCount();
 
@@ -66,8 +60,8 @@ public class RipeRisClusterOrchestrator {
     private final Map<Integer, BlockingQueue<RisMessage>> eventQueues;
     private final ExecutorService threadPool;
 
-    private final Map<Integer, Long> perSessionFired = new LinkedHashMap<>();
-    private final Map<Integer, Long> perSessionEventsReceived = new LinkedHashMap<>();
+    private final Map<Integer, Integer> perSessionFired = new LinkedHashMap<>();
+    private final Map<Integer, Integer> perSessionEventsReceived = new LinkedHashMap<>();
 
     public RipeRisClusterOrchestrator(String fullDrlContent) {
         this.clusterSessions = new LinkedHashMap<>();
@@ -88,7 +82,8 @@ public class RipeRisClusterOrchestrator {
             KieSession session = buildSessionFromDrl(drl, clusterId);
             session.fireAllRules();
 
-            long ruleCount = session.getKieBase().getKiePackages().stream()
+            // Log rule count for debugging DRL splitting
+            int ruleCount = session.getKieBase().getKiePackages().stream()
                     .mapToInt(p -> p.getRules().size()).sum();
 
             clusterSessions.put(clusterId, session);
@@ -99,11 +94,19 @@ public class RipeRisClusterOrchestrator {
         }
     }
 
-    public long replayEvents(List<RisMessage> events) {
+    /**
+     * Replays all events through the parallel cluster architecture.
+     * Each event is routed to exactly one cluster via {@link RipeRisEventRouter}.
+     *
+     * @param events the list of {@link RisMessage} events to replay
+     * @return total number of rules fired across all clusters
+     */
+    public int replayEvents(List<RisMessage> events) {
         perSessionFired.clear();
         perSessionEventsReceived.clear();
 
-        Map<Integer, Future<long[]>> futures = new LinkedHashMap<>();
+        // Launch consumer threads
+        Map<Integer, Future<int[]>> futures = new LinkedHashMap<>();
         for (Map.Entry<Integer, KieSession> entry : clusterSessions.entrySet()) {
             int cid = entry.getKey();
             KieSession session = entry.getValue();
@@ -111,18 +114,19 @@ public class RipeRisClusterOrchestrator {
             futures.put(cid, threadPool.submit(() -> drainAndFire(session, queue)));
         }
 
+        // Alpha-filter routing: each event goes to exactly one cluster
         for (RisMessage event : events) {
+            ClusterId target = RipeRisEventRouter.route(event);
+            int clusterId = clusterIdOrdinal(target);
             try {
-                for (int i = 1; i <= POOL_SIZE; i++) {
-                    eventQueues.get(i).put(event);
-                }
+                eventQueues.get(clusterId).put(event);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException("Interrupted while enqueuing event", e);
             }
         }
 
-        // Send poison pills
+        // Send poison pills to all clusters
         for (BlockingQueue<RisMessage> q : eventQueues.values()) {
             try {
                 q.put(POISON_PILL);
@@ -131,10 +135,11 @@ public class RipeRisClusterOrchestrator {
             }
         }
 
-        long totalFired = 0L;
-        for (Map.Entry<Integer, Future<long[]>> entry : futures.entrySet()) {
+        // Collect results
+        int totalFired = 0;
+        for (Map.Entry<Integer, Future<int[]>> entry : futures.entrySet()) {
             try {
-                long[] result = entry.getValue().get();
+                int[] result = entry.getValue().get();
                 totalFired += result[0];
                 perSessionFired.put(entry.getKey(), result[0]);
                 perSessionEventsReceived.put(entry.getKey(), result[1]);
@@ -145,15 +150,18 @@ public class RipeRisClusterOrchestrator {
         return totalFired;
     }
 
-    private long[] drainAndFire(KieSession session, BlockingQueue<RisMessage> queue)
+    /**
+     * Worker thread: drains the queue and fires rules for each event.
+     */
+    private int[] drainAndFire(KieSession session, BlockingQueue<RisMessage> queue)
             throws InterruptedException {
         SessionPseudoClock clock = session.getSessionClock();
-        long fired = 0L;
-        long received = 0L;
+        int fired = 0;
+        int received = 0;
 
         while (true) {
             RisMessage event = queue.take();
-            if (event == POISON_PILL || (event != null && "__STOP__".equals(event.getId()))) break;
+            if (event == POISON_PILL) break;
             received++;
 
             long currentTime = clock.getCurrentTime();
@@ -165,25 +173,30 @@ public class RipeRisClusterOrchestrator {
             session.insert(event);
             fired += session.fireAllRules();
         }
-        return new long[] { fired, received };
+        return new int[] { fired, received };
     }
 
     private KieSession buildSessionFromDrl(String drl, int clusterId) {
         KieServices ks = KieServices.Factory.get();
         KieFileSystem kfs = ks.newKieFileSystem();
         long uid = System.nanoTime();
+        // Put each cluster's DRL in a completely unique directory to prevent classpath leakage
         String pkgDir = "cluster" + clusterId + "_" + uid;
         String pkgPath = "src/main/resources/" + pkgDir + "/cluster_ripe.drl";
-        
-        String kbaseName = "ripeCluster_" + clusterId + "Base_" + uid;
+
+        String kbaseName  = "ripeCluster_" + clusterId + "Base_"    + uid;
         String ksessionName = "ripeCluster_" + clusterId + "Session_" + uid;
-        
-        String updatedDrl = drl.replace("package rules;", "package " + pkgDir + ";");
+
+        // Replace the package declaration so it matches the unique directory
+        String updatedDrl = drl.replace(
+                "package org.kie.benchmark.cep.riperis.rules",
+                "package " + pkgDir);
         kfs.write(pkgPath, updatedDrl);
 
         String kmoduleXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<kmodule xmlns=\"http://www.drools.org/xsd/kmodule\">\n"
-                + "  <kbase name=\"" + kbaseName + "\" packages=\"" + pkgDir + "\" eventProcessingMode=\"stream\">\n"
+                + "  <kbase name=\"" + kbaseName + "\" packages=\"" + pkgDir
+                + "\" eventProcessingMode=\"stream\">\n"
                 + "    <ksession name=\"" + ksessionName + "\"/>\n"
                 + "  </kbase>\n"
                 + "</kmodule>";
@@ -209,11 +222,21 @@ public class RipeRisClusterOrchestrator {
         return kc.newKieSession(ksessionName, cfg);
     }
 
-    public Map<Integer, Long> getPerSessionFired() {
+    /** Maps ClusterId enum to the 1-based integer key used in the session map. */
+    private static int clusterIdOrdinal(ClusterId id) {
+        switch (id) {
+            case C1_GENERAL:      return 1;
+            case C2_ANNOUNCEMENT: return 2;
+            case C3_WITHDRAWAL:   return 3;
+            default: throw new IllegalArgumentException("Unknown ClusterId: " + id);
+        }
+    }
+
+    public Map<Integer, Integer> getPerSessionFired() {
         return Collections.unmodifiableMap(perSessionFired);
     }
 
-    public Map<Integer, Long> getPerSessionEventsReceived() {
+    public Map<Integer, Integer> getPerSessionEventsReceived() {
         return Collections.unmodifiableMap(perSessionEventsReceived);
     }
 

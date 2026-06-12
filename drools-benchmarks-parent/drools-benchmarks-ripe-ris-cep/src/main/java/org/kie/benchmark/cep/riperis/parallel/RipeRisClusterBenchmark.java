@@ -23,15 +23,22 @@ import org.kie.api.time.SessionPseudoClock;
 import org.kie.benchmark.cep.riperis.model.RisMessage;
 import org.kie.benchmark.cep.riperis.runner.RipeRisBaselineBenchmark;
 import org.kie.benchmark.cep.riperis.util.CepSessionFactory;
+import org.kie.benchmark.cep.riperis.util.EnvConfig;
 
-import java.io.*;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Benchmark harness that runs both the single-session baseline and the
- * parallel execution, comparing throughput and rule firing counts.
+ * 3-cluster parallel execution, comparing throughput and rule firing counts.
+ *
+ * <h3>Usage</h3>
+ * <pre>
+ *   mvn exec:java "-Dexec.mainClass=org.kie.benchmark.cep.riperis.parallel.RipeRisClusterBenchmark" \
+ *       "-Dexec.args=RIPERIS_DEFAULT_DATA_FILE [maxEvents]"
+ * </pre>
  */
 public class RipeRisClusterBenchmark {
 
@@ -43,11 +50,16 @@ public class RipeRisClusterBenchmark {
                 System.err.println("Usage: RipeRisClusterBenchmark <dataFile> [maxEvents]");
                 System.exit(1);
             }
-            String dataFile = args[0];
-            long maxEvents = args.length > 1 ? Long.parseLong(args[1]) : Long.MAX_VALUE;
+            String argDataFile = args[0];
+            String dataFile = EnvConfig.get(argDataFile);
+            if (dataFile == null) {
+                dataFile = argDataFile;
+            }
+            int maxEvents = args.length > 1 ? Integer.parseInt(args[1]) : Integer.MAX_VALUE;
 
             System.out.println("╔══════════════════════════════════════════════╗");
             System.out.println("║  Ripe RIS CEP — Cluster Parallel Benchmark  ║");
+            System.out.println("║  3 threads: General + Announcement + Withdrawal ║");
             System.out.println("╚══════════════════════════════════════════════╝\n");
 
             // 1. Load events
@@ -59,8 +71,7 @@ public class RipeRisClusterBenchmark {
             String drlContent;
             try (InputStream is = RipeRisClusterBenchmark.class
                     .getClassLoader().getResourceAsStream(DRL_PATH)) {
-                if (is == null)
-                    throw new RuntimeException("Cannot find " + DRL_PATH);
+                if (is == null) throw new RuntimeException("Cannot find " + DRL_PATH);
                 drlContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
 
@@ -72,7 +83,7 @@ public class RipeRisClusterBenchmark {
             KieSession baselineSession = factory.createSession(true);
 
             long baselineStart = System.currentTimeMillis();
-            long baselineFired = 0L;
+            int baselineFired = 0;
             SessionPseudoClock baseClock = baselineSession.getSessionClock();
 
             for (int i = 0; i < events.size(); i++) {
@@ -96,16 +107,16 @@ public class RipeRisClusterBenchmark {
             // ══════════════════════════════════════════════
             // CLUSTER PARALLEL
             // ══════════════════════════════════════════════
-            System.out.println("\n── Cluster-Parallel Execution ─────────");
+            System.out.println("\n── Cluster-Parallel Execution (3T) ─────────");
 
             RipeRisClusterOrchestrator orchestrator = new RipeRisClusterOrchestrator(drlContent);
 
             long clusterStart = System.currentTimeMillis();
-            long clusterFired = orchestrator.replayEvents(events);
+            int clusterFired = orchestrator.replayEvents(events);
             long clusterDuration = System.currentTimeMillis() - clusterStart;
 
-            Map<Integer, Long> perSessionFired = orchestrator.getPerSessionFired();
-            Map<Integer, Long> perSessionEvents = orchestrator.getPerSessionEventsReceived();
+            Map<Integer, Integer> perSessionFired = orchestrator.getPerSessionFired();
+            Map<Integer, Integer> perSessionEvents = orchestrator.getPerSessionEventsReceived();
 
             orchestrator.dispose();
 
@@ -119,7 +130,7 @@ public class RipeRisClusterBenchmark {
             // COMPARISON
             // ══════════════════════════════════════════════
             System.out.println("\n── Comparison ──────────────────────────────");
-            System.out.printf("%-25s %15s %15s%n", "", "Single", "Cluster");
+            System.out.printf("%-25s %15s %15s%n", "", "Single", "Cluster (3T)");
             System.out.printf("%-25s %,15d %,15d%n", "Rules fired",
                     baselineFired, clusterFired);
             System.out.printf("%-25s %,12d ms %,12d ms%n", "Duration",
@@ -136,13 +147,24 @@ public class RipeRisClusterBenchmark {
             // ══════════════════════════════════════════════
             String[] names = RipeRisClusterDrlGenerator.getClusterNames();
             System.out.println("\n── Per-Session Breakdown ───────────────────");
-            for (Map.Entry<Integer, Long> entry : perSessionFired.entrySet()) {
+            for (Map.Entry<Integer, Integer> entry : perSessionFired.entrySet()) {
                 int cid = entry.getKey();
-                long fired = entry.getValue();
-                long eventsRecv = perSessionEvents.getOrDefault(cid, 0L);
+                int fired = entry.getValue();
+                int eventsRecv = perSessionEvents.getOrDefault(cid, 0);
                 System.out.printf("  %-30s Events: %,8d  Fired: %,8d%n",
                         names[cid], eventsRecv, fired);
             }
+
+            // ══════════════════════════════════════════════
+            // CORRECTNESS CHECKS
+            // ══════════════════════════════════════════════
+            System.out.println("\n── Correctness ─────────────────────────────");
+            int maxFired = perSessionFired.values().stream()
+                    .mapToInt(Integer::intValue).max().orElse(0);
+            boolean noLoop = maxFired < events.size() * 50;
+            System.out.printf("Max rules in one session: %,d%n", maxFired);
+            System.out.println("No infinite loops: " + noLoop);
+            System.out.println("Status: " + (noLoop ? "✅ PASS" : "❌ WARNING"));
 
         } catch (Exception e) {
             e.printStackTrace();

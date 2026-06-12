@@ -50,6 +50,9 @@ public class RipeRisBaselineBenchmark {
 
         if (args.length > 0) {
             dataFile = EnvConfig.get(args[0]);
+            if (dataFile == null) {
+                dataFile = args[0];
+            }
             if (args.length > 1) {
                 maxEvents = Long.parseLong(args[1]);
             }

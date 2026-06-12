@@ -35,23 +35,30 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmark for the parallel Ripe RIS CEP execution.
+ * JMH benchmark for the 3-cluster parallel RIPE RIS CEP execution.
  *
- * <p>
- * Replays all events through the cluster architecture
+ * <p>Replays all events through the alpha-filter routed cluster architecture
  * using {@link RipeRisClusterOrchestrator}.
+ *
+ * <p>Architecture:
+ * <ul>
+ *   <li>C1 (General/Non-UPDATE) — events with no payload</li>
+ *   <li>C2 (Announcement Pipeline) — events with announcements</li>
+ *   <li>C3 (Withdrawal Pipeline) — events with withdrawals only</li>
+ * </ul>
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @Warmup(iterations = 3, batchSize = 1)
 @Measurement(iterations = 5, batchSize = 1)
-@Fork(value = 1, jvmArgs = { "-Xms4g", "-Xmx4g" })
+@Fork(value = 1, jvmArgs = {"-Xms4g", "-Xmx4g"})
 public class RipeRisClusterJmhBenchmark {
 
     private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
+    private static final String DEFAULT_DATA_FILE = "RIPERIS_DEFAULT_DATA_FILE";
 
-    @Param({ "RIPERIS_DEFAULT_DATA_FILE" })
+    @Param({DEFAULT_DATA_FILE})
     private String dataFile;
 
     private List<RisMessage> events;
@@ -59,13 +66,13 @@ public class RipeRisClusterJmhBenchmark {
 
     // Per-invocation state
     private RipeRisClusterOrchestrator orchestrator;
-    private long lastRulesFired;
+    private int lastRulesFired;
     private long invocationStartTime;
 
     // Cumulative trial-level metrics
     private long totalRulesFired;
     private long totalTimeElapsed;
-    private long invocationCount;
+    private int invocationCount;
 
     @Setup(Level.Trial)
     public void setupTrial() throws Exception {
@@ -73,8 +80,7 @@ public class RipeRisClusterJmhBenchmark {
         events = RipeRisBaselineBenchmark.loadEvents(EnvConfig.get(dataFile), Long.MAX_VALUE);
 
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(DRL_PATH)) {
-            if (is == null)
-                throw new RuntimeException("Cannot find " + DRL_PATH);
+            if (is == null) throw new RuntimeException("Cannot find " + DRL_PATH);
             drlContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
 
@@ -96,7 +102,7 @@ public class RipeRisClusterJmhBenchmark {
     }
 
     @Benchmark
-    public long clusterReplay() {
+    public int clusterReplay() {
         lastRulesFired = orchestrator.replayEvents(events);
         return lastRulesFired;
     }
@@ -111,24 +117,23 @@ public class RipeRisClusterJmhBenchmark {
         totalTimeElapsed += duration;
 
         // Log per-session breakdown
-        Map<Integer, Long> perFired = orchestrator.getPerSessionFired();
-        Map<Integer, Long> perEvents = orchestrator.getPerSessionEventsReceived();
+        Map<Integer, Integer> perFired = orchestrator.getPerSessionFired();
+        Map<Integer, Integer> perEvents = orchestrator.getPerSessionEventsReceived();
         String[] names = RipeRisClusterDrlGenerator.getClusterNames();
 
         System.out.printf("[Cluster Invocation %d] Rules fired: %,d | Duration: %d ms | Throughput: %.2f events/sec%n",
                 invocationCount, lastRulesFired, duration, throughput);
-        for (Map.Entry<Integer, Long> entry : perFired.entrySet()) {
+        for (Map.Entry<Integer, Integer> entry : perFired.entrySet()) {
             int cid = entry.getKey();
             System.out.printf("  %s:  Events=%,d  Fired=%,d%n",
-                    names[cid], perEvents.getOrDefault(cid, 0L), entry.getValue());
+                    names[cid], perEvents.getOrDefault(cid, 0), entry.getValue());
         }
     }
 
     @TearDown(Level.Trial)
     public void teardownTrial() {
         double avgThroughput = (totalTimeElapsed > 0)
-                ? (invocationCount * events.size() * 1000.0) / totalTimeElapsed
-                : 0;
+                ? (invocationCount * events.size() * 1000.0) / totalTimeElapsed : 0;
 
         System.out.println("\n=== Cluster Trial Summary ===");
         System.out.println("Pool size:              " + RipeRisClusterDrlGenerator.getClusterCount());

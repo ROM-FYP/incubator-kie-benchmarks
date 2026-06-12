@@ -49,7 +49,8 @@ public class RipeRisCepBenchmark {
 
     public void run() {
         if (config.isPartitioned()) {
-            logger.warn("Partitioned mode not yet implemented for Ripe RIS. Running baseline instead.");
+            logger.info("Partitioned mode is available via RipeRisClusterBenchmark / RipeRisClusterJmhBenchmark.");
+            logger.info("This class only runs the single-session baseline.");
             runBaseline();
         } else {
             runBaseline();

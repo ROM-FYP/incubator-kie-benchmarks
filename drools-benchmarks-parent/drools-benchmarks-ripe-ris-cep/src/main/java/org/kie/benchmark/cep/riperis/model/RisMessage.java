@@ -87,16 +87,34 @@ public class RisMessage implements Serializable {
         Object dataObj = envelope.get("data");
         Map<?, ?> data = dataObj instanceof Map ? (Map<?, ?>) dataObj : envelope;
         RisMessage m = new RisMessage();
-        m.setEnvelopeType(dataObj instanceof Map ? stringValue(envelope.get("type"), "ris_message") : "ris_message");
+
+        Object envType = envelope.get("envelopeType");
+        if (envType == null) {
+            envType = envelope.get("type");
+        }
+        m.setEnvelopeType(dataObj instanceof Map ? stringValue(envType, "ris_message") : "ris_message");
+
         m.setId(stringValue(data.get("id"), null));
         Object ts = data.get("timestamp");
         if (ts instanceof Number) {
             m.setTimestamp(((Number) ts).doubleValue());
         }
         m.setPeer(stringValue(data.get("peer"), null));
-        m.setPeerAsn(stringValue(data.get("peer_asn"), null));
+
+        Object peerAsnVal = data.get("peer_asn");
+        if (peerAsnVal == null) {
+            peerAsnVal = data.get("peerAsn");
+        }
+        m.setPeerAsn(stringValue(peerAsnVal, null));
+
         m.setHost(stringValue(data.get("host"), null));
-        m.setBgpType(stringValue(data.get("type"), null));
+
+        Object bgpTypeVal = data.get("type");
+        if (bgpTypeVal == null) {
+            bgpTypeVal = data.get("bgpType");
+        }
+        m.setBgpType(stringValue(bgpTypeVal, null));
+
         m.setPath(asList(data.get("path")));
         m.setCommunity(asList(data.get("community")));
         m.setOrigin(stringValue(data.get("origin"), null));
