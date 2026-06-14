@@ -33,13 +33,13 @@ DATASETS=(
 )
 
 echo "=============================================================="
-echo "Starting RIPE RIS CEP Benchmark Suite (16 combinations)"
+echo "Starting RIPE RIS CEP Benchmark Suite (8 combinations)"
 echo "Warmup: 0 iterations | Measurement: 1 iterations | Forks: 1"
 echo "Results target: $RESULTS_DIR/"
 echo "=============================================================="
 echo ""
 
-# Loop over architectures and datasets to run all 16 combinations one by one
+# Loop over architectures and datasets to run all 8 combinations one by one
 for arch_entry in "${ARCHITECTURES[@]}"; do
     # Split the entry by colon
     runner_class="${arch_entry%%:*}"
@@ -91,6 +91,6 @@ for arch_entry in "${ARCHITECTURES[@]}"; do
 done
 
 echo "=============================================================="
-echo "All 16 benchmark combinations completed successfully."
+echo "All 8 benchmark combinations completed successfully."
 echo "Results are stored in: $(pwd)/$RESULTS_DIR/"
 echo "=============================================================="

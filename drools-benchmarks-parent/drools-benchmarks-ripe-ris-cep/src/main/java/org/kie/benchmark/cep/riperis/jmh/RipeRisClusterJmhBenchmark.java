@@ -52,7 +52,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @Warmup(iterations = 3, batchSize = 1)
 @Measurement(iterations = 5, batchSize = 1)
-@Fork(value = 1, jvmArgs = {"-Xms4g", "-Xmx4g"})
+@Fork(value = 1, jvmArgs = {"-Xms4g", "-Xmx24g"})
 public class RipeRisClusterJmhBenchmark {
 
     private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
