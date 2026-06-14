@@ -19,8 +19,8 @@ mkdir -p "$RESULTS_DIR"
 # Define 4 architectures: "RunnerClassName:friendly_name"
 ARCHITECTURES=(
     "RipeRisSequentialJmhRunner:sequential"
-    "RipeRisParallelEvalJmhRunner:parallel_eval"
-    "RipeRisFullyParallelJmhRunner:fully_parallel"
+    # "RipeRisParallelEvalJmhRunner:parallel_eval"
+    # "RipeRisFullyParallelJmhRunner:fully_parallel"
     "RipeRisClusterJmhRunner:cluster"
 )
 
@@ -66,7 +66,7 @@ for arch_entry in "${ARCHITECTURES[@]}"; do
         # -prof gc : Attach GC/allocation profiler to record memory metrics
         # The runner class will write the custom, clean results JSON to: $output_file
         # We redirect the standard console output to a log file in results/
-        if ! java -jar "$JAR_PATH" "$runner_class" \
+        if ! java -Djmh.ignoreLock=true -jar "$JAR_PATH" "$runner_class" \
             -p dataFile="$param_value" \
             -wi 0 -i 1 -f 1 \
             -prof gc \
