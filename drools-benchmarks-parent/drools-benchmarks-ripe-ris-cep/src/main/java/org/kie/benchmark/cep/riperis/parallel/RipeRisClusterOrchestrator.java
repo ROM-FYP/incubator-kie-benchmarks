@@ -58,7 +58,10 @@ public class RipeRisClusterOrchestrator {
 
     private final Map<Integer, KieSession> clusterSessions;
     private final Map<Integer, BlockingQueue<RisMessage>> eventQueues;
-    private final ExecutorService threadPool;
+    private ExecutorService threadPool;
+
+    private final Map<Integer, KieContainer> clusterContainers = new LinkedHashMap<>();
+    private final Map<Integer, String> clusterSessionNames = new LinkedHashMap<>();
 
     private final Map<Integer, Integer> perSessionFired = new LinkedHashMap<>();
     private final Map<Integer, Integer> perSessionEventsReceived = new LinkedHashMap<>();
@@ -66,9 +69,8 @@ public class RipeRisClusterOrchestrator {
     public RipeRisClusterOrchestrator(String fullDrlContent) {
         this.clusterSessions = new LinkedHashMap<>();
         this.eventQueues = new LinkedHashMap<>();
-        this.threadPool = Executors.newFixedThreadPool(POOL_SIZE);
 
-        System.out.println("[Orchestrator] Building " + POOL_SIZE + " cluster sessions");
+        System.out.println("[Orchestrator] Building " + POOL_SIZE + " cluster containers");
 
         Map<Integer, String> drls = RipeRisClusterDrlGenerator.generateClusterDrls(fullDrlContent);
         String[] clusterNames = RipeRisClusterDrlGenerator.getClusterNames();
@@ -79,19 +81,18 @@ public class RipeRisClusterOrchestrator {
                 throw new IllegalStateException("Failed to generate DRL for cluster " + clusterId);
             }
 
-            KieSession session = buildSessionFromDrl(drl, clusterId);
-            session.fireAllRules();
+            buildContainerFromDrl(drl, clusterId);
 
-            // Log rule count for debugging DRL splitting
-            int ruleCount = session.getKieBase().getKiePackages().stream()
+            KieContainer kc = clusterContainers.get(clusterId);
+            int ruleCount = kc.getKieBase(kc.getKieBaseNames().iterator().next()).getKiePackages().stream()
                     .mapToInt(p -> p.getRules().size()).sum();
 
-            clusterSessions.put(clusterId, session);
-            eventQueues.put(clusterId, new LinkedBlockingQueue<>());
-
             System.out.println("[Orchestrator]   " + clusterNames[clusterId]
-                    + " session ready (" + ruleCount + " rules loaded)");
+                    + " container ready (" + ruleCount + " rules loaded)");
         }
+
+        // Initialize sessions and thread pool initially so the orchestrator is ready for single-run use cases
+        startInvocation();
     }
 
     /**
@@ -114,15 +115,17 @@ public class RipeRisClusterOrchestrator {
             futures.put(cid, threadPool.submit(() -> drainAndFire(session, queue)));
         }
 
-        // Alpha-filter routing: each event goes to exactly one cluster
+        // Alpha-filter routing: each event goes to one or more clusters based on event router
         for (RisMessage event : events) {
-            ClusterId target = RipeRisEventRouter.route(event);
-            int clusterId = clusterIdOrdinal(target);
-            try {
-                eventQueues.get(clusterId).put(event);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Interrupted while enqueuing event", e);
+            List<ClusterId> targets = RipeRisEventRouter.route(event);
+            for (ClusterId target : targets) {
+                int clusterId = clusterIdOrdinal(target);
+                try {
+                    eventQueues.get(clusterId).put(event);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted while enqueuing event", e);
+                }
             }
         }
 
@@ -176,7 +179,69 @@ public class RipeRisClusterOrchestrator {
         return new int[] { fired, received };
     }
 
-    private KieSession buildSessionFromDrl(String drl, int clusterId) {
+    /**
+     * Starts a new invocation by setting up fresh sessions and a thread pool.
+     */
+    public void startInvocation() {
+        if (threadPool == null || threadPool.isShutdown()) {
+            this.threadPool = Executors.newFixedThreadPool(POOL_SIZE);
+        }
+
+        // Dispose any existing sessions just in case
+        for (KieSession session : clusterSessions.values()) {
+            if (session != null) {
+                session.dispose();
+            }
+        }
+        clusterSessions.clear();
+
+        // Clear and initialize event queues
+        eventQueues.clear();
+
+        KieServices ks = KieServices.Factory.get();
+        for (Map.Entry<Integer, KieContainer> entry : clusterContainers.entrySet()) {
+            int clusterId = entry.getKey();
+            KieContainer kc = entry.getValue();
+            String ksessionName = clusterSessionNames.get(clusterId);
+
+            KieSessionConfiguration cfg = ks.newKieSessionConfiguration();
+            cfg.setOption(ClockTypeOption.PSEUDO);
+            KieSession session = kc.newKieSession(ksessionName, cfg);
+
+            // Warm up / fire initial rules
+            session.fireAllRules();
+
+            clusterSessions.put(clusterId, session);
+            eventQueues.put(clusterId, new LinkedBlockingQueue<>());
+        }
+    }
+
+    /**
+     * Ends an invocation by disposing current sessions and shutting down the thread pool.
+     */
+    public void endInvocation() {
+        for (KieSession session : clusterSessions.values()) {
+            if (session != null) {
+                session.dispose();
+            }
+        }
+        clusterSessions.clear();
+        eventQueues.clear();
+
+        if (threadPool != null) {
+            threadPool.shutdown();
+            try {
+                if (!threadPool.awaitTermination(2, TimeUnit.SECONDS)) {
+                    threadPool.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                threadPool.shutdownNow();
+            }
+            threadPool = null;
+        }
+    }
+
+    private void buildContainerFromDrl(String drl, int clusterId) {
         KieServices ks = KieServices.Factory.get();
         KieFileSystem kfs = ks.newKieFileSystem();
         long uid = System.nanoTime();
@@ -217,9 +282,8 @@ public class RipeRisClusterOrchestrator {
         }
 
         KieContainer kc = ks.newKieContainer(rid);
-        KieSessionConfiguration cfg = ks.newKieSessionConfiguration();
-        cfg.setOption(ClockTypeOption.PSEUDO);
-        return kc.newKieSession(ksessionName, cfg);
+        clusterContainers.put(clusterId, kc);
+        clusterSessionNames.put(clusterId, ksessionName);
     }
 
     /** Maps ClusterId enum to the 1-based integer key used in the session map. */
@@ -241,14 +305,6 @@ public class RipeRisClusterOrchestrator {
     }
 
     public void dispose() {
-        threadPool.shutdown();
-        try {
-            if (!threadPool.awaitTermination(5, TimeUnit.SECONDS)) {
-                threadPool.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            threadPool.shutdownNow();
-        }
-        clusterSessions.values().forEach(KieSession::dispose);
+        endInvocation();
     }
 }

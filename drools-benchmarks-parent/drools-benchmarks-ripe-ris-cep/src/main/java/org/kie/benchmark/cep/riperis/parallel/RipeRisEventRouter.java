@@ -30,12 +30,16 @@ import org.kie.benchmark.cep.riperis.model.RisMessage;
  *
  * <ul>
  *   <li>{@link ClusterId#C2_ANNOUNCEMENT}: events where {@code announcements} is non-empty
- *       (includes mixed announcement + withdrawal events — announcement pipeline wins)</li>
- *   <li>{@link ClusterId#C3_WITHDRAWAL}: events where {@code withdrawals} is non-empty
- *       AND {@code announcements} is null/empty</li>
+ *       (includes mixed announcement + withdrawal events).</li>
+ *   <li>{@link ClusterId#C3_WITHDRAWAL}: BGP UPDATE events containing announcements OR
+ *       withdrawals, required to ensure temporal rules 078/079 can join withdrawals
+ *       and announcements.</li>
  *   <li>{@link ClusterId#C1_GENERAL}: all other events (non-UPDATE, header-only)</li>
  * </ul>
  */
+import java.util.List;
+import java.util.ArrayList;
+
 public class RipeRisEventRouter {
 
     private RipeRisEventRouter() {
@@ -43,30 +47,37 @@ public class RipeRisEventRouter {
     }
 
     /**
-     * Determines which cluster should handle this event.
-     * Returns a single {@link ClusterId} — each event is sent to exactly one cluster.
+     * Determines which clusters should handle this event.
+     * Returns a list of {@link ClusterId} targets.
      *
      * @param event the incoming RisMessage
-     * @return the target cluster ID
+     * @return the target cluster IDs
      */
-    public static ClusterId route(RisMessage event) {
+    public static List<ClusterId> route(RisMessage event) {
+        List<ClusterId> targets = new ArrayList<>();
+        
         boolean hasAnnouncements = event.getAnnouncements() != null
                 && !event.getAnnouncements().isEmpty();
         boolean hasWithdrawals = event.getWithdrawals() != null
                 && !event.getWithdrawals().isEmpty();
 
-        // C2: Announcement pipeline — any event carrying route announcements
-        // (including mixed events — announcement processing takes priority)
-        if (hasAnnouncements) {
-            return ClusterId.C2_ANNOUNCEMENT;
-        }
-
-        // C3: Withdrawal pipeline — withdrawal-only events
-        if (hasWithdrawals) {
-            return ClusterId.C3_WITHDRAWAL;
-        }
-
         // C1: General / Non-UPDATE — header-only or non-BGP-UPDATE events
-        return ClusterId.C1_GENERAL;
+        if (!hasAnnouncements && !hasWithdrawals) {
+            targets.add(ClusterId.C1_GENERAL);
+            return targets;
+        }
+
+        // C2: Announcement pipeline — any event carrying route announcements
+        if (hasAnnouncements) {
+            targets.add(ClusterId.C2_ANNOUNCEMENT);
+        }
+
+        // C3: Withdrawal pipeline — all BGP UPDATE events (since C3's temporal rules
+        // join RouteWithdrawal and RouteAnnouncement, C3 must see all updates)
+        if (hasAnnouncements || hasWithdrawals) {
+            targets.add(ClusterId.C3_WITHDRAWAL);
+        }
+
+        return targets;
     }
 }

@@ -85,6 +85,8 @@ public class RipeRisClusterJmhBenchmark {
         }
 
         orchestrator = new RipeRisClusterOrchestrator(drlContent);
+        // Clean up the initial session created by default in constructor
+        orchestrator.endInvocation();
 
         totalRulesFired = 0;
         totalTimeElapsed = 0;
@@ -98,6 +100,7 @@ public class RipeRisClusterJmhBenchmark {
 
     @Setup(Level.Invocation)
     public void setupInvocation() {
+        orchestrator.startInvocation();
         invocationStartTime = System.currentTimeMillis();
     }
 
@@ -128,6 +131,8 @@ public class RipeRisClusterJmhBenchmark {
             System.out.printf("  %s:  Events=%,d  Fired=%,d%n",
                     names[cid], perEvents.getOrDefault(cid, 0), entry.getValue());
         }
+
+        orchestrator.endInvocation();
     }
 
     @TearDown(Level.Trial)
