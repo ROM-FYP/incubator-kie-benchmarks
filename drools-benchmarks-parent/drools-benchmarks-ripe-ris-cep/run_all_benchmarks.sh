@@ -63,12 +63,15 @@ for arch_entry in "${ARCHITECTURES[@]}"; do
         # -wi 2  : 2 warmup iterations
         # -i 5   : 5 measurement iterations
         # -f 1   : 1 fork (runs on a dedicated JVM)
+        # -jvmArgsAppend: inject -Dwarmup.iterations=2 into the *forked* benchmark JVM
+        #   (launcher -D flags are NOT inherited by forked processes)
         # -prof gc : Attach GC/allocation profiler to record memory metrics
         # The runner class will write the custom, clean results JSON to: $output_file
         # We redirect the standard console output to a log file in results/
-        if ! java -Djmh.ignoreLock=true -Dwarmup.iterations=2 -jar "$JAR_PATH" "$runner_class" \
+        if ! java -Djmh.ignoreLock=true -jar "$JAR_PATH" "$runner_class" \
             -p dataFile="$param_value" \
             -wi 2 -i 5 -f 1 \
+            -jvmArgsAppend "-Dwarmup.iterations=2" \
             -prof gc \
             > "${output_file%.json}.log" 2>&1; then
             echo ""
