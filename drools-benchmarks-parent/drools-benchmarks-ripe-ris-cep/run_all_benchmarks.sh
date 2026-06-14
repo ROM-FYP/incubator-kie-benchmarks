@@ -34,7 +34,7 @@ DATASETS=(
 
 echo "=============================================================="
 echo "Starting RIPE RIS CEP Benchmark Suite (16 combinations)"
-echo "Warmup: 3 iterations | Measurement: 5 iterations | Forks: 1"
+echo "Warmup: 0 iterations | Measurement: 1 iterations | Forks: 1"
 echo "Results target: $RESULTS_DIR/"
 echo "=============================================================="
 echo ""
@@ -60,17 +60,30 @@ for arch_entry in "${ARCHITECTURES[@]}"; do
         echo "--------------------------------------------------------------"
 
         # Execute JMH benchmark via shaded JAR
-        # -wi 3  : 3 warmup iterations
-        # -i 5   : 5 measurement iterations
+        # -wi 0  : 0 warmup iterations
+        # -i 1   : 1 measurement iterations
         # -f 1   : 1 fork (runs on a dedicated JVM)
         # -prof gc : Attach GC/allocation profiler to record memory metrics
         # The runner class will write the custom, clean results JSON to: $output_file
         # We redirect the standard console output to a log file in results/
-        java -jar "$JAR_PATH" "$runner_class" \
+        if ! java -jar "$JAR_PATH" "$runner_class" \
             -p dataFile="$param_value" \
-            -wi 3 -i 5 -f 1 \
+            -wi 0 -i 1 -f 1 \
             -prof gc \
-            > "${output_file%.json}.log" 2>&1
+            > "${output_file%.json}.log" 2>&1; then
+            echo ""
+            echo "=============================================================="
+            echo "ERROR: Benchmark run failed for combination:"
+            echo "  Architecture : $arch_name ($runner_class)"
+            echo "  Data Size    : $data_count ($param_value)"
+            echo "  Log File     : ${output_file%.json}.log"
+            echo "=============================================================="
+            echo "Last 30 lines of log output:"
+            echo "--------------------------------------------------------------"
+            tail -n 30 "${output_file%.json}.log"
+            echo "--------------------------------------------------------------"
+            exit 1
+        fi
 
         echo "Finished combination. Saved results to $output_file"
         echo ""

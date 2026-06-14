@@ -49,9 +49,9 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-@Warmup(iterations = 3, batchSize = 1)
-@Measurement(iterations = 5, batchSize = 1)
-@Fork(value = 1, jvmArgs = { "-Xms8g", "-Xmx8g" })
+@Warmup(iterations = 0, batchSize = 1)
+@Measurement(iterations = 1, batchSize = 1)
+@Fork(value = 1, jvmArgs = { "-Xms1g", "-Xmx4g" })
 public class RipeRisParallelEvalJmhRunner {
 
     private static final String DRL_PATH = EnvConfig.get("RIPERIS_RULES_FILE");
@@ -199,7 +199,7 @@ public class RipeRisParallelEvalJmhRunner {
     @TearDown(Level.Trial)
     public void teardownTrial() {
         int totalSize = iterationDurations.size();
-        int startIndex = Math.max(0, totalSize - 5);
+        int startIndex = Math.max(0, totalSize - 1);
         int numMeasurement = totalSize - startIndex;
 
         long measurementTimeElapsed = 0;
@@ -250,7 +250,7 @@ public class RipeRisParallelEvalJmhRunner {
             sb.append("{\n");
             sb.append(String.format(java.util.Locale.US, "  \"architecture\": \"%s\",\n", archName));
             sb.append(String.format(java.util.Locale.US, "  \"dataset\": \"%s\",\n", dataCount));
-            sb.append("  \"warmup_iterations\": 3,\n");
+            sb.append("  \"warmup_iterations\": 0,\n");
             sb.append(String.format(java.util.Locale.US, "  \"measurement_iterations\": %d,\n", numMeasurement));
             sb.append(String.format(java.util.Locale.US, "  \"average_execution_time_ms\": %.2f,\n", avgTime));
             sb.append(String.format(java.util.Locale.US, "  \"average_throughput_events_s\": %.2f,\n", avgThroughput));
