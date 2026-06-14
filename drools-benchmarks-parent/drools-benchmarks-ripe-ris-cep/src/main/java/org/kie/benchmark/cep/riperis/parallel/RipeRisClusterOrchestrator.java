@@ -206,6 +206,7 @@ public class RipeRisClusterOrchestrator {
 
             KieSessionConfiguration cfg = ks.newKieSessionConfiguration();
             cfg.setOption(ClockTypeOption.PSEUDO);
+            cfg.setOption(org.kie.api.runtime.conf.ThreadSafeOption.NO);
             KieSession session = kc.newKieSession(ksessionName, cfg);
 
             // Warm up / fire initial rules

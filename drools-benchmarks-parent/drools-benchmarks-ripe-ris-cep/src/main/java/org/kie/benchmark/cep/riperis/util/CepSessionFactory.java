@@ -99,6 +99,8 @@ public class CepSessionFactory {
             sessionConfig.setOption(org.kie.api.runtime.conf.ClockTypeOption.get("pseudo"));
         }
 
+        sessionConfig.setOption(org.kie.api.runtime.conf.ThreadSafeOption.NO);
+
         return kieBase.newKieSession(sessionConfig, null);
     }
 }

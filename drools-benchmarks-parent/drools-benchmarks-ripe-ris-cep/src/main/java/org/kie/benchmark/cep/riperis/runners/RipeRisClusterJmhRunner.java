@@ -80,7 +80,8 @@ public class RipeRisClusterJmhRunner {
         if (resolvedPath == null) {
             resolvedPath = dataFile;
         }
-        events = RipeRisBaselineBenchmark.loadEvents(resolvedPath, Long.MAX_VALUE);
+        long limit = Long.parseLong(System.getProperty("benchmark.limit", String.valueOf(Long.MAX_VALUE)));
+        events = RipeRisBaselineBenchmark.loadEvents(resolvedPath, limit);
 
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(DRL_PATH)) {
             if (is == null) {
