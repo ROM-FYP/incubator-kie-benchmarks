@@ -19,8 +19,8 @@ mkdir -p "$RESULTS_DIR"
 # Define 4 architectures: "RunnerClassName:friendly_name"
 ARCHITECTURES=(
     "RipeRisSequentialJmhRunner:sequential"
-    # "RipeRisParallelEvalJmhRunner:parallel_eval"
-    # "RipeRisFullyParallelJmhRunner:fully_parallel"
+    "RipeRisParallelEvalJmhRunner:parallel_eval"
+    "RipeRisFullyParallelJmhRunner:fully_parallel"
     "RipeRisClusterJmhRunner:cluster"
 )
 
@@ -33,13 +33,13 @@ DATASETS=(
 )
 
 echo "=============================================================="
-echo "Starting RIPE RIS CEP Benchmark Suite (8 combinations)"
-echo "Warmup: 0 iterations | Measurement: 1 iterations | Forks: 1"
+echo "Starting RIPE RIS CEP Benchmark Suite (16 combinations)"
+echo "Warmup: 2 iterations | Measurement: 5 iterations | Forks: 1"
 echo "Results target: $RESULTS_DIR/"
 echo "=============================================================="
 echo ""
 
-# Loop over architectures and datasets to run all 8 combinations one by one
+# Loop over architectures and datasets to run all 16 combinations one by one
 for arch_entry in "${ARCHITECTURES[@]}"; do
     # Split the entry by colon
     runner_class="${arch_entry%%:*}"
@@ -60,15 +60,15 @@ for arch_entry in "${ARCHITECTURES[@]}"; do
         echo "--------------------------------------------------------------"
 
         # Execute JMH benchmark via shaded JAR
-        # -wi 0  : 0 warmup iterations
-        # -i 1   : 1 measurement iterations
+        # -wi 2  : 2 warmup iterations
+        # -i 5   : 5 measurement iterations
         # -f 1   : 1 fork (runs on a dedicated JVM)
         # -prof gc : Attach GC/allocation profiler to record memory metrics
         # The runner class will write the custom, clean results JSON to: $output_file
         # We redirect the standard console output to a log file in results/
-        if ! java -Djmh.ignoreLock=true -jar "$JAR_PATH" "$runner_class" \
+        if ! java -Djmh.ignoreLock=true -Dwarmup.iterations=2 -jar "$JAR_PATH" "$runner_class" \
             -p dataFile="$param_value" \
-            -wi 0 -i 1 -f 1 \
+            -wi 2 -i 5 -f 1 \
             -prof gc \
             > "${output_file%.json}.log" 2>&1; then
             echo ""
@@ -91,6 +91,6 @@ for arch_entry in "${ARCHITECTURES[@]}"; do
 done
 
 echo "=============================================================="
-echo "All 8 benchmark combinations completed successfully."
+echo "All 16 benchmark combinations completed successfully."
 echo "Results are stored in: $(pwd)/$RESULTS_DIR/"
 echo "=============================================================="

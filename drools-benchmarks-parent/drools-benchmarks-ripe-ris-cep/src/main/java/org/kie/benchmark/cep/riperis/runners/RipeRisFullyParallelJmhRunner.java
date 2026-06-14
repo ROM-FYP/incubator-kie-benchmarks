@@ -203,7 +203,8 @@ public class RipeRisFullyParallelJmhRunner {
     @TearDown(Level.Trial)
     public void teardownTrial() {
         int totalSize = iterationDurations.size();
-        int startIndex = Math.max(0, totalSize - 1);
+        int warmupIters = Integer.getInteger("warmup.iterations", 0);
+        int startIndex = Math.min(totalSize, warmupIters);
         int numMeasurement = totalSize - startIndex;
 
         long measurementTimeElapsed = 0;
@@ -235,10 +236,10 @@ public class RipeRisFullyParallelJmhRunner {
         System.out.printf("Avg peak heap:          %.2f MB%n", avgPeakHeap);
         System.out.println("====================================\n");
 
-        writeResultsJson("fully_parallel", avgTime, avgThroughput, avgPeakHeap, startIndex);
+        writeResultsJson("fully_parallel", avgTime, avgThroughput, avgPeakHeap, startIndex, warmupIters);
     }
 
-    private void writeResultsJson(String archName, double avgTime, double avgThroughput, double avgPeakHeap, int startIndex) {
+    private void writeResultsJson(String archName, double avgTime, double avgThroughput, double avgPeakHeap, int startIndex, int warmupIters) {
         try {
             java.io.File dir = new java.io.File("results");
             if (!dir.exists()) {
@@ -254,7 +255,7 @@ public class RipeRisFullyParallelJmhRunner {
             sb.append("{\n");
             sb.append(String.format(java.util.Locale.US, "  \"architecture\": \"%s\",\n", archName));
             sb.append(String.format(java.util.Locale.US, "  \"dataset\": \"%s\",\n", dataCount));
-            sb.append("  \"warmup_iterations\": 0,\n");
+            sb.append(String.format(java.util.Locale.US, "  \"warmup_iterations\": %d,\n", warmupIters));
             sb.append(String.format(java.util.Locale.US, "  \"measurement_iterations\": %d,\n", numMeasurement));
             sb.append(String.format(java.util.Locale.US, "  \"average_execution_time_ms\": %.2f,\n", avgTime));
             sb.append(String.format(java.util.Locale.US, "  \"average_throughput_events_s\": %.2f,\n", avgThroughput));
