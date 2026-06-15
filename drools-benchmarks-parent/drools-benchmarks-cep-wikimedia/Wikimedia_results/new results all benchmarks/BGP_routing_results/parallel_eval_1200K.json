@@ -1,0 +1,41 @@
+{
+  "architecture": "parallel_eval",
+  "dataset": "1200K",
+  "warmup_iterations": 2,
+  "measurement_iterations": 5,
+  "average_execution_time_ms": 464380.40,
+  "average_throughput_events_s": 2584.09,
+  "average_peak_heap_mb": 19051.60,
+  "iterations": [
+    {
+      "iteration": 1,
+      "execution_time_ms": 467138,
+      "throughput_events_s": 2568.83,
+      "peak_heap_mb": 18190
+    },
+    {
+      "iteration": 2,
+      "execution_time_ms": 459928,
+      "throughput_events_s": 2609.10,
+      "peak_heap_mb": 19199
+    },
+    {
+      "iteration": 3,
+      "execution_time_ms": 459879,
+      "throughput_events_s": 2609.38,
+      "peak_heap_mb": 18655
+    },
+    {
+      "iteration": 4,
+      "execution_time_ms": 466695,
+      "throughput_events_s": 2571.27,
+      "peak_heap_mb": 20679
+    },
+    {
+      "iteration": 5,
+      "execution_time_ms": 468262,
+      "throughput_events_s": 2562.67,
+      "peak_heap_mb": 18535
+    }
+  ]
+}

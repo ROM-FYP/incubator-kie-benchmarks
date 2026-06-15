@@ -1,0 +1,41 @@
+{
+  "architecture": "cluster",
+  "dataset": "800K",
+  "warmup_iterations": 2,
+  "measurement_iterations": 5,
+  "average_execution_time_ms": 224885.00,
+  "average_throughput_events_s": 3557.37,
+  "average_peak_heap_mb": 19914.20,
+  "iterations": [
+    {
+      "iteration": 1,
+      "execution_time_ms": 223549,
+      "throughput_events_s": 3578.63,
+      "peak_heap_mb": 22287
+    },
+    {
+      "iteration": 2,
+      "execution_time_ms": 224565,
+      "throughput_events_s": 3562.44,
+      "peak_heap_mb": 19903
+    },
+    {
+      "iteration": 3,
+      "execution_time_ms": 225390,
+      "throughput_events_s": 3549.40,
+      "peak_heap_mb": 19239
+    },
+    {
+      "iteration": 4,
+      "execution_time_ms": 224781,
+      "throughput_events_s": 3559.02,
+      "peak_heap_mb": 19631
+    },
+    {
+      "iteration": 5,
+      "execution_time_ms": 226140,
+      "throughput_events_s": 3537.63,
+      "peak_heap_mb": 18511
+    }
+  ]
+}

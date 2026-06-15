@@ -1,0 +1,41 @@
+{
+  "architecture": "fully_parallel",
+  "dataset": "400K",
+  "warmup_iterations": 2,
+  "measurement_iterations": 5,
+  "average_execution_time_ms": 164078.20,
+  "average_throughput_events_s": 2437.86,
+  "average_peak_heap_mb": 19486.80,
+  "iterations": [
+    {
+      "iteration": 1,
+      "execution_time_ms": 165145,
+      "throughput_events_s": 2422.11,
+      "peak_heap_mb": 19279
+    },
+    {
+      "iteration": 2,
+      "execution_time_ms": 163656,
+      "throughput_events_s": 2444.15,
+      "peak_heap_mb": 19559
+    },
+    {
+      "iteration": 3,
+      "execution_time_ms": 164215,
+      "throughput_events_s": 2435.82,
+      "peak_heap_mb": 19470
+    },
+    {
+      "iteration": 4,
+      "execution_time_ms": 163113,
+      "throughput_events_s": 2452.28,
+      "peak_heap_mb": 19583
+    },
+    {
+      "iteration": 5,
+      "execution_time_ms": 164262,
+      "throughput_events_s": 2435.13,
+      "peak_heap_mb": 19543
+    }
+  ]
+}

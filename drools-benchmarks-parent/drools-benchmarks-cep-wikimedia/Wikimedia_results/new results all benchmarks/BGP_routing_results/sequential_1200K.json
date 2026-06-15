@@ -1,0 +1,41 @@
+{
+  "architecture": "sequential",
+  "dataset": "1200K",
+  "warmup_iterations": 2,
+  "measurement_iterations": 5,
+  "average_execution_time_ms": 421398.40,
+  "average_throughput_events_s": 2847.66,
+  "average_peak_heap_mb": 20093.20,
+  "iterations": [
+    {
+      "iteration": 1,
+      "execution_time_ms": 419372,
+      "throughput_events_s": 2861.42,
+      "peak_heap_mb": 20871
+    },
+    {
+      "iteration": 2,
+      "execution_time_ms": 421289,
+      "throughput_events_s": 2848.40,
+      "peak_heap_mb": 20367
+    },
+    {
+      "iteration": 3,
+      "execution_time_ms": 419479,
+      "throughput_events_s": 2860.69,
+      "peak_heap_mb": 19471
+    },
+    {
+      "iteration": 4,
+      "execution_time_ms": 421762,
+      "throughput_events_s": 2845.20,
+      "peak_heap_mb": 19822
+    },
+    {
+      "iteration": 5,
+      "execution_time_ms": 425090,
+      "throughput_events_s": 2822.93,
+      "peak_heap_mb": 19935
+    }
+  ]
+}

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benchmark Execution Pipeline</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 30px 10px;
+    }
+
+    .slide {
+      width: 520px;
+      max-width: 100%;
+    }
+
+    .slide-label {
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .slide-title {
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 28px;
+      letter-spacing: -0.01em;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .mid-connector {
+      display: flex;
+      justify-content: flex-end;
+      padding-right: 52px;
+    }
+
+    .mid-connector-line {
+      width: 2px;
+      height: 24px;
+      background: #cbd5e1;
+      position: relative;
+    }
+
+    .mid-connector-line::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #cbd5e1;
+    }
+
+    .step {
+      width: 108px;
+      height: 110px;
+      border-radius: 10px;
+      border: 2px solid;
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .step-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .h-conn {
+      height: 2px;
+      width: 24px;
+      background: #cbd5e1;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .h-conn::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 6px solid #cbd5e1;
+    }
+
+    .h-conn-left {
+      height: 2px;
+      width: 24px;
+      background: #cbd5e1;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .h-conn-left::after {
+      content: '';
+      position: absolute;
+      left: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-right: 6px solid #cbd5e1;
+    }
+
+    .s0 {
+      background: #fff3e0;
+      border-color: #e65100;
+    }
+
+    .s0 .step-title {
+      color: #bf360c;
+    }
+
+    .s1 {
+      background: #e8eaf6;
+      border-color: #5c6bc0;
+    }
+
+    .s1 .step-title {
+      color: #283593;
+    }
+
+    .s2 {
+      background: #e8f5e9;
+      border-color: #388e3c;
+    }
+
+    .s2 .step-title {
+      color: #1b5e20;
+    }
+
+    .s3 {
+      background: #e3f2fd;
+      border-color: #1976d2;
+    }
+
+    .s3 .step-title {
+      color: #0d47a1;
+    }
+
+    .s4 {
+      background: #fff8e1;
+      border-color: #f9a825;
+    }
+
+    .s4 .step-title {
+      color: #e65100;
+    }
+
+    .s5 {
+      background: #f3e5f5;
+      border-color: #7b1fa2;
+    }
+
+    .s5 .step-title {
+      color: #4a148c;
+    }
+
+    .s6 {
+      background: #fce4ec;
+      border-color: #c62828;
+    }
+
+    .s6 .step-title {
+      color: #b71c1c;
+    }
+
+    .s7 {
+      background: #e0f2f1;
+      border-color: #00796b;
+    }
+
+    .s7 .step-title {
+      color: #004d40;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="slide">
+    <div class="slide-label">Methodology</div>
+    <div class="slide-title">Benchmark Execution Pipeline</div>
+
+    <!-- Row 1: Steps 0→1→2→3 (left to right) -->
+    <div class="row">
+      <div class="step s0">
+        <div class="step-title">Benchmark formation</div>
+      </div>
+      <div class="h-conn"></div>
+      <div class="step s1">
+        <div class="step-title">Execution on single-threaded vanilla Drools</div>
+      </div>
+      <div class="h-conn"></div>
+      <div class="step s2">
+        <div class="step-title">Collection of rule execution traces</div>
+      </div>
+      <div class="h-conn"></div>
+      <div class="step s3">
+        <div class="step-title">Construction of a causal graph</div>
+      </div>
+    </div>
+
+    <!-- Vertical connector: drops from step 3 (right side) -->
+    <div class="mid-connector">
+      <div class="mid-connector-line"></div>
+    </div>
+
+    <!-- Row 2: Steps 4←5←6←7 (right to left, snake pattern) -->
+    <div class="row" style="justify-content:flex-end;">
+      <div class="step s7">
+        <div class="step-title">Execution of benchmarks with N KIE sessions</div>
+      </div>
+      <div class="h-conn-left"></div>
+      <div class="step s6">
+        <div class="step-title">Manual modification of clusters to resolve dependencies</div>
+      </div>
+      <div class="h-conn-left"></div>
+      <div class="step s5">
+        <div class="step-title">Evaluation of clusters against static dependencies</div>
+      </div>
+      <div class="h-conn-left"></div>
+      <div class="step s4">
+        <div class="step-title">Cluster detection via Infomap</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+
+</html>

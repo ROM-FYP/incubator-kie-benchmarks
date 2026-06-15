@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benchmark Execution Pipeline</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 60px 20px;
+    }
+
+    .slide {
+      width: 560px;
+      max-width: 96vw;
+    }
+
+    .slide-label {
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+
+    .slide-title {
+      text-align: center;
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 44px;
+      letter-spacing: -0.01em;
+    }
+
+    .flow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .step {
+      width: 100%;
+      border-radius: 12px;
+      border: 2px solid;
+      padding: 22px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .step-index {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .step-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .connector {
+      width: 2px;
+      height: 32px;
+      background: #cbd5e1;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .connector::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #cbd5e1;
+    }
+
+    .s1 {
+      background: #e8eaf6;
+      border-color: #5c6bc0;
+    }
+
+    .s1 .step-title {
+      color: #283593;
+    }
+
+    .s1 .step-index {
+      color: #5c6bc0;
+    }
+
+    .s2 {
+      background: #e8f5e9;
+      border-color: #388e3c;
+    }
+
+    .s2 .step-title {
+      color: #1b5e20;
+    }
+
+    .s2 .step-index {
+      color: #388e3c;
+    }
+
+    .s3 {
+      background: #e3f2fd;
+      border-color: #1976d2;
+    }
+
+    .s3 .step-title {
+      color: #0d47a1;
+    }
+
+    .s3 .step-index {
+      color: #1976d2;
+    }
+
+    .s4 {
+      background: #fff8e1;
+      border-color: #f9a825;
+    }
+
+    .s4 .step-title {
+      color: #e65100;
+    }
+
+    .s4 .step-index {
+      color: #c07000;
+    }
+
+    .s5 {
+      background: #f3e5f5;
+      border-color: #7b1fa2;
+    }
+
+    .s5 .step-title {
+      color: #4a148c;
+    }
+
+    .s5 .step-index {
+      color: #7b1fa2;
+    }
+
+    .s6 {
+      background: #fce4ec;
+      border-color: #c62828;
+    }
+
+    .s6 .step-title {
+      color: #b71c1c;
+    }
+
+    .s6 .step-index {
+      color: #c62828;
+    }
+
+    .s7 {
+      background: #e0f2f1;
+      border-color: #00796b;
+    }
+
+    .s7 .step-title {
+      color: #004d40;
+    }
+
+    .s7 .step-index {
+      color: #00796b;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        padding: 40px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="slide">
+    <div class="slide-label">Methodology</div>
+    <div class="slide-title">Benchmark Execution Pipeline</div>
+    <div class="flow">
+
+      <div class="step s1">
+        <div class="step-index">1</div>
+        <div class="step-title">Execute Benchmarks on Single-Threaded Vanilla Drools</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="step s2">
+        <div class="step-index">2</div>
+        <div class="step-title">Collect Rule Execution Traces</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="step s3">
+        <div class="step-index">3</div>
+        <div class="step-title">Create a Causal Graph</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="step s4">
+        <div class="step-index">4</div>
+        <div class="step-title">Run Infomap to Get Clusters</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="step s5">
+        <div class="step-index">5</div>
+        <div class="step-title">Evaluate Clusters Against Static Dependencies</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="step s6">
+        <div class="step-index">6</div>
+        <div class="step-title">Modify Clusters to Resolve Dependencies (Manual)</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="step s7">
+        <div class="step-index">7</div>
+        <div class="step-title">Execute Benchmarks with N KIE Sessions</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+
+</html>
