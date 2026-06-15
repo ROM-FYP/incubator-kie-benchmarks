@@ -28,21 +28,22 @@ Table~\ref{tab:gap} summarises the positioning.
 \centering
 \caption{Comparison of existing benchmarks with our proposed suite. (\checkmark = supported, --- = absent)}\label{tab:gap}
 \small
-\begin{tabular}{@{}lcccc@{}}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lccccp{2.6cm}@{}}
 \toprule
-\textbf{Benchmark} & \textbf{Rule Type} & \textbf{Data} & \textbf{Temporal} & \textbf{Year} \\
+\textbf{Benchmark} & \textbf{Rule Type} & \textbf{Data} & \textbf{Temp.} & \textbf{Year} & \textbf{Eval.\ Metrics} \\
 \midrule
-Waltz / Miss Manners    & Production (OPS5)   & Synthetic       & ---             & 1985 \\
-OpenRuleBench           & Datalog/Prod.       & Static KB       & ---             & 2009 \\
-Train Benchmark         & Graph patterns      & Synthetic       & ---             & 2018 \\
-RUBEN                   & Datalog/OWL         & Static KB       & ---             & 2022 \\
+Waltz / Miss Manners    & Production (OPS5)   & Synthetic       & ---             & 1985 & Exec.\ time, rule firings \\
+OpenRuleBench           & Datalog/Prod.       & Static KB       & ---             & 2009 & Load time, inference time \\
+Train Benchmark         & Graph patterns      & Synthetic       & ---             & 2018 & Incr.\ re-eval time, memory \\
+RUBEN                   & Datalog/OWL         & Static KB       & ---             & 2022 & Exec.\ time, scalability \\
 \midrule
-LinearRoad / NEXMark    & SQL / Beam          & Synth.\ streams & \checkmark      & 03--04 \\
-Wahl \& Hollunder       & CEP (Esper/Drools)  & Synth.\ SOAP    & \checkmark$^*$  & 2012 \\
-ESPBench / Theodolite   & Beam / Flink        & Synth.\ IoT     & \checkmark      & 2021 \\
+LinearRoad / NEXMark    & SQL / Beam          & Synth.\ streams & \checkmark      & 03--04 & Throughput, latency \\
+Wahl \& Hollunder       & CEP (Esper/Drools)  & Synth.\ SOAP    & \checkmark$^*$  & 2012 & Latency, CPU, memory \\
+ESPBench / Theodolite   & Beam / Flink        & Synth.\ IoT     & \checkmark      & 2021 & Latency, scalability \\
 \midrule
-\textbf{Our Suite}      & \textbf{Drools CEP} & \textbf{Real-world} & \checkmark  & 2026 \\
+\textbf{Our Suite}      & \textbf{Drools CEP} & \textbf{Real-world} & \checkmark  & 2026 & Throughput, latency, WM, coverage, chain depth \\
 \bottomrule
-\multicolumn{5}{@{}l}{\footnotesize $^*$Limited to a single 4-event pattern.}
+\multicolumn{6}{@{}l}{\footnotesize $^*$Limited to a single 4-event pattern.}
 \end{tabular}
 \end{table}
